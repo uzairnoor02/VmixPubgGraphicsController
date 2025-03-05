@@ -1,0 +1,6 @@
+@VmixPubgGraphicsController_HostAddress = http://localhost:5254
+
+GET {{VmixPubgGraphicsController_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
