@@ -1,35 +1,36 @@
 ﻿
+using Hangfire;
 using Microsoft.Extensions.Configuration;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
-using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
+using System.Text.Json.Serialization;
 using VmixData.Models;
 using VmixData.Models.MatchModels;
-using System;
-using System.IO;
-using System.Net.Http;
-using System.Threading.Tasks;
-using static Google.Apis.Requests.BatchRequest;
-using Microsoft.Extensions.Logging;
-using Hangfire;
-using System.Text.Json.Serialization;
 
 namespace VmixGraphicsBusiness.MatchBusiness
 {
-    public class GetLiveData(LiveStatsBusiness liveStatsBusiness, PostMatch dbBusiness, IConfiguration configuration)
+    public class GetLiveData
     {
-        string _apiUrl = configuration["pcobUrl"]!;
+        private readonly LiveStatsBusiness _liveStatsBusiness;
+        private readonly PostMatch _dbBusiness;
+        private readonly IBackgroundJobClient _backgroundJobClient;
+        private readonly string _pcobUrl;
+        private List<LiveTeamPointStats> teampoints = null;
+
+        public GetLiveData(LiveStatsBusiness liveStatsBusiness, PostMatch dbBusiness, IBackgroundJobClient backgroundJobClient)
+        {
+            _liveStatsBusiness = liveStatsBusiness;
+            _dbBusiness = dbBusiness;
+            _backgroundJobClient = backgroundJobClient;
+            _pcobUrl = GlobalSettings.PcobUrl;
+        }
+
         public async Task<bool> IsInGame()
         {
             using (var client = new HttpClient())
             {
                 try
                 {
-                    var response = await client.GetAsync(_apiUrl + "isingame");
+                    var response = await client.GetAsync(_pcobUrl + "isingame");
                     if (response.IsSuccessStatusCode)
                     {
                         var data = await response.Content.ReadAsStringAsync();
@@ -50,31 +51,33 @@ namespace VmixGraphicsBusiness.MatchBusiness
             }
         }
 
-        [AutomaticRetry(Attempts = 0)]
-        public async Task FetchAndPostData(Match match)
+        [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 2 })]
+        public async Task FetchAndPostData(VmixData.Models.Match match)
         {
             var previousData = "";
-
+            if (teampoints is null)
+            {
+                teampoints = await _dbBusiness.fetchTeamPointsAsync(match);
+            }
             using (var client = new HttpClient())
             {
                 if (await IsInGame())
                 {
                     try
                     {
-                        var teampoints = await dbBusiness.fetchTeamPointsAsync(match);
-                        var response = await client.GetAsync(_apiUrl + "gettotalplayerlist");
-                        var response2 = await client.GetAsync(_apiUrl + "getteaminfolist");
+                        var response = await client.GetAsync(_pcobUrl + "gettotalplayerlist");
+                        var response2 = await client.GetAsync(_pcobUrl + "getteaminfolist");
 
                         if (response.IsSuccessStatusCode)
                         {
                             var data = await response.Content.ReadAsStringAsync();
                             var data2 = await response2.Content.ReadAsStringAsync();
-                            if ( data != null)// data != previousData &&
+                            if (data != null)// data != previousData &&
                             {
                                 LivePlayersList livePlayerInfo = JsonSerializer.Deserialize<LivePlayersList>(data)!;
                                 TeamInfoList TeamInfoList = JsonSerializer.Deserialize<TeamInfoList>(data2)!;
 
-                                await liveStatsBusiness.CreateLiveStats(livePlayerInfo, TeamInfoList, teampoints);
+                                _backgroundJobClient.Enqueue(() => _liveStatsBusiness.CreateLiveStats(livePlayerInfo, TeamInfoList, teampoints));
                                 previousData = data;
                             }
                             else
@@ -94,6 +97,7 @@ namespace VmixGraphicsBusiness.MatchBusiness
                 }
             }
         }
+
     }
     public class DependencyJobActivator : JobActivator
     {

@@ -18,36 +18,32 @@ namespace VmixGraphicsBusiness
 
         // Constructor Injection
         public SetPlayerAchievements(
-            vmix_graphicsContext vmixGraphicsContext,
             IBackgroundJobClient backgroundJobClient,
             IConnectionMultiplexer redisConnection,
             IServiceProvider serviceProvider)
         {
-            _vmixGraphicsContext = vmixGraphicsContext;
             _backgroundJobClient = backgroundJobClient;
             _redisDb = redisConnection.GetDatabase(); // Initialize Redis database
             _serviceProvider = serviceProvider;
         }
-
+        [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 2 })]
         public async Task<bool> GetAllAchievements(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
-            var players = await _vmixGraphicsContext.Players.ToListAsync();
 
             // Enqueue Hangfire Jobs (Runs one after another)
-            var jobId1 = _backgroundJobClient.Enqueue(() => VehicleEliminationsAsync(playerInfo, liveTeamPointStats, players));
-            var jobId2 = _backgroundJobClient.ContinueJobWith(jobId1, () => GrenadeEliminationsAsync(playerInfo, liveTeamPointStats, players));
-            var jobId3 = _backgroundJobClient.ContinueJobWith(jobId2, () => AirDropLootedAsync(playerInfo, liveTeamPointStats, players));
-            var jobId4 = _backgroundJobClient.ContinueJobWith(jobId3, () => FirstBloodAsync(playerInfo, liveTeamPointStats, players));
+            var jobId1 = _backgroundJobClient.Enqueue(() => VehicleEliminationsAsync(playerInfo, liveTeamPointStats));
+            var jobId2 = _backgroundJobClient.ContinueJobWith(jobId1, () => GrenadeEliminationsAsync(playerInfo, liveTeamPointStats));
+            var jobId3 = _backgroundJobClient.ContinueJobWith(jobId2, () => AirDropLootedAsync(playerInfo, liveTeamPointStats));
+            var jobId4 = _backgroundJobClient.ContinueJobWith(jobId3, () => FirstBloodAsync(playerInfo, liveTeamPointStats));
 
             return true;
         }
 
-        [AutomaticRetry(Attempts = 0)]
-        public async Task VehicleEliminationsAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats, List<Player> players)
+        [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 2 })]
+        public async Task VehicleEliminationsAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             var _vmiLayerSetOnOff = _serviceProvider.GetService<vmi_layerSetOnOff>();
-            var vmixDataOperations = new VmixDataUtils();
-            var vmixData = await vmixDataOperations.SetVMIXDataoperations();
+            var vmixData = await VmixDataUtils.SetVMIXDataoperations();
             await _vmiLayerSetOnOff.PushAnimationAsync(vmixData.VehiclePlayerAcheivmentGuid, 1, false, 300);
 
             foreach (var player in playerInfo.PlayerInfoList)
@@ -60,9 +56,9 @@ namespace VmixGraphicsBusiness
                 if (existingData.IsNullOrEmpty || JsonSerializer.Deserialize<VehicleEliminationInfo>(existingData).VehicleKills < player.KillNumInVehicle)
                 {
                     var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == player.TeamId);
-                    var currentPlayer = players.FirstOrDefault(x => x.PlayerUid == player.UId.ToString());
+                    //var currentPlayer = players.FirstOrDefault(x => x.PlayerUid == player.UId.ToString());
 
-                    if (currentTeam == null || currentPlayer == null) continue;
+                    if (currentTeam == null) continue;
 
                     var eliminationInfo = new VehicleEliminationInfo
                     {
@@ -75,7 +71,7 @@ namespace VmixGraphicsBusiness
 
                     var apiCalls = new List<string>
                     {
-                        _vmiLayerSetOnOff.GetSetTextApiCall(vmixData.VehiclePlayerAcheivmentGuid, "PNAME", currentPlayer.PlayerDisplayName),
+                        _vmiLayerSetOnOff.GetSetTextApiCall(vmixData.VehiclePlayerAcheivmentGuid, "PNAME", player.PlayerName),
                         _vmiLayerSetOnOff.GetSetImageApiCall(vmixData.VehiclePlayerAcheivmentGuid, "LOGO", currentTeam.teamImage)
                     };
 
@@ -86,15 +82,14 @@ namespace VmixGraphicsBusiness
             }
         }
 
-        [AutomaticRetry(Attempts = 0)]
-        public async Task GrenadeEliminationsAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats, List<Player> players)
+        [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 2 })]
+        public async Task GrenadeEliminationsAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
                 return;
 
             var _vmiLayerSetOnOff = _serviceProvider.GetService<vmi_layerSetOnOff>();
-            var vmixDataOperations = new VmixDataUtils();
-            var vmixData = await vmixDataOperations.SetVMIXDataoperations();
+            var vmixData = await VmixDataUtils.SetVMIXDataoperations();
             await _vmiLayerSetOnOff.PushAnimationAsync(vmixData.GrenadePlayerAcheivmentGuid, 1, false, 300);
 
             foreach (var player in playerInfo.PlayerInfoList)
@@ -107,9 +102,8 @@ namespace VmixGraphicsBusiness
                 if (existingData.IsNullOrEmpty || JsonSerializer.Deserialize<GrenadeEliminationInfo>(existingData).GrenadeKills < player.KillNumByGrenade)
                 {
                     var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == player.TeamId);
-                    var currentPlayer = players.FirstOrDefault(x => x.PlayerUid == player.UId.ToString());
 
-                    if (currentTeam == null || currentPlayer == null) continue;
+                    if (currentTeam == null) continue;
 
                     var eliminationInfo = new GrenadeEliminationInfo
                     {
@@ -133,59 +127,59 @@ namespace VmixGraphicsBusiness
             }
         }
 
-        [AutomaticRetry(Attempts = 0)]
-        public async Task AirDropLootedAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats, List<Player> players)
+        [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 2 })]
+        public async Task AirDropLootedAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
                 return;
 
             var _vmiLayerSetOnOff = _serviceProvider.GetService<vmi_layerSetOnOff>();
-            var vmixDataOperations = new VmixDataUtils();
-            var vmixData = await vmixDataOperations.SetVMIXDataoperations();
-            var airdropPlayer = playerInfo.PlayerInfoList.FirstOrDefault(p => p.GotAirDropNum > 0);
-            if (airdropPlayer == null) return;
-
-            var redisKey = $"{Utils.HelperRedis.AirDropLootedKey}:{airdropPlayer.UId}";
-            var existingData = await _redisDb.StringGetAsync(redisKey);
-
-            if (existingData.IsNullOrEmpty)
+            var vmixData = await VmixDataUtils.SetVMIXDataoperations();
+            foreach (var airdropPlayer in playerInfo.PlayerInfoList)
             {
-                var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == airdropPlayer.TeamId);
-                //var currentPlayer = players.FirstOrDefault(x => x.PlayerUid == airdropPlayer.UId.ToString());
+                if (airdropPlayer == null) return;
 
-                if (currentTeam == null ) return;
+                var redisKey = $"{Utils.HelperRedis.AirDropLootedKey}:{airdropPlayer.UId}";
+                var existingData = await _redisDb.StringGetAsync(redisKey);
 
-                var airdropInfo = new AirDropLootedInfo
+                if (existingData.IsNullOrEmpty)
                 {
-                    AirdropLootedNumber = airdropPlayer.GotAirDropNum,
-                    DateTime = DateTime.UtcNow,
-                    PlayerId = airdropPlayer.UId.ToString()
-                };
+                    var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == airdropPlayer.TeamId);
+                    //var currentPlayer = players.FirstOrDefault(x => x.PlayerUid == airdropPlayer.UId.ToString());
 
-                await _redisDb.StringSetAsync(redisKey, JsonSerializer.Serialize(airdropInfo));
+                    if (currentTeam == null) return;
 
-                var apiCalls = new List<string>
+                    var airdropInfo = new AirDropLootedInfo
+                    {
+                        AirdropLootedNumber = airdropPlayer.GotAirDropNum,
+                        DateTime = DateTime.UtcNow,
+                        PlayerId = airdropPlayer.UId.ToString()
+                    };
+
+                    await _redisDb.StringSetAsync(redisKey, JsonSerializer.Serialize(airdropInfo));
+
+                    var apiCalls = new List<string>
                 {
                     _vmiLayerSetOnOff.GetSetTextApiCall(vmixData.AirDropPlayerAcheivmentGuid, "PNAME", airdropPlayer.PlayerName ?? "Unknown"),
                     _vmiLayerSetOnOff.GetSetImageApiCall(vmixData.AirDropPlayerAcheivmentGuid, "LOGO", currentTeam.teamImage ?? "")
                 };
 
-                var setTexts = new SetTexts();
-                await setTexts.CallApiAsync(apiCalls);
-                await _vmiLayerSetOnOff.PushAnimationAsync(vmixData.AirDropPlayerAcheivmentGuid, 1, true, 2000);
+                    var setTexts = new SetTexts();
+                    await setTexts.CallApiAsync(apiCalls);
+                    await _vmiLayerSetOnOff.PushAnimationAsync(vmixData.AirDropPlayerAcheivmentGuid, 1, true, 2000);
+                }
             }
         }
 
-        [AutomaticRetry(Attempts = 0)]
-        public async Task<bool> FirstBloodAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats, List<Player> players)
+        [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 2 })]
+        public async Task<bool> FirstBloodAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
                 return false;
 
             var _vmiLayerSetOnOff = _serviceProvider.GetService<vmi_layerSetOnOff>();
-            var vmixDataOperations = new VmixDataUtils();
-            var vmixData = await vmixDataOperations.SetVMIXDataoperations();
-            var firstBloodPlayer = playerInfo.PlayerInfoList.FirstOrDefault(p => p.KillNum > 0);
+            var vmixData = await VmixDataUtils.SetVMIXDataoperations();
+            foreach (var firstBloodPlayer in playerInfo.PlayerInfoList) { 
             if (firstBloodPlayer == null) return false;
 
             var redisKey = "FirstBlood";
@@ -194,9 +188,8 @@ namespace VmixGraphicsBusiness
             if (existingData.IsNullOrEmpty)
             {
                 var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == firstBloodPlayer.TeamId);
-                var currentPlayer = players.FirstOrDefault(x => x.PlayerUid == firstBloodPlayer.UId.ToString());
 
-                if (currentTeam == null || currentPlayer == null) return false;
+                if (currentTeam == null) return false;
 
                 var firstBloodInfo = new FirstBlood
                 {
@@ -215,12 +208,13 @@ namespace VmixGraphicsBusiness
                 var setTexts = new SetTexts();
                 await setTexts.CallApiAsync(apiCalls);
                 await _vmiLayerSetOnOff.PushAnimationAsync(vmixData.FirstBloodPlayerAcheivmentGuid, 1, true, 2000);
-
+                }
                 return true;
             }
+        
 
             return false;
         }
-    }
+}
 }
 

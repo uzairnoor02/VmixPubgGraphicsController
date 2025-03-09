@@ -11,9 +11,12 @@ using VmixGraphicsBusiness.vmixutils;
 using VmixData.Models;
 using Hangfire;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
+using VmixGraphicsBusiness.Utils;
 
 namespace VmixGraphicsBusiness;
-public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backgroundJobClient, VMIXDataoperations vMIXDataoperations, vmi_layerSetOnOff _vmi_LayerSetOnOff, SetPlayerAchievements setPlayerAcheivments, IServiceProvider service, ILogger<LiveStatsBusiness> _logger)
+public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backgroundJobClient, VMIXDataoperations vMIXDataoperations, vmi_layerSetOnOff _vmi_LayerSetOnOff, SetPlayerAchievements setPlayerAcheivments, IServiceProvider service, ILogger<LiveStatsBusiness> _logger, IConnectionMultiplexer redisConnection
+)
 {
     VmixData.Models.MatchModels.VmixData VMIXData;
     string LiverankingGuid;
@@ -25,23 +28,21 @@ public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backg
     public readonly IConfiguration _config = config;
     vmi_layerSetOnOff vmi_LayerSetOnOff = _vmi_LayerSetOnOff;
 
-
+    [AutomaticRetry(Attempts =0)]
     public async Task<List<TeamLiveStats>> CreateLiveStats(LivePlayersList playerInfo, TeamInfoList teamInfos, List<LiveTeamPointStats> liveTeamPointStats)
     {
-        var vmixdataoperations = new VmixDataUtils();
-        var vmixdata = await vmixdataoperations.SetVMIXDataoperations();
+        
+        var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
         if (teamInfos.teamInfoList.Count() < 17)
         {
             LiverankingGuid = vmixdata.LiverankingGuid16;
         }
-        else if (teamInfos.teamInfoList.Count() <19)
+        else if (teamInfos.teamInfoList.Count() < 19)
         {
             LiverankingGuid = vmixdata.LiverankingGuid18;
-
         }
         else if (teamInfos.teamInfoList.Count() >= 19)
         {
-
             LiverankingGuid = vmixdata.LiverankingGuid20;
         }
         int teamcount = 1;
@@ -50,50 +51,39 @@ public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backg
         {
             string folderPath = _config["SaveToFolder"]!;
             string HeatlhImages = _config["Images"]!;
-            // Initialize an empty list to store team live stats
             List<TeamLiveStats> teamLiveStats = new List<TeamLiveStats>();
 
-            // Group players by team ID
-            // var groupedByTeam = playerInfo.PlayerInfoList.GroupBy(info => info.TeamId);
             var groupedByTeam = playerInfo.PlayerInfoList.ToLookup(info => info.TeamId);
-
             var teamID = 0;
-            groupedByTeam.OrderBy(x => x.Sum(y => y.KillNum));
             foreach (var teamGroup in groupedByTeam)
             {
                 long teamId = teamGroup.Key;
-                var currentTeamInfo = liveTeamPointStats.Where(x => x.teamid == teamGroup.Key).FirstOrDefault();
-                var teamStats = new TeamLiveStats(); // Create a new TeamLiveStats object for each team
+                var currentTeamInfo = liveTeamPointStats.FirstOrDefault(x => x.teamid == teamGroup.Key);
+                var teamStats = new TeamLiveStats();
 
-                // Calculate team stats
-                teamID = teamcount; // Assign a default rank (can be updated later)
-                teamStats.Logo = ""; // Set logo (can be populated from external source based on team ID)
-                teamStats.TotalPoints = 0; // Initialize points
+                teamID = teamcount;
+                teamStats.Logo = "";
+                teamStats.TotalPoints = 0;
 
                 int eliminations = 0;
-                int playerCount = 0; // Track the number of alive players
+                int playerCount = 0;
                 bool isEliminated = false;
 
-                // Use teamGroup.Key to access the TeamId
-                if (teamInfos.teamInfoList.Where(x => x.teamId == teamId).First().liveMemberNum == 0)
+                if (teamInfos.teamInfoList.First(x => x.teamId == teamId).liveMemberNum == 0)
                 {
                     isEliminated = true;
-                    IsEliminatedAsync(teamGroup.First().TeamName, teamID, true, teamGroup.Select(x => x.KillNum).Sum(), teamGroup.Select(x => x.Rank).FirstOrDefault());
-                    // All players in the current team are dead
-                    
+                    await IsEliminatedAsync(teamGroup.First().TeamName, teamID, true, teamGroup.Sum(x => x.KillNum), teamGroup.First().Rank);
                     _logger.LogInformation($"All players in Team {teamGroup.Key} are dead.");
                 }
                 else
                 {
                     isEliminated = false;
-                    // Some players in the current team are still alive
-                   // _logger.LogInformation($"Some players in Team {teamGroup.Key} are still alive.");
                 }
                 bool isinBlue = false;
                 foreach (var player in teamGroup)
                 {
                     playerCount++;
-                    switch (playerCount) // Update health properties based on player count (adjust as needed)
+                    switch (playerCount)
                     {
                         case 1:
                             teamStats.Player1Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
@@ -121,7 +111,6 @@ public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backg
                             break;
                     }
 
-                    // Update eliminations and potentially points (adjust point logic as needed)
                     eliminations += player.KillNum;
                     teamStats.TotalPoints += player.KillNum;
                 }
@@ -144,18 +133,17 @@ public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backg
                 {
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{teamcount}", HeatlhImages + "\\EliminatedBG\\Team Out Zone.png"));
                 }
-                // Add the calculated TeamLiveStats to the list
                 teamLiveStats.Add(teamStats);
                 teamcount++;
             }
-            SetTexts setTexts = new SetTexts();
-            await setTexts.CallApiAsync(apiCalls);
 
-            // Replace with your desired path
+            // Enqueue API calls to Hangfire
+            backgroundJobClient.Enqueue<ApiCallProcessor>(processor => processor.ProcessApiCalls(apiCalls));
+
             ExcelCreator excelCreator = new ExcelCreator();
 
-            bool firstblood = false;
-            firstblood = await setPlayerAcheivments.GetAllAchievements(playerInfo, liveTeamPointStats);
+            // Enqueue the GetAllAchievements call to Hangfire
+            backgroundJobClient.Enqueue(() => setPlayerAcheivments.GetAllAchievements(playerInfo, liveTeamPointStats));
         }
         catch (Exception ex)
         {
@@ -163,6 +151,7 @@ public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backg
         }
         return null;
     }
+
     public static (string HealthImage, string liveStatus) EvaluateLiveStatus(int liveState, int health, int healthMax)
     {
         string liveStatus;
@@ -272,59 +261,42 @@ public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backg
         await request.ExecuteAsync();
     }
 
-
     public async Task IsEliminatedAsync(string teamName, int teamId, bool isEliminated, int totalEliminations, int rank)
     {
-        var vmixdataoperations = new VmixDataUtils();
-        var vmixdata = await vmixdataoperations.SetVMIXDataoperations();
+        TeamInfo team;
+        var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
         await vmi_LayerSetOnOff.PushAnimationAsync(TeamEliminatedGuid, 1, false, 100);
         List<string> apiCalls = new List<string>();
-        string outputFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "resources");
 
-        if (!Directory.Exists(outputFolder))
-        {
-            Directory.CreateDirectory(outputFolder);
-        }
-
-        string outputFilePath = Path.Combine(outputFolder, "isEliminated.json");
         try
         {
-            List<TeamInfo> teams = new List<TeamInfo>();
 
-            if (File.Exists(outputFilePath))
-            {
-                try
-                {
-                    string existingData = File.ReadAllText(outputFilePath);
-                    teams = JsonSerializer.Deserialize<List<TeamInfo>>(existingData) ?? new List<TeamInfo>();
-                }
-                catch (JsonException ex)
-                {
-                    _logger.LogError(ex.Message, ex);
-                    teams = new List<TeamInfo>();
-                }
-            }
+            var redis = redisConnection.GetDatabase();
 
-            TeamInfo existingTeam = teams.Find(t => t.TeamId == teamId);
-            if (existingTeam != null)
+            // Retrieve existing data from Redis
+            string existingData = await redis.StringGetAsync($"{HelperRedis.isEliminated}:{teamId}");
+            TeamInfo existingTeam = string.IsNullOrEmpty(existingData) ? new TeamInfo() : JsonSerializer.Deserialize<TeamInfo>(existingData) ?? new TeamInfo();
+
+            if (!string.IsNullOrEmpty(existingTeam.TeamName))
             {
-                _logger.LogInformation($"Team with ID {teamId} already exists in the file.");
+                _logger.LogInformation($"Team with ID {teamId} already exists in Redis.");
                 existingTeam.IsEliminated = isEliminated;
             }
             else
             {
-                teams.Add(new TeamInfo { TeamName = teamName, TeamId = teamId, IsEliminated = isEliminated });
+                team = new TeamInfo { TeamName = teamName, TeamId = teamId, IsEliminated = isEliminated };
+
                 apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(TeamEliminatedGuid, $"elims", totalEliminations.ToString()));
                 apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(TeamEliminatedGuid, $"teamname", "team" + teamId));
                 apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(TeamEliminatedGuid, $"rank", "#" + rank));
                 SetTexts setTexts = new SetTexts();
                 await setTexts.CallApiAsync(apiCalls);
                 await vmi_LayerSetOnOff.PushAnimationAsync(TeamEliminatedGuid, 1, true, 2000);
+                // Save updated data to Redis
+                await redis.StringSetAsync($"{HelperRedis.isEliminated}:{teamId}", JsonSerializer.Serialize(team, new JsonSerializerOptions { WriteIndented = true }));
+
+                _logger.LogInformation($"Team information successfully saved to Redis.");
             }
-
-            File.WriteAllText(outputFilePath, JsonSerializer.Serialize(teams, new JsonSerializerOptions { WriteIndented = true }));
-
-            _logger.LogInformation($"Team information successfully saved to {outputFilePath}");
         }
         catch (Exception ex)
         {

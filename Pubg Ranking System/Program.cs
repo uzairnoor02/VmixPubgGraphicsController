@@ -45,6 +45,7 @@ namespace Pubg_Ranking_System
 
                 // Configure Redis
                 var redis = ConnectionMultiplexer.Connect(redisConnectionString);
+                GlobalSettings.Initialize(Configuration);
 
                 // Configure services for Windows Forms
                 var services = new ServiceCollection();

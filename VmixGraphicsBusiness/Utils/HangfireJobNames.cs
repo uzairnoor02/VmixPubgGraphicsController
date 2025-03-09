@@ -18,5 +18,6 @@ namespace VmixGraphicsBusiness.Utils
         public const string GrenadeEliminationsKey = "GrenadeEliminations";
         public const string AirDropLootedKey = "AirDropLooted";
         public const string FirstBloodKey = "FirstBlood";
+        public const string isEliminated = "isEliminated";
     }
 }

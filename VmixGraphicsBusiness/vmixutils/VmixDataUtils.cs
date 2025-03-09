@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace VmixGraphicsBusiness.vmixutils
 {
-    public class VmixDataUtils
+    public static class VmixDataUtils
     {
-        public async Task<vmixguidsclass> SetVMIXDataoperations()
+        public static async Task<vmixguidsclass> SetVMIXDataoperations()
         {
             vmixguidsclass vmixguidsclass = new vmixguidsclass();
             VMIXDataoperations vMIXDataoperation = new VMIXDataoperations();

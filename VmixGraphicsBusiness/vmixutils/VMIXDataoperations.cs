@@ -2,7 +2,7 @@
 
 namespace VmixGraphicsBusiness.vmixutils
 {
-    public class VMIXDataoperations
+    public class VMIXDataoperations()
     {
         public async Task<string> GetXmlDataAsync(string apiUrl)
         {
@@ -24,11 +24,10 @@ namespace VmixGraphicsBusiness.vmixutils
         {
             try
             {
-                // URL of the vMix API
-                string apiUrl = "http://192.168.2.3:8088/API/";
+                var vmixUrl = GlobalSettings.VmixUrl;
 
                 // Make a GET request to the vMix API
-                string xmlData = await GetXmlDataAsync(apiUrl);
+                string xmlData = await GetXmlDataAsync(vmixUrl);
 
                 // Deserialize the XML data into an instance of VmixData
                 VmixData.Models.MatchModels.VmixData vmixData;

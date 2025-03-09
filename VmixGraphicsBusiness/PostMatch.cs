@@ -217,8 +217,7 @@ namespace VmixGraphicsBusiness
         public async Task WWCDStatsAsync(LivePlayersList livePlayersList, TeamInfoList teamInfoList, int match_id)
         {
             int playernum = 1;
-            var vmixdataoperations = new VmixDataUtils();
-            var vmixdata = await vmixdataoperations.SetVMIXDataoperations();
+            var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
             List<string> apiCalls = new List<string>();
 
             var winnerPlayers = livePlayersList.PlayerInfoList.Where(x => x.Rank == 1).ToList();

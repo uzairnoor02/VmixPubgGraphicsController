@@ -12,9 +12,9 @@ namespace VmixGraphicsBusiness.vmixutils
     public class vmi_layerSetOnOff
     {
         String _vmixapibaseurl;
-        public vmi_layerSetOnOff(IConfiguration configuration)
+        public vmi_layerSetOnOff()
         {
-            _vmixapibaseurl = configuration["vmixUrl"];
+            _vmixapibaseurl = GlobalSettings.VmixUrl;
 
         }
 
