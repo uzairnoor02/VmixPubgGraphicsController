@@ -1,5 +1,6 @@
 ﻿using Hangfire;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 using System.Text.Json;
 using VmixData.Models;
@@ -12,20 +13,20 @@ namespace VmixGraphicsBusiness
     {
         private readonly IBackgroundJobClient _backgroundJobClient;
         private readonly vmix_graphicsContext _vmixGraphicsContext;
-        private readonly vmi_layerSetOnOff _vmiLayerSetOnOff;
         private readonly IDatabase _redisDb;
+        private readonly IServiceProvider _serviceProvider;
 
         // Constructor Injection
         public SetPlayerAchievements(
-            vmi_layerSetOnOff vmiLayerSetOnOff,
             vmix_graphicsContext vmixGraphicsContext,
             IBackgroundJobClient backgroundJobClient,
-            IConnectionMultiplexer redisConnection)
+            IConnectionMultiplexer redisConnection,
+            IServiceProvider serviceProvider)
         {
-            _vmiLayerSetOnOff = vmiLayerSetOnOff;
             _vmixGraphicsContext = vmixGraphicsContext;
             _backgroundJobClient = backgroundJobClient;
             _redisDb = redisConnection.GetDatabase(); // Initialize Redis database
+            _serviceProvider = serviceProvider;
         }
 
         public async Task<bool> GetAllAchievements(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
@@ -41,8 +42,10 @@ namespace VmixGraphicsBusiness
             return true;
         }
 
+        [AutomaticRetry(Attempts = 0)]
         public async Task VehicleEliminationsAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats, List<Player> players)
         {
+            var _vmiLayerSetOnOff = _serviceProvider.GetService<vmi_layerSetOnOff>();
             var vmixDataOperations = new VmixDataUtils();
             var vmixData = await vmixDataOperations.SetVMIXDataoperations();
             await _vmiLayerSetOnOff.PushAnimationAsync(vmixData.VehiclePlayerAcheivmentGuid, 1, false, 300);
@@ -51,7 +54,7 @@ namespace VmixGraphicsBusiness
             {
                 if (player.KillNumInVehicle <= 0) continue;
 
-                var redisKey = $"VehicleEliminations:{player.UId}";
+                var redisKey = $"{Utils.HelperRedis.VehicleEliminationsKey}:{player.UId}:{player.UId}";
                 var existingData = await _redisDb.StringGetAsync(redisKey);
 
                 if (existingData.IsNullOrEmpty || JsonSerializer.Deserialize<VehicleEliminationInfo>(existingData).VehicleKills < player.KillNumInVehicle)
@@ -83,11 +86,13 @@ namespace VmixGraphicsBusiness
             }
         }
 
+        [AutomaticRetry(Attempts = 0)]
         public async Task GrenadeEliminationsAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats, List<Player> players)
         {
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
                 return;
 
+            var _vmiLayerSetOnOff = _serviceProvider.GetService<vmi_layerSetOnOff>();
             var vmixDataOperations = new VmixDataUtils();
             var vmixData = await vmixDataOperations.SetVMIXDataoperations();
             await _vmiLayerSetOnOff.PushAnimationAsync(vmixData.GrenadePlayerAcheivmentGuid, 1, false, 300);
@@ -96,7 +101,7 @@ namespace VmixGraphicsBusiness
             {
                 if (player.KillNumByGrenade <= 0) continue;
 
-                var redisKey = $"GrenadeEliminations:{player.UId}";
+                var redisKey = $"{Utils.HelperRedis.GrenadeEliminationsKey}:{player.UId}";
                 var existingData = await _redisDb.StringGetAsync(redisKey);
 
                 if (existingData.IsNullOrEmpty || JsonSerializer.Deserialize<GrenadeEliminationInfo>(existingData).GrenadeKills < player.KillNumByGrenade)
@@ -128,25 +133,27 @@ namespace VmixGraphicsBusiness
             }
         }
 
+        [AutomaticRetry(Attempts = 0)]
         public async Task AirDropLootedAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats, List<Player> players)
         {
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
                 return;
 
+            var _vmiLayerSetOnOff = _serviceProvider.GetService<vmi_layerSetOnOff>();
             var vmixDataOperations = new VmixDataUtils();
             var vmixData = await vmixDataOperations.SetVMIXDataoperations();
             var airdropPlayer = playerInfo.PlayerInfoList.FirstOrDefault(p => p.GotAirDropNum > 0);
             if (airdropPlayer == null) return;
 
-            var redisKey = $"AirDropLooted:{airdropPlayer.UId}";
+            var redisKey = $"{Utils.HelperRedis.AirDropLootedKey}:{airdropPlayer.UId}";
             var existingData = await _redisDb.StringGetAsync(redisKey);
 
             if (existingData.IsNullOrEmpty)
             {
                 var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == airdropPlayer.TeamId);
-                var currentPlayer = players.FirstOrDefault(x => x.PlayerUid == airdropPlayer.UId.ToString());
+                //var currentPlayer = players.FirstOrDefault(x => x.PlayerUid == airdropPlayer.UId.ToString());
 
-                if (currentTeam == null || currentPlayer == null) return;
+                if (currentTeam == null ) return;
 
                 var airdropInfo = new AirDropLootedInfo
                 {
@@ -159,7 +166,7 @@ namespace VmixGraphicsBusiness
 
                 var apiCalls = new List<string>
                 {
-                    _vmiLayerSetOnOff.GetSetTextApiCall(vmixData.AirDropPlayerAcheivmentGuid, "PLayerName", airdropPlayer.PlayerName ?? "Unknown"),
+                    _vmiLayerSetOnOff.GetSetTextApiCall(vmixData.AirDropPlayerAcheivmentGuid, "PNAME", airdropPlayer.PlayerName ?? "Unknown"),
                     _vmiLayerSetOnOff.GetSetImageApiCall(vmixData.AirDropPlayerAcheivmentGuid, "LOGO", currentTeam.teamImage ?? "")
                 };
 
@@ -169,11 +176,13 @@ namespace VmixGraphicsBusiness
             }
         }
 
+        [AutomaticRetry(Attempts = 0)]
         public async Task<bool> FirstBloodAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats, List<Player> players)
         {
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
                 return false;
 
+            var _vmiLayerSetOnOff = _serviceProvider.GetService<vmi_layerSetOnOff>();
             var vmixDataOperations = new VmixDataUtils();
             var vmixData = await vmixDataOperations.SetVMIXDataoperations();
             var firstBloodPlayer = playerInfo.PlayerInfoList.FirstOrDefault(p => p.KillNum > 0);
@@ -214,3 +223,4 @@ namespace VmixGraphicsBusiness
         }
     }
 }
+

@@ -1,22 +1,41 @@
+using Hangfire;
+using Microsoft.Extensions.Logging;
+using VmixGraphicsBusiness.Utils;
 using System.Collections.Generic;
 using VmixGraphicsBusiness;
 using VmixGraphicsBusiness.MatchBusiness;
+using StackExchange.Redis;
+using Microsoft.Extensions.Configuration;
+using VmixGraphicsBusiness.vmixutils;
+using Microsoft.Extensions.DependencyInjection;
+using VmixData.Models;
 
 namespace Pubg_Ranking_System
 {
     public partial class Form1 : Form
     {
-        Add_tournament _Add_tournament { get; set; }
-        GetLiveData _getLiveData { get; set; }
-        private TournamentBusiness _tournamentBusiness { get; set; }
-        private LiveStatsBusiness _liveStatsBusiness { get; set; }
-        public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness,TournamentBusiness tournamentBusiness)
+        private readonly Add_tournament _Add_tournament;
+        private readonly GetLiveData _getLiveData;
+        private readonly TournamentBusiness _tournamentBusiness;
+        private readonly LiveStatsBusiness _liveStatsBusiness;
+        private readonly IRecurringJobManager _recurringJobManager;
+        private readonly ILogger<Form1> _logger;
+        private readonly IConnectionMultiplexer _redisConnection;
+        private readonly IDatabase _redisDb;
+        private readonly IServiceProvider _serviceProvider;
+
+        public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness, TournamentBusiness tournamentBusiness, IRecurringJobManager recurringJobManager, ILogger<Form1> logger, IConnectionMultiplexer redisConnection, IServiceProvider serviceProvider)
         {
             _liveStatsBusiness = liveStatsBusiness;
             _Add_tournament = add_Tournament;
             _getLiveData = getLiveData;
             InitializeComponent();
+            _recurringJobManager = recurringJobManager;
+            _logger = logger;
             _tournamentBusiness = tournamentBusiness;
+            _redisConnection = redisConnection;
+            _redisDb = _redisConnection.GetDatabase(); // Initialize Redis database
+
             var tournamentnames = _tournamentBusiness.getAll().Select(x => x.Name).ToList();
             Stage_cmb.DataSource = _tournamentBusiness.getAllStages().Select(x => x.Name).ToList();
             TournamentName_cmb.DataSource = tournamentnames;
@@ -26,26 +45,29 @@ namespace Pubg_Ranking_System
             matches.Add("1"); matches.Add("2"); matches.Add("3"); matches.Add("4"); matches.Add("5"); matches.Add("6"); matches.Add("7"); matches.Add("8");
             Day_cmb.DataSource = days;
             Match_cmb.DataSource = matches;
+            _serviceProvider = serviceProvider;
         }
 
-        private void Add_Tournamen_btn_Click(object sender, EventArgs e)
+        private void Add_Tournament_btn_Click(object sender, EventArgs e)
         {
             _Add_tournament.Show();
         }
-
         private async void start_btn_Click(object sender, EventArgs e)
         {
-           var result=await  _tournamentBusiness.add_match(TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text);
+            var result = await _tournamentBusiness.add_match(TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text);
             if (result.Item2 == 0)
             {
-
-                await _getLiveData.FetchAndPostData(result.Item3);
+                EnqueueFetchAndPostDataJob(result.Item3, _recurringJobManager, _serviceProvider);
+                MessageBox.Show("Recurring job started.");
+                _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
             }
             else
             {
                 if (MessageBox.Show(result.Item1, "", MessageBoxButtons.YesNo) == DialogResult.Yes)
                 {
-                    await _getLiveData.FetchAndPostData(result.Item3);
+                    EnqueueFetchAndPostDataJob(result.Item3, _recurringJobManager, _serviceProvider);
+                   // MessageBox.Show("Recurring job started.");
+                    _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
                 }
             }
         }
@@ -57,32 +79,54 @@ namespace Pubg_Ranking_System
 
             try
             {
-                // Check if the folder exists and delete it
                 if (Directory.Exists(outputFolder))
                 {
-                    Directory.Delete(outputFolder, true); // 'true' ensures all contents are deleted
-                    Console.WriteLine($"Deleted folder: {outputFolder}");
+                    Directory.Delete(outputFolder, true);
+                    _logger.LogInformation($"Deleted folder: {outputFolder}");
                 }
             }
             catch (Exception ex)
             {
                 // Log or handle exceptions
-                Console.WriteLine($"Error deleting folder: {ex.Message}");
+                _logger.LogInformation($"Error deleting folder: {ex.Message}");
             }
         }
-        private async void button4_Click(object sender, EventArgs e)
+        private async void stop_Click(object sender, EventArgs e)
         {
-            try
+            _recurringJobManager.RemoveIfExists(HangfireJobNames.FetchAndPostDataJob);
+            MessageBox.Show("Recurring job stopped.");
+            _logger.LogInformation("Recurring job stopped.");
+
+
+            // Remove all Redis keys related to the achievements
+            var redisKeys = new List<string>
             {
-                // Run the IsEliminatedAsync method and await its result
-                await _liveStatsBusiness.IsEliminatedAsync("AS I8", 4, true, 5, 1);
-            }
-            catch (Exception ex)
+                $"{HelperRedis.VehicleEliminationsKey}:*",
+                $"{HelperRedis.GrenadeEliminationsKey}:*",
+                $"{HelperRedis.AirDropLootedKey}:*",
+                HelperRedis.FirstBloodKey
+            };
+
+            foreach (var keyPattern in redisKeys)
             {
-                // Handle any exceptions that occur
-                MessageBox.Show($"An error occurred: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                var server = _redisConnection.GetServer(_redisConnection.GetEndPoints().First());
+                var keys = server.Keys(pattern: keyPattern).ToArray();
+                if (keys.Any())
+                {
+                    await _redisDb.KeyDeleteAsync(keys);
+                }
             }
         }
+        public static void EnqueueFetchAndPostDataJob(Match match, IRecurringJobManager recurringJobManager, IServiceProvider serviceProvider)
+        {
+            var getLiveData = serviceProvider.GetRequiredService<GetLiveData>();
+            recurringJobManager.AddOrUpdate(
+                HangfireJobNames.FetchAndPostDataJob, // Job ID
+                () => getLiveData.FetchAndPostData(match), // Method to call
+                "*/2 * * * * *" // Cron expression for every 2 seconds
+            );
+        }
+
 
     }
 }

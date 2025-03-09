@@ -10,9 +10,10 @@ using System.Text.Json;
 using VmixGraphicsBusiness.vmixutils;
 using VmixData.Models;
 using Hangfire;
+using Microsoft.Extensions.Logging;
 
 namespace VmixGraphicsBusiness;
-public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backgroundJobClient, VMIXDataoperations vMIXDataoperations, vmi_layerSetOnOff _vmi_LayerSetOnOff, SetPlayerAchievements setPlayerAcheivments)
+public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backgroundJobClient, VMIXDataoperations vMIXDataoperations, vmi_layerSetOnOff _vmi_LayerSetOnOff, SetPlayerAchievements setPlayerAcheivments, IServiceProvider service, ILogger<LiveStatsBusiness> _logger)
 {
     VmixData.Models.MatchModels.VmixData VMIXData;
     string LiverankingGuid;
@@ -53,7 +54,9 @@ public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backg
             List<TeamLiveStats> teamLiveStats = new List<TeamLiveStats>();
 
             // Group players by team ID
-            var groupedByTeam = playerInfo.PlayerInfoList.GroupBy(info => info.TeamId);
+            // var groupedByTeam = playerInfo.PlayerInfoList.GroupBy(info => info.TeamId);
+            var groupedByTeam = playerInfo.PlayerInfoList.ToLookup(info => info.TeamId);
+
             var teamID = 0;
             groupedByTeam.OrderBy(x => x.Sum(y => y.KillNum));
             foreach (var teamGroup in groupedByTeam)
@@ -77,13 +80,14 @@ public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backg
                     isEliminated = true;
                     IsEliminatedAsync(teamGroup.First().TeamName, teamID, true, teamGroup.Select(x => x.KillNum).Sum(), teamGroup.Select(x => x.Rank).FirstOrDefault());
                     // All players in the current team are dead
-                    Console.WriteLine($"All players in Team {teamGroup.Key} are dead.");
+                    
+                    _logger.LogInformation($"All players in Team {teamGroup.Key} are dead.");
                 }
                 else
                 {
                     isEliminated = false;
                     // Some players in the current team are still alive
-                    Console.WriteLine($"Some players in Team {teamGroup.Key} are still alive.");
+                   // _logger.LogInformation($"Some players in Team {teamGroup.Key} are still alive.");
                 }
                 bool isinBlue = false;
                 foreach (var player in teamGroup)
@@ -153,9 +157,9 @@ public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backg
             bool firstblood = false;
             firstblood = await setPlayerAcheivments.GetAllAchievements(playerInfo, liveTeamPointStats);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            throw;
+            _logger.LogError(ex.Message, ex);
         }
         return null;
     }
@@ -294,9 +298,9 @@ public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backg
                     string existingData = File.ReadAllText(outputFilePath);
                     teams = JsonSerializer.Deserialize<List<TeamInfo>>(existingData) ?? new List<TeamInfo>();
                 }
-                catch (JsonException)
+                catch (JsonException ex)
                 {
-                    Console.WriteLine("Error reading JSON file. Initializing a new list.");
+                    _logger.LogError(ex.Message, ex);
                     teams = new List<TeamInfo>();
                 }
             }
@@ -304,7 +308,7 @@ public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backg
             TeamInfo existingTeam = teams.Find(t => t.TeamId == teamId);
             if (existingTeam != null)
             {
-                Console.WriteLine($"Team with ID {teamId} already exists in the file.");
+                _logger.LogInformation($"Team with ID {teamId} already exists in the file.");
                 existingTeam.IsEliminated = isEliminated;
             }
             else
@@ -320,11 +324,11 @@ public class LiveStatsBusiness(IConfiguration config, IBackgroundJobClient backg
 
             File.WriteAllText(outputFilePath, JsonSerializer.Serialize(teams, new JsonSerializerOptions { WriteIndented = true }));
 
-            Console.WriteLine($"Team information successfully saved to {outputFilePath}");
+            _logger.LogInformation($"Team information successfully saved to {outputFilePath}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"An error occurred: {ex.Message}");
+            _logger.LogError(ex.Message, ex);
         }
     }
 

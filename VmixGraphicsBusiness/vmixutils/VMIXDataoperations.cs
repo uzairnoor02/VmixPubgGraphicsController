@@ -25,7 +25,7 @@ namespace VmixGraphicsBusiness.vmixutils
             try
             {
                 // URL of the vMix API
-                string apiUrl = "http://127.0.0.1:8088/API/";
+                string apiUrl = "http://192.168.2.3:8088/API/";
 
                 // Make a GET request to the vMix API
                 string xmlData = await GetXmlDataAsync(apiUrl);

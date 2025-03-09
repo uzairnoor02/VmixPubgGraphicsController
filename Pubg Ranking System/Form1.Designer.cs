@@ -30,7 +30,7 @@
         {
             Add_Tournamen_btn = new Button();
             start_btn = new Button();
-            button4 = new Button();
+            stop_btn = new Button();
             TournamentName_cmb = new ComboBox();
             Stage_cmb = new ComboBox();
             label1 = new Label();
@@ -51,7 +51,7 @@
             Add_Tournamen_btn.TabIndex = 0;
             Add_Tournamen_btn.Text = "Add tournament";
             Add_Tournamen_btn.UseVisualStyleBackColor = true;
-            Add_Tournamen_btn.Click += Add_Tournamen_btn_Click;
+            Add_Tournamen_btn.Click += Add_Tournament_btn_Click;
             // 
             // start_btn
             // 
@@ -63,15 +63,15 @@
             start_btn.UseVisualStyleBackColor = true;
             start_btn.Click += start_btn_Click;
             // 
-            // button4
+            // stop_btn
             // 
-            button4.Location = new Point(571, 406);
-            button4.Name = "button4";
-            button4.Size = new Size(99, 42);
-            button4.TabIndex = 0;
-            button4.Text = "Add tournament";
-            button4.UseVisualStyleBackColor = true;
-            button4.Click += button4_Click;
+            stop_btn.Location = new Point(18, 261);
+            stop_btn.Name = "stop_btn";
+            stop_btn.Size = new Size(99, 42);
+            stop_btn.TabIndex = 0;
+            stop_btn.Text = "Stop";
+            stop_btn.UseVisualStyleBackColor = true;
+            stop_btn.Click += stop_Click;
             // 
             // TournamentName_cmb
             // 
@@ -148,6 +148,7 @@
             // groupBox1
             // 
             groupBox1.Controls.Add(Day_cmb);
+            groupBox1.Controls.Add(stop_btn);
             groupBox1.Controls.Add(label4);
             groupBox1.Controls.Add(start_btn);
             groupBox1.Controls.Add(label3);
@@ -158,7 +159,7 @@
             groupBox1.Controls.Add(Match_cmb);
             groupBox1.Location = new Point(12, 90);
             groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(169, 290);
+            groupBox1.Size = new Size(169, 316);
             groupBox1.TabIndex = 3;
             groupBox1.TabStop = false;
             groupBox1.Text = "MatchBox1";
@@ -169,7 +170,6 @@
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(784, 550);
             Controls.Add(groupBox1);
-            Controls.Add(button4);
             Controls.Add(Add_Tournamen_btn);
             Name = "Form1";
             Text = "Form1";
@@ -183,7 +183,7 @@
 
         private Button Add_Tournamen_btn;
         private Button start_btn;
-        private Button button4;
+        private Button stop_btn;
         private ComboBox TournamentName_cmb;
         private ComboBox Stage_cmb;
         private Label label1;

@@ -28,14 +28,21 @@ namespace VmixGraphicsBusiness.vmixutils
             vmixguidsclass.MVPGUID = GetlIVElInputKey(VMIXData, "MVP.gtzip") ?? "MVP.gtzip";
             return vmixguidsclass;
         }
-        static string GetlIVElInputKey(VmixData.Models.MatchModels.VmixData vmixData, string inputTitle)
+        public static string GetlIVElInputKey(VmixData.Models.MatchModels.VmixData vmixData, string inputTitle)
         {
-            // Find the input key where input title is "overall rankings"
-            var overallInput = vmixData.Inputs.FirstOrDefault(input =>
-                input.Title.Equals(inputTitle, StringComparison.OrdinalIgnoreCase) &&
-                input.Type.Equals("GT", StringComparison.OrdinalIgnoreCase));
+            try
+            {
+                // Find the input key where input title is "overall rankings"
+                var overallInput = vmixData.Inputs.FirstOrDefault(input =>
+                    input.Title.Equals(inputTitle, StringComparison.OrdinalIgnoreCase) &&
+                    input.Type.Equals("GT", StringComparison.OrdinalIgnoreCase));
 
-            return overallInput.Key;
+                return overallInput?.Key ?? Guid.NewGuid().ToString();
+            }
+            catch
+            {
+                return Guid.NewGuid().ToString();
+            }
         }
     }
     public class vmixguidsclass
