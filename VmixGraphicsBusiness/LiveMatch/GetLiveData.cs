@@ -5,8 +5,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using VmixData.Models;
 using VmixData.Models.MatchModels;
+using VmixGraphicsBusiness.PostMatchStats;
 
-namespace VmixGraphicsBusiness.MatchBusiness
+namespace VmixGraphicsBusiness.LiveMatch
 {
     public class GetLiveData
     {
@@ -52,7 +53,7 @@ namespace VmixGraphicsBusiness.MatchBusiness
         }
 
         [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 2 })]
-        public async Task FetchAndPostData(VmixData.Models.Match match)
+        public async Task FetchAndPostData(Match match)
         {
             var previousData = "";
             if (teampoints is null)
@@ -61,7 +62,8 @@ namespace VmixGraphicsBusiness.MatchBusiness
             }
             using (var client = new HttpClient())
             {
-                if (await IsInGame())
+                //if (await IsInGame())
+                while(await IsInGame())
                 {
                     try
                     {
@@ -89,6 +91,7 @@ namespace VmixGraphicsBusiness.MatchBusiness
                         {
                             Console.WriteLine($"Failed to fetch data. Status code: {response.StatusCode}");
                         }
+                        await Task.Delay(3000);
                     }
                     catch (Exception e)
                     {

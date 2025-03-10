@@ -59,10 +59,10 @@ namespace VmixGraphicsBusiness.vmixutils
             try
             {
                 // Turn the layer on or off
-                string function = isOn ? "wipe" : "wipe";
+                string function = isOn ? "slide" : "slide";
                 string Overlay = isOn ? $"OverlayInput{layer}In" : $"OverlayInput{layer}Out";
                 await SendCommandToVmixAsync($"function={Overlay}&input={input}");
-                await Task.Delay(10);
+                await Task.Delay(5000);
                 if (isOn)
                 {
 

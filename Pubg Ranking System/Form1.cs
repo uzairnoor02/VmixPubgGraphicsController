@@ -3,12 +3,12 @@ using Microsoft.Extensions.Logging;
 using VmixGraphicsBusiness.Utils;
 using System.Collections.Generic;
 using VmixGraphicsBusiness;
-using VmixGraphicsBusiness.MatchBusiness;
 using StackExchange.Redis;
 using Microsoft.Extensions.Configuration;
 using VmixGraphicsBusiness.vmixutils;
 using Microsoft.Extensions.DependencyInjection;
 using VmixData.Models;
+using VmixGraphicsBusiness.LiveMatch;
 
 namespace Pubg_Ranking_System
 {
@@ -48,6 +48,7 @@ namespace Pubg_Ranking_System
             _serviceProvider = serviceProvider;
         }
 
+
         private void Add_Tournament_btn_Click(object sender, EventArgs e)
         {
             _Add_tournament.Show();
@@ -57,7 +58,8 @@ namespace Pubg_Ranking_System
             var result = await _tournamentBusiness.add_match(TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text);
             if (result.Item2 == 0)
             {
-                EnqueueFetchAndPostDataJob(result.Item3, _recurringJobManager, _serviceProvider);
+                // EnqueueFetchAndPostDataJob(result.Item3, _recurringJobManager, _serviceProvider);
+                _getLiveData.FetchAndPostData(result.Item3);
                 MessageBox.Show("Recurring job started.");
                 _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
             }
@@ -65,8 +67,8 @@ namespace Pubg_Ranking_System
             {
                 if (MessageBox.Show(result.Item1, "", MessageBoxButtons.YesNo) == DialogResult.Yes)
                 {
-                    EnqueueFetchAndPostDataJob(result.Item3, _recurringJobManager, _serviceProvider);
-                   // MessageBox.Show("Recurring job started.");
+                    _getLiveData.FetchAndPostData(result.Item3);
+                    // MessageBox.Show("Recurring job started.");
                     _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
                 }
             }

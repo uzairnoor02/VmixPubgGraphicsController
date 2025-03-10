@@ -7,7 +7,7 @@ using VmixData.Models;
 using VmixData.Models.MatchModels;
 using VmixGraphicsBusiness.vmixutils;
 
-namespace VmixGraphicsBusiness
+namespace VmixGraphicsBusiness.LiveMatch
 {
     public class SetPlayerAchievements
     {
@@ -76,7 +76,7 @@ namespace VmixGraphicsBusiness
                     };
 
                     var setTexts = new SetTexts();
-                    await setTexts.CallApiAsync(apiCalls);
+                    _backgroundJobClient.Enqueue(() => setTexts.CallApiAsync(apiCalls));
                     await _vmiLayerSetOnOff.PushAnimationAsync(vmixData.VehiclePlayerAcheivmentGuid, 1, true, 2000);
                 }
             }
@@ -116,7 +116,7 @@ namespace VmixGraphicsBusiness
 
                     var apiCalls = new List<string>
                     {
-                        _vmiLayerSetOnOff.GetSetTextApiCall(vmixData.GrenadePlayerAcheivmentGuid, "PLayerName", player.PlayerName ?? "Unknown Player"),
+                        _vmiLayerSetOnOff.GetSetTextApiCall(vmixData.GrenadePlayerAcheivmentGuid, "PName", player.PlayerName ?? "Unknown Player"),
                         _vmiLayerSetOnOff.GetSetImageApiCall(vmixData.GrenadePlayerAcheivmentGuid, "LOGO", currentTeam.teamImage ?? string.Empty)
                     };
 
@@ -135,7 +135,8 @@ namespace VmixGraphicsBusiness
 
             var _vmiLayerSetOnOff = _serviceProvider.GetService<vmi_layerSetOnOff>();
             var vmixData = await VmixDataUtils.SetVMIXDataoperations();
-            foreach (var airdropPlayer in playerInfo.PlayerInfoList)
+
+            foreach (var airdropPlayer in playerInfo.PlayerInfoList.Where(x => x.GotAirDropNum > 0))
             {
                 if (airdropPlayer == null) return;
 
@@ -166,7 +167,7 @@ namespace VmixGraphicsBusiness
 
                     var setTexts = new SetTexts();
                     await setTexts.CallApiAsync(apiCalls);
-                    await _vmiLayerSetOnOff.PushAnimationAsync(vmixData.AirDropPlayerAcheivmentGuid, 1, true, 2000);
+                    await _vmiLayerSetOnOff.PushAnimationAsync(vmixData.AirDropPlayerAcheivmentGuid, 1, true, 5000);
                 }
             }
         }
@@ -179,42 +180,43 @@ namespace VmixGraphicsBusiness
 
             var _vmiLayerSetOnOff = _serviceProvider.GetService<vmi_layerSetOnOff>();
             var vmixData = await VmixDataUtils.SetVMIXDataoperations();
-            foreach (var firstBloodPlayer in playerInfo.PlayerInfoList) { 
-            if (firstBloodPlayer == null) return false;
+            foreach (var firstBloodPlayer in playerInfo.PlayerInfoList)
+            { //todo: check if the player is the first blood player
+                if (firstBloodPlayer.KillNum<1) return false;
 
-            var redisKey = "FirstBlood";
-            var existingData = await _redisDb.StringGetAsync(redisKey);
+                var redisKey = "FirstBlood";
+                var existingData = await _redisDb.StringGetAsync(redisKey);
 
-            if (existingData.IsNullOrEmpty)
-            {
-                var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == firstBloodPlayer.TeamId);
-
-                if (currentTeam == null) return false;
-
-                var firstBloodInfo = new FirstBlood
+                if (existingData.IsNullOrEmpty)
                 {
-                    DateTime = DateTime.UtcNow,
-                    PlayerId = firstBloodPlayer.UId.ToString()
-                };
+                    var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == firstBloodPlayer.TeamId);
 
-                await _redisDb.StringSetAsync(redisKey, JsonSerializer.Serialize(firstBloodInfo));
+                    if (currentTeam == null) return false;
 
-                var apiCalls = new List<string>
+                    var firstBloodInfo = new FirstBlood
+                    {
+                        DateTime = DateTime.UtcNow,
+                        PlayerId = firstBloodPlayer.UId.ToString()
+                    };
+
+                    await _redisDb.StringSetAsync(redisKey, JsonSerializer.Serialize(firstBloodInfo));
+
+                    var apiCalls = new List<string>
                 {
                     _vmiLayerSetOnOff.GetSetTextApiCall(vmixData.FirstBloodPlayerAcheivmentGuid, "PNAME", firstBloodPlayer.PlayerName ?? "Unknown"),
                     _vmiLayerSetOnOff.GetSetImageApiCall(vmixData.FirstBloodPlayerAcheivmentGuid, "LOGO", currentTeam.teamImage ?? "")
                 };
 
-                var setTexts = new SetTexts();
-                await setTexts.CallApiAsync(apiCalls);
-                await _vmiLayerSetOnOff.PushAnimationAsync(vmixData.FirstBloodPlayerAcheivmentGuid, 1, true, 2000);
+                    var setTexts = new SetTexts();
+                    await setTexts.CallApiAsync(apiCalls);
+                    await _vmiLayerSetOnOff.PushAnimationAsync(vmixData.FirstBloodPlayerAcheivmentGuid, 1, true, 2000);
                 }
                 return true;
             }
-        
+
 
             return false;
         }
-}
+    }
 }
 

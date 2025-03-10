@@ -1,6 +1,6 @@
 ﻿using System.Xml.Serialization;
 
-namespace VmixGraphicsBusiness;
+namespace VmixGraphicsBusiness.vmixutils;
 public class SetTexts
 {
     public async Task CallApiAsync(List<string> apiCalls)

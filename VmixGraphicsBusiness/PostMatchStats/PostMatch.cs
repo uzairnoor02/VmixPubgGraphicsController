@@ -5,7 +5,7 @@ using VmixData.Models;
 using VmixData.Models.MatchModels;
 using VmixGraphicsBusiness.vmixutils;
 
-namespace VmixGraphicsBusiness
+namespace VmixGraphicsBusiness.PostMatchStats
 {
     public class PostMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration, vmi_layerSetOnOff vmi_LayerSetOnOff)
     {

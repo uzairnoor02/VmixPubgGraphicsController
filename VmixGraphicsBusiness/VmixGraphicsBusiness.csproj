@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="PostMatchStats\" />
+    <Folder Include="MatchBusiness\" />
   </ItemGroup>
 
 </Project>

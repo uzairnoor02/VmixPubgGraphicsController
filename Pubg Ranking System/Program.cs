@@ -7,7 +7,6 @@ using StackExchange.Redis;
 using VmixData.Models;
 using VmixGraphicsBusiness;
 using VmixGraphicsBusiness.vmixutils;
-using VmixGraphicsBusiness.MatchBusiness;
 using System;
 using System.IO;
 using System.Windows.Forms;
@@ -15,6 +14,8 @@ using Hangfire.Redis.StackExchange;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using VmixGraphicsBusiness.Utils;
+using VmixGraphicsBusiness.PostMatchStats;
+using VmixGraphicsBusiness.LiveMatch;
 
 namespace Pubg_Ranking_System
 {
@@ -143,15 +144,18 @@ namespace Pubg_Ranking_System
             });
 
             // Register dependencies for Windows Forms
-            services.AddSingleton<LiveStatsBusiness>();
-            services.AddSingleton<TournamentBusiness>();
-            services.AddSingleton<Add_tournament>();
-            services.AddSingleton<PostMatch>();
-            services.AddSingleton<SetPlayerAchievements>();
-            services.AddSingleton<vmi_layerSetOnOff>();
-            services.AddSingleton<VMIXDataoperations>();
-            services.AddSingleton<GetLiveData>();
-            services.AddSingleton<Form1>();
+            services.AddTransient<LiveStatsBusiness>();
+            services.AddTransient<TournamentBusiness>();
+            services.AddTransient<Add_tournament>();
+            services.AddTransient<PostMatch>();
+            services.AddTransient<SetPlayerAchievements>();
+            services.AddTransient<vmi_layerSetOnOff>();
+            services.AddTransient<VMIXDataoperations>();
+            services.AddTransient<GetLiveData>();
+            services.AddTransient<Form1>();
+            services.AddTransient<ApiCallProcessor>();
+
+            services.AddScoped<IHostApplicationLifetime>(provider => provider.GetRequiredService<IHostApplicationLifetime>());
         }
 
         public static void ConfigureHangfire(this IServiceCollection services, IConfiguration configuration)
@@ -169,6 +173,21 @@ namespace Pubg_Ranking_System
 
             // Initialize Hangfire JobStorage
             GlobalConfiguration.Configuration.UseRedisStorage(redis);
+        }
+    }
+
+    public class DependencyJobActivator : JobActivator
+    {
+        private readonly IServiceProvider _serviceProvider;
+
+        public DependencyJobActivator(IServiceProvider serviceProvider)
+        {
+            _serviceProvider = serviceProvider;
+        }
+
+        public override object ActivateJob(Type jobType)
+        {
+            return _serviceProvider.GetService(jobType) ?? throw new InvalidOperationException($"JobActivator returned NULL instance of the '{jobType.Name}' type.");
         }
     }
 }
