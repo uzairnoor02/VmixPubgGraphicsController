@@ -75,9 +75,10 @@ public partial class PlayerStat
 
     public int? OutsideBlueCircleTime { get; set; }
 
-    public int? UseFragGrenadeNum { get; set; }
+    public int UseFragGrenadeNum { get; set; }
+    public int useBurnGrenadeNum { get; set; }
 
-    public int? UseSmokeGrenadeNum { get; set; }
+    public int UseSmokeGrenadeNum { get; set; }
 
     public int? HealTeammateNum { get; set; }
 
@@ -87,5 +88,6 @@ public partial class PlayerStat
 
     public int? RescueTimes { get; set; }
 
-    public int? StageId { get; set; }
+    public int StageId { get; set; }
+    public int DayId { get; set; }
 }
