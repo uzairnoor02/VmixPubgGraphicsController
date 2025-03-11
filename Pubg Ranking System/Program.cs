@@ -84,7 +84,7 @@ namespace Pubg_Ranking_System
                         .ConfigureWebHostDefaults(webBuilder =>
                         {
                             webBuilder.UseKestrel()
-                                .UseUrls("http://localhost:5001") 
+                                .UseUrls("http://localhost:5001", "http://localhost:5000") 
                                 .ConfigureServices((context, services) =>
                                 {
                                     services.ConfigureHangfire(Configuration);
@@ -132,7 +132,6 @@ namespace Pubg_Ranking_System
             services.AddTransient<GetLiveData>();
             services.AddSingleton<Form1>();
             services.AddScoped<ApiCallProcessor>();
-
             services.AddSingleton<IHostApplicationLifetime>(provider => provider.GetRequiredService<IHostApplicationLifetime>());
         }
 

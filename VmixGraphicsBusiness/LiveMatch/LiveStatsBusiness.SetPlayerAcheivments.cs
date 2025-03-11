@@ -32,7 +32,7 @@ namespace VmixGraphicsBusiness.LiveMatch
         {
 
             // Enqueue Hangfire Jobs (Runs one after another)
-            var jobId1 = _backgroundJobClient.Enqueue(HangfireQueues.Default ,() => FirstBloodAsync(playerInfo, liveTeamPointStats));
+            var jobId1 = _backgroundJobClient.Enqueue(HangfireQueues.Default, () => FirstBloodAsync(playerInfo, liveTeamPointStats));
             var jobId2 = _backgroundJobClient.ContinueJobWith(jobId1, () => GrenadeEliminationsAsync(playerInfo, liveTeamPointStats));
             var jobId3 = _backgroundJobClient.ContinueJobWith(jobId2, () => AirDropLootedAsync(playerInfo, liveTeamPointStats));
             var jobId4 = _backgroundJobClient.ContinueJobWith(jobId3, () => VehicleEliminationsAsync(playerInfo, liveTeamPointStats));
@@ -40,7 +40,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             return true;
         }
 
-        [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1,1 })]
+        [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
         public async Task VehicleEliminationsAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             var _vmiLayerSetOnOff = _serviceProvider.GetService<vmi_layerSetOnOff>();
@@ -86,7 +86,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             }
         }
 
-        [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1,1 })]
+        [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
         public async Task GrenadeEliminationsAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
@@ -134,7 +134,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             }
         }
 
-        [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1,1 })]
+        [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
         public async Task AirDropLootedAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
@@ -182,7 +182,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             }
         }
 
-        [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1,1 })]
+        [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
         public async Task<bool> FirstBloodAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
@@ -191,7 +191,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             var _vmiLayerSetOnOff = _serviceProvider.GetService<vmi_layerSetOnOff>();
             var vmixData = await VmixDataUtils.SetVMIXDataoperations();
             foreach (var firstBloodPlayer in playerInfo.PlayerInfoList)
-            { //todo: check if the player is the first blood player
+            {
                 if (firstBloodPlayer.KillNum < 1) return false;
 
                 var redisKey = "FirstBlood";
