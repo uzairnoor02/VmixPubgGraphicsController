@@ -19,5 +19,8 @@ namespace VmixGraphicsBusiness.Utils
         public const string AirDropLootedKey = "AirDropLooted";
         public const string FirstBloodKey = "FirstBlood";
         public const string isEliminated = "isEliminated";
+        public const string TeamInfoList = "TeamInfoList";
+        public const string PlayerInfolist = "PlayerInfolist";
+        public const string LiveRankingGuid = "LiveRankingGuid";
     }
 }

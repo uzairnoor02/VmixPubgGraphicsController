@@ -24,7 +24,7 @@ namespace VmixGraphicsBusiness.vmixutils
         {
             try
             {
-                var vmixUrl = GlobalSettings.VmixUrl;
+                var vmixUrl = ConfigGlobal.VmixUrl;
 
                 // Make a GET request to the vMix API
                 string xmlData = await GetXmlDataAsync(vmixUrl);

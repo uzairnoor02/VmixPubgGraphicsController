@@ -29,14 +29,12 @@ namespace Pubg_Ranking_System
         {
             try
             {
-                // Load configuration
                 var builder = new ConfigurationBuilder()
                     .SetBasePath(Directory.GetCurrentDirectory())
                     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 
                 Configuration = builder.Build();
 
-                // Validate configuration
                 var redisConnectionString = Configuration.GetConnectionString("RedisConnection");
                 if (string.IsNullOrEmpty(redisConnectionString))
                 {
@@ -46,70 +44,53 @@ namespace Pubg_Ranking_System
 
                 // Configure Redis
                 var redis = ConnectionMultiplexer.Connect(redisConnectionString);
-                GlobalSettings.Initialize(Configuration);
-
-                // Configure services for Windows Forms
+                ConfigGlobal.Initialize(Configuration);
                 var services = new ServiceCollection();
-
-                // Configure Entity Framework (MySQL)
                 services.AddDbContextPool<vmix_graphicsContext>(options =>
                 {
                     var connectionString = Configuration.GetConnectionString("DefaultConnection");
                     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
                 });
 
-                // Register Redis in the Windows Forms DI container
                 services.AddSingleton<IConnectionMultiplexer>(redis);
 
-                // Register Hangfire services in the Windows Forms DI container
                 services.ConfigureHangfire(Configuration);
 
-                // Register IBackgroundJobClient for service-based APIs
                 services.AddSingleton<IBackgroundJobClient, BackgroundJobClient>();
 
-                // Register dependencies for Windows Forms
                 ApplicationConfiguration.Initialize();
                 services.AddSingleton<IConfiguration>(Configuration);
                 ConfigureServices(services, Configuration);
 
-                // Build service provider for Windows Forms
                 using var serviceProvider = services.BuildServiceProvider();
 
-                // Initialize Hangfire JobStorage
                 GlobalConfiguration.Configuration.UseRedisStorage(redis);
 
-                // Start Hangfire servers explicitly with custom job activator
                 _hangfireServer = new BackgroundJobServer(new BackgroundJobServerOptions
                 {
                     Queues = new[] { HangfireQueues.Default, HangfireQueues.HighPriority, HangfireQueues.LowPriority },
-                    WorkerCount = Environment.ProcessorCount * 2, // Adjust worker count as needed
-                    Activator = new DependencyJobActivator(serviceProvider)
+                    WorkerCount = Environment.ProcessorCount * 4,
                 });
 
-                // Remove the recurring job if it exists at the start
                 using (var scope = serviceProvider.CreateScope())
                 {
                     var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
-
                     recurringJobManager.RemoveIfExists(HangfireJobNames.FetchAndPostDataJob);
                 }
 
-                // Start Hangfire Dashboard in a separate thread
                 var dashboardThread = new System.Threading.Thread(() =>
                 {
                     var host = Host.CreateDefaultBuilder()
                         .ConfigureWebHostDefaults(webBuilder =>
                         {
                             webBuilder.UseKestrel()
-                                .UseUrls("http://localhost:5001") // Adjust as needed
+                                .UseUrls("http://localhost:5001") 
                                 .ConfigureServices((context, services) =>
                                 {
-                                    // Register Hangfire services in the ASP.NET Core pipeline
                                     services.ConfigureHangfire(Configuration);
                                 })
                                 .Configure(app =>
                                 {
-                                    // Enable Hangfire Dashboard
                                     app.UseHangfireDashboard();
                                 });
                         })
@@ -119,7 +100,6 @@ namespace Pubg_Ranking_System
                 });
                 dashboardThread.Start();
 
-                // Run main Windows Form
                 var mainForm = serviceProvider.GetRequiredService<Form1>();
                 Application.Run(mainForm);
             }
@@ -129,7 +109,6 @@ namespace Pubg_Ranking_System
             }
             finally
             {
-                // Dispose of the Hangfire server when the application exits
                 _hangfireServer?.Dispose();
             }
         }
@@ -143,7 +122,6 @@ namespace Pubg_Ranking_System
                 loggingBuilder.SetMinimumLevel(LogLevel.Information);
             });
 
-            // Register dependencies for Windows Forms
             services.AddTransient<LiveStatsBusiness>();
             services.AddTransient<TournamentBusiness>();
             services.AddTransient<Add_tournament>();
@@ -152,10 +130,10 @@ namespace Pubg_Ranking_System
             services.AddTransient<vmi_layerSetOnOff>();
             services.AddTransient<VMIXDataoperations>();
             services.AddTransient<GetLiveData>();
-            services.AddTransient<Form1>();
-            services.AddTransient<ApiCallProcessor>();
+            services.AddSingleton<Form1>();
+            services.AddScoped<ApiCallProcessor>();
 
-            services.AddScoped<IHostApplicationLifetime>(provider => provider.GetRequiredService<IHostApplicationLifetime>());
+            services.AddSingleton<IHostApplicationLifetime>(provider => provider.GetRequiredService<IHostApplicationLifetime>());
         }
 
         public static void ConfigureHangfire(this IServiceCollection services, IConfiguration configuration)
@@ -163,31 +141,19 @@ namespace Pubg_Ranking_System
             var redisConnectionString = configuration.GetConnectionString("RedisConnection");
             var redis = ConnectionMultiplexer.Connect(redisConnectionString);
 
-            // Configure Hangfire to use Redis storage
-            services.AddHangfire(config => config.UseRedisStorage(redis));
+            services.AddHangfire(config =>
+            {
+                config.UseRedisStorage(redis)
+                .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+                .UseSimpleAssemblyNameTypeSerializer()
+                .UseRecommendedSerializerSettings();
+            });
             services.AddHangfireServer(options =>
             {
                 options.Queues = new[] { HangfireQueues.Default, HangfireQueues.HighPriority, HangfireQueues.LowPriority };
-                options.WorkerCount = Environment.ProcessorCount * 2; // Adjust worker count as needed
+                options.WorkerCount = Environment.ProcessorCount * 2;
             });
-
-            // Initialize Hangfire JobStorage
             GlobalConfiguration.Configuration.UseRedisStorage(redis);
-        }
-    }
-
-    public class DependencyJobActivator : JobActivator
-    {
-        private readonly IServiceProvider _serviceProvider;
-
-        public DependencyJobActivator(IServiceProvider serviceProvider)
-        {
-            _serviceProvider = serviceProvider;
-        }
-
-        public override object ActivateJob(Type jobType)
-        {
-            return _serviceProvider.GetService(jobType) ?? throw new InvalidOperationException($"JobActivator returned NULL instance of the '{jobType.Name}' type.");
         }
     }
 }

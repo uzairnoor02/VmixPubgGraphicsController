@@ -14,7 +14,7 @@ namespace VmixGraphicsBusiness.vmixutils
         String _vmixapibaseurl;
         public vmi_layerSetOnOff()
         {
-            _vmixapibaseurl = GlobalSettings.VmixUrl;
+            _vmixapibaseurl = ConfigGlobal.VmixUrl;
 
         }
 
@@ -65,7 +65,6 @@ namespace VmixGraphicsBusiness.vmixutils
                 await Task.Delay(5000);
                 if (isOn)
                 {
-
                     await Task.Delay(animationTimeMs);
                     // Turn the layer off after the animation
                     await SendCommandToVmixAsync($"function=OverlayInput{layer}Out&input={input}");
@@ -83,7 +82,7 @@ namespace VmixGraphicsBusiness.vmixutils
         }
 
         // Helper method to send a command to the vMix API
-        private async Task SendCommandToVmixAsync(string command)
+        public async Task SendCommandToVmixAsync(string command)
         {
             string requestUrl = $"{_vmixapibaseurl}?{command}";
 

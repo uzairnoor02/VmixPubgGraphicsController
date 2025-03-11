@@ -21,5 +21,5 @@ public partial class Match
 
     public DateTime? EndTime { get; set; }
 
-    public int? StageId { get; set; }
+    public int StageId { get; set; }
 }

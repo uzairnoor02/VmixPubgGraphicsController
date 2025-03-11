@@ -9,6 +9,11 @@ using VmixGraphicsBusiness.vmixutils;
 using Microsoft.Extensions.DependencyInjection;
 using VmixData.Models;
 using VmixGraphicsBusiness.LiveMatch;
+using System.Security.Cryptography.X509Certificates;
+using System.Security.Cryptography;
+using Microsoft.EntityFrameworkCore;
+using VmixGraphicsBusiness.PostMatchStats;
+using System.Diagnostics;
 
 namespace Pubg_Ranking_System
 {
@@ -23,8 +28,10 @@ namespace Pubg_Ranking_System
         private readonly IConnectionMultiplexer _redisConnection;
         private readonly IDatabase _redisDb;
         private readonly IServiceProvider _serviceProvider;
+        private readonly VmixData.Models.vmix_graphicsContext _vmix_GraphicsContext;
+        private readonly PostMatch _postMatch;
 
-        public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness, TournamentBusiness tournamentBusiness, IRecurringJobManager recurringJobManager, ILogger<Form1> logger, IConnectionMultiplexer redisConnection, IServiceProvider serviceProvider)
+        public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness, TournamentBusiness tournamentBusiness, IRecurringJobManager recurringJobManager, ILogger<Form1> logger, IConnectionMultiplexer redisConnection, IServiceProvider serviceProvider,vmix_graphicsContext vmix_GraphicsContext,PostMatch postMatch)
         {
             _liveStatsBusiness = liveStatsBusiness;
             _Add_tournament = add_Tournament;
@@ -46,8 +53,35 @@ namespace Pubg_Ranking_System
             Day_cmb.DataSource = days;
             Match_cmb.DataSource = matches;
             _serviceProvider = serviceProvider;
+            _vmix_GraphicsContext = vmix_GraphicsContext;
+            _postMatch = postMatch;
         }
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            base.OnFormClosing(e);
 
+            _logger.LogInformation("Form is closing.");
+
+            if (MessageBox.Show("Are you sure you want to close the application?", "Confirm Exit", MessageBoxButtons.YesNo) == DialogResult.No)
+            {
+                return;
+            }
+
+            string processName = "Pubg Ranking System"; 
+
+            try
+            {
+                foreach (var process in Process.GetProcessesByName(processName))
+                {
+                    process.Kill();
+                    process.WaitForExit();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error terminating process {processName}: {ex.Message}");
+            }
+        }
 
         private void Add_Tournament_btn_Click(object sender, EventArgs e)
         {
@@ -106,6 +140,10 @@ namespace Pubg_Ranking_System
                 $"{HelperRedis.VehicleEliminationsKey}:*",
                 $"{HelperRedis.GrenadeEliminationsKey}:*",
                 $"{HelperRedis.AirDropLootedKey}:*",
+                $"{HelperRedis.PlayerInfolist}",
+                $"{HelperRedis.TeamInfoList}",
+                $"isEliminated:rank",
+                $"{HelperRedis.isEliminated}:*",
                 HelperRedis.FirstBloodKey
             };
 
@@ -129,6 +167,14 @@ namespace Pubg_Ranking_System
             );
         }
 
+        private async void button1_Click(object sender, EventArgs e)
+        {
+            //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
+            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
+            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
+            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
+            _postMatch.TeamsToWatch(match);
 
+        }
     }
 }

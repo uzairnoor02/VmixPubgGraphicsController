@@ -59,11 +59,11 @@ public partial class PlayerStat
 
     public int? KillNumInVehicle { get; set; }
 
-    public int? SurvivalTime { get; set; }
+    public int SurvivalTime { get; set; }
 
     public int? DriveDistance { get; set; }
 
-    public int? MarchDistance { get; set; }
+    public int MarchDistance { get; set; }
 
     public int? Assists { get; set; }
 

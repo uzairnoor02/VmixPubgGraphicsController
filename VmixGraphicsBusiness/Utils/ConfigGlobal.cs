@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using System.IO;
 using System.Text.Json;
 
-public static class GlobalSettings
+public static class ConfigGlobal
 {
     private static readonly object _lock = new object();
     private static IConfiguration _configuration;
@@ -11,6 +11,8 @@ public static class GlobalSettings
 
     public static string VmixUrl { get; private set; }
     public static string PcobUrl { get; private set; }
+    public static string LogosImages { get; private set; }
+    public static string PlayerImages { get; private set; }
 
     public static void Initialize(IConfiguration configuration)
     {
@@ -19,14 +21,17 @@ public static class GlobalSettings
 
         VmixUrl = _configuration["VmixUrl"];
         PcobUrl = _configuration["pcobUrl"];
+        LogosImages = _configuration["TeamLogosImages"];
+        PlayerImages = _configuration["PlayerImages"];
     }
 
-    public static void UpdateUrls(string newVmixUrl, string newPcobUrl)
+    public static void UpdateUrls(string newVmixUrl, string newPcobUrl,string newlogosImages)
     {
         lock (_lock)
         {
             VmixUrl = newVmixUrl;
             PcobUrl = newPcobUrl;
+            LogosImages = newlogosImages;
 
             UpdateAppSettings();
         }
@@ -49,6 +54,10 @@ public static class GlobalSettings
                 if (jsonObj.ContainsKey("pcobUrl"))
                 {
                     jsonObj["pcobUrl"] = PcobUrl;
+                }
+                if (jsonObj.ContainsKey("logosImages"))
+                {
+                    jsonObj["logosImages"] = LogosImages;
                 }
 
                 var updatedJson = JsonSerializer.Serialize(jsonObj, new JsonSerializerOptions { WriteIndented = true });

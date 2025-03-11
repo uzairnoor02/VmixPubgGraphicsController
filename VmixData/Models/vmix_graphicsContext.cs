@@ -143,11 +143,13 @@ public partial class vmix_graphicsContext : DbContext
             entity.Property(e => e.PosZ).HasColumnName("posZ");
             entity.Property(e => e.Rank).HasColumnName("rank");
             entity.Property(e => e.RescueTimes).HasColumnName("rescue_times");
+            entity.Property(e => e.DayId).HasColumnName("day_id");
             entity.Property(e => e.ShowPicUrl).HasColumnName("show_pic_url");
             entity.Property(e => e.StageId).HasColumnName("stage_id");
             entity.Property(e => e.SurvivalTime).HasColumnName("survival_time");
             entity.Property(e => e.TeamId).HasColumnName("team_id");
             entity.Property(e => e.UseFragGrenadeNum).HasColumnName("use_frag_grenade_num");
+            entity.Property(e => e.useBurnGrenadeNum).HasColumnName("useBurnGrenadeNum");
             entity.Property(e => e.UseSmokeGrenadeNum).HasColumnName("use_smoke_grenade_num");
         });
 

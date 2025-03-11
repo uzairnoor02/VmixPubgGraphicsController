@@ -13,15 +13,15 @@ namespace VmixGraphicsBusiness.vmixutils
             vmixguidsclass vmixguidsclass = new vmixguidsclass();
             VMIXDataoperations vMIXDataoperation = new VMIXDataoperations();
             var VMIXData = await vMIXDataoperation.GetVMIXData();
-            //vmixguidsclass.LiverankingGuid = GetlIVElInputKey(VMIXData, "Live Rankings.gtzip");
+            vmixguidsclass.LiverankingGuid4 = GetlIVElInputKey(VMIXData, "Live_Rankings_4.gtzip");
             vmixguidsclass.LiverankingGuid16 = GetlIVElInputKey(VMIXData, "Live_Rankings_16.gtzip");
             vmixguidsclass.LiverankingGuid18 = GetlIVElInputKey(VMIXData, "Live_Rankings_18.gtzip");
             vmixguidsclass.LiverankingGuid20 = GetlIVElInputKey(VMIXData, "Live_Rankings_20.gtzip");
             vmixguidsclass.TeamEliminatedGuid = GetlIVElInputKey(VMIXData, "eliminated.gtzip") ?? "eliminated.gtzip";
-            vmixguidsclass.GrenadePlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "Player Achievements grenade.gtzip") ?? "Player Achievements grenade.gtzip";
-            vmixguidsclass.AirDropPlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "Player Achievements Airdrop.gtzip") ?? "Player Achievements Airdrop.gtzip";
-            vmixguidsclass.VehiclePlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "Player Achievements vehicle.gtzip") ?? "Player Achievements vehicle.gtzip";
-            vmixguidsclass.FirstBloodPlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "Player Achievements First Blood.gtzip") ?? "Player Achievements First Blood.gtzip";
+            vmixguidsclass.GrenadePlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "Grenade_kill.gtzip") ?? "Player Achievements grenade.gtzip";
+            vmixguidsclass.AirDropPlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "Airdrop_looted.gtzip") ?? "Player Achievements Airdrop.gtzip";
+            vmixguidsclass.VehiclePlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "Vehicle_kill.gtzip") ?? "Player Achievements vehicle.gtzip";
+            vmixguidsclass.FirstBloodPlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "First_Blood.gtzip") ?? "Player Achievements First Blood.gtzip";
             vmixguidsclass.WWCDTEAMSTATSGuid = GetlIVElInputKey(VMIXData, "WWCD TEAM STATS.gtzip") ?? "WWCD TEAM STATS.gtzip";
             vmixguidsclass.TeamsToWatchGUID = GetlIVElInputKey(VMIXData, "TEAMS TO WATCH.gtzip") ?? "TEAMS TO WATCH.gtzip";
             vmixguidsclass.OverAllRankingGUID = GetlIVElInputKey(VMIXData, "OVERALL RANKINGS.gtzip") ?? "OVERALL RANKINGS.gtzip";
@@ -47,7 +47,7 @@ namespace VmixGraphicsBusiness.vmixutils
     }
     public class vmixguidsclass
     {
-        //public string LiverankingGuid { get; set; }
+        public string LiverankingGuid4 { get; set; }
         public string LiverankingGuid16 { get; set; }
         public string LiverankingGuid18 { get; set; }
         public string LiverankingGuid20 { get; set; }

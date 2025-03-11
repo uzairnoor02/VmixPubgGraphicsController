@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
             Add_Tournamen_btn = new Button();
             start_btn = new Button();
             stop_btn = new Button();
@@ -40,6 +41,7 @@
             Match_cmb = new ComboBox();
             label4 = new Label();
             groupBox1 = new GroupBox();
+            button1 = new Button();
             groupBox1.SuspendLayout();
             SuspendLayout();
             // 
@@ -164,15 +166,27 @@
             groupBox1.TabStop = false;
             groupBox1.Text = "MatchBox1";
             // 
+            // button1
+            // 
+            button1.Location = new Point(430, 143);
+            button1.Name = "button1";
+            button1.Size = new Size(75, 23);
+            button1.TabIndex = 4;
+            button1.Text = "button1";
+            button1.UseVisualStyleBackColor = true;
+            button1.Click += button1_Click;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(784, 550);
+            Controls.Add(button1);
             Controls.Add(groupBox1);
             Controls.Add(Add_Tournamen_btn);
+            Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "Form1";
-            Text = "Form1";
+            Text = "Dashboard";
             Load += Form1_Load;
             groupBox1.ResumeLayout(false);
             groupBox1.PerformLayout();
@@ -193,5 +207,6 @@
         private ComboBox Match_cmb;
         private Label label4;
         private GroupBox groupBox1;
+        private Button button1;
     }
 }

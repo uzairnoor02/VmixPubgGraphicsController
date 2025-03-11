@@ -1,13 +1,15 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
+using StackExchange.Redis;
 using VmixData.Models;
 using VmixData.Models.MatchModels;
 using VmixGraphicsBusiness.vmixutils;
 
 namespace VmixGraphicsBusiness.PostMatchStats
 {
-    public class PostMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration, vmi_layerSetOnOff vmi_LayerSetOnOff)
+    public partial class PostMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration, vmi_layerSetOnOff vmi_LayerSetOnOff, IConnectionMultiplexer _redisConnection)
+
     {
         string logos = configuration["LogosImages"];
         public void createPostMtachStats(LivePlayersList livePlayersList, Match match, TeamInfoList teamInfoList)
@@ -61,13 +63,15 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     ShowPicUrl = player.ShowPicUrl,
                     MatchId = match.MatchId,
                     StageId = match.StageId,
+                    DayId=match.MatchDayId,
+                    useBurnGrenadeNum = player.UseBurnGrenadeNum,
 
                 };
                 playerstats.Add(playerStat);
-
             }
-            _vmix_GraphicsContext.PlayerStats.AddRangeAsync(playerstats);
+            _vmix_GraphicsContext.PlayerStats.AddRange(playerstats);
 
+            _vmix_GraphicsContext.SaveChanges();
         }
 
         public void saveTeamsinfo(TeamInfoList TeamsinfoList, Match match, LivePlayersList liveplayerslist)
@@ -81,10 +85,9 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     DayId = match.MatchDayId,
                     KillPoints = team.killNum,
                     MatchId = match.MatchId,
-                    StageId = match.StageId ?? 0,
+                    StageId = match.StageId,
                     TeamId = team.teamId,
                 };
-
                 var rank = liveplayerslist.PlayerInfoList.Where(x => x.TeamId == team.teamId).Select(x => x.Rank).FirstOrDefault();
                 switch (rank)
                 {
@@ -119,7 +122,6 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
                 teamPoints.Add(teamPoint);
 
-
             }
             _vmix_GraphicsContext.AddRangeAsync(teamPoints);
 
@@ -137,7 +139,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             {
                 liveTeamPointStats.Add(new LiveTeamPointStats()
                 {
-                    score = teampoints.Where(x=>x.Key.ToString()==team.TeamId).Select(x=>x.Sum(x=>x.TotalPoints)).FirstOrDefault(),
+                    score = teampoints.Where(x => x.Key.ToString() == team.TeamId).Select(x => x.Sum(x => x.TotalPoints)).FirstOrDefault(),
                     teamid = int.Parse(team.TeamId),
                     teamName = team.TeamName,
                     teamImage = logos + "\\" + stage.Name + "\\" + team.TeamId.FirstOrDefault()
@@ -185,7 +187,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     Damage = model.Sum(x => x.Damage),
                     Eliminations = model.Sum(x => x.KillNum),
                     Name = _vmix_GraphicsContext.Players.Where(x => x.PlayerUid == model.Key.ToString()).Select(x => x.PlayerDisplayName).FirstOrDefault() ?? model.Select(x => x.PlayerName).FirstOrDefault(),
-                    StageId = match.StageId ?? _vmix_GraphicsContext.Stages.Where(x => x.TournamentId == match.TournamentId).Select(x => x.StageId).FirstOrDefault(),
+                    StageId = match.StageId ==0? _vmix_GraphicsContext.Stages.Where(x => x.TournamentId == match.TournamentId).Select(x => x.StageId).FirstOrDefault():0,
                     SurvivalTime = model.Average(x => x.SurvivalTime),
                     TeamId = model.Select(x => x.TeamId).FirstOrDefault(),
                     TournamentId = match.TournamentId
@@ -214,33 +216,5 @@ namespace VmixGraphicsBusiness.PostMatchStats
         }
 
 
-        public async Task WWCDStatsAsync(LivePlayersList livePlayersList, TeamInfoList teamInfoList, int match_id)
-        {
-            int playernum = 1;
-            var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
-            List<string> apiCalls = new List<string>();
-
-            var winnerPlayers = livePlayersList.PlayerInfoList.Where(x => x.Rank == 1).ToList();
-            var winneerteam = _vmix_GraphicsContext.Teams.Where(x => x.TeamId == winnerPlayers.Select(x => x.TeamId).First().ToString()).First();
-
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.VehiclePlayerAcheivmentGuid, $"TEAMNAME1", winneerteam.TeamName));
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.VehiclePlayerAcheivmentGuid, $"MATCHNumber", match_id.ToString()));
-            //apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.VehiclePlayerAchievmentGuid, $"Image1", winneerteam.));
-            foreach (var player in winnerPlayers)
-            {
-                var players = _vmix_GraphicsContext.Players.Where(x => x.PlayerUid == player.UId.ToString()).First();
-
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.VehiclePlayerAcheivmentGuid, $"NAMEP{playernum}", players.PlayerDisplayName));
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.VehiclePlayerAcheivmentGuid, $"ELIMSP{playernum}", player.KillNum.ToString()));
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.VehiclePlayerAcheivmentGuid, $"DAMAGEP{playernum}", player.Damage.ToString()));
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.VehiclePlayerAcheivmentGuid, $"KNOCKSP{playernum}", player.Knockouts.ToString()));
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.VehiclePlayerAcheivmentGuid, $"DMGTAKENP{playernum}", player.InDamage.ToString()));
-                // apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.VehiclePlayerAchievmentGuid, $"ELIMSP2{playernum}", currentTeam.teamImage));
-            }
-
-            SetTexts setTexts = new SetTexts();
-            await setTexts.CallApiAsync(apiCalls);
-
-        }
     }
 }
