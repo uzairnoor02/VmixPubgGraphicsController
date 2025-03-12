@@ -1,4 +1,5 @@
 using StackExchange.Redis;
+using System.Linq.Expressions;
 using System.Text.Json;
 using System.Threading.Tasks;
 using VmixData.Models;
@@ -16,19 +17,29 @@ namespace VmixGraphicsBusiness.PostMatchStats
             {
                 List<string> apiCalls = new List<string>();
                 var teamRankings = _vmix_GraphicsContext.TeamPoints
-                    .Where(x => x.StageId == matches.StageId)
-                    .OrderByDescending(x => x.TotalPoints)
-                    .ThenByDescending(x => x.PlacementPoints)
-                    .ThenByDescending(x => x.WWCD)
-                    .ThenByDescending(x => x.KillPoints)
-                    .ToList();
+    .Where(x => x.StageId == matches.StageId)
+    .GroupBy(x => x.TeamId)
+    .Select(g => new
+    {
+        TeamId = g.Key,
+        TotalPoints = g.Sum(x => x.TotalPoints),
+        PlacementPoints = g.Sum(x => x.PlacementPoints),
+        WWCD = g.Sum(x => x.WWCD),
+        KillPoints = g.Sum(x => x.KillPoints)
+    })
+    .OrderByDescending(x => x.TotalPoints)
+    .ThenByDescending(x => x.PlacementPoints)
+    .ThenByDescending(x => x.WWCD)
+    .ThenByDescending(x => x.KillPoints)
+    .ToList();
                 var teamsdata = _vmix_GraphicsContext.Teams.Where(x => x.StageId == matches.StageId).ToList();
 
                 var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
                 int rankNum = 1;
                 foreach (var team in teamRankings)
                 {
-                    
+                    var chicken = _vmix_GraphicsContext.TeamPoints.Where(x => x.TeamId == team.TeamId).Select(x=>x.WWCD).Sum();
+
                     var teamData = teamsdata.Where(x => x.TeamId == team.TeamId.ToString()).FirstOrDefault();
                     if (teamData == null)
                     {
@@ -36,7 +47,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     }
 
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.OverAllRankingGUID, $"TAGT{rankNum}", teamData.TeamName));
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.OverAllRankingGUID, $"WWCD{rankNum}", team.WWCD.ToString()));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.OverAllRankingGUID, $"WWCD{rankNum}", chicken.ToString()));
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.OverAllRankingGUID, $"ELIMST{rankNum}", team.KillPoints.ToString()));
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.OverAllRankingGUID, $"PLACET{rankNum}", team.PlacementPoints.ToString()));
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.OverAllRankingGUID, $"TOTALT{rankNum}", team.TotalPoints.ToString()));
@@ -52,7 +63,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             }
             catch (Exception e)
             {
-                throw e;
+                Console.WriteLine(e);
             }
         }
     }

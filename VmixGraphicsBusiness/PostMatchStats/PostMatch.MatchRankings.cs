@@ -26,9 +26,9 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 int rankNum = 1;
                 foreach (var team in teamRankings)
                 {
-                    var wwcddata = _vmix_GraphicsContext.PlayerStats.Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.TeamId==team.TeamId).ToList();
+                    var wwcddata = _vmix_GraphicsContext.PlayerStats.Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.TeamId == team.TeamId).ToList();
                     var wwcd = wwcddata.Any(x => x.Rank == 1);
-                    var ranks =wwcddata.Select(x => x.Rank);
+                    var ranks = wwcddata.Select(x => x.Rank);
                     var teamData = teamsdata.Where(x => x.TeamId == team.TeamId.ToString()).FirstOrDefault();
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TAGT{rankNum}", teamData.TeamName));
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TEAMNAME{rankNum}", teamData.TeamName));
@@ -45,7 +45,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                         apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"WWCDT{rankNum}", $"{ConfigGlobal.LogosImages}\\0.png"));
                     }
 
-                        rankNum++;
+                    rankNum++;
                 }
                 SetTexts setTexts = new SetTexts();
                 await setTexts.CallApiAsync(apiCalls);
@@ -54,7 +54,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             }
             catch (Exception e)
             {
-                throw e;
+                Console.WriteLine(e);
             }
         }
     }

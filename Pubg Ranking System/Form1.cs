@@ -23,21 +23,22 @@ namespace Pubg_Ranking_System
         private readonly GetLiveData _getLiveData;
         private readonly TournamentBusiness _tournamentBusiness;
         private readonly LiveStatsBusiness _liveStatsBusiness;
-        private readonly IRecurringJobManager _recurringJobManager;
+        private readonly IBackgroundJobClient _backgroundJobManager;
         private readonly ILogger<Form1> _logger;
         private readonly IConnectionMultiplexer _redisConnection;
         private readonly IDatabase _redisDb;
         private readonly IServiceProvider _serviceProvider;
         private readonly VmixData.Models.vmix_graphicsContext _vmix_GraphicsContext;
         private readonly PostMatch _postMatch;
+        private readonly Reset _reset;
 
-        public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness, TournamentBusiness tournamentBusiness, IRecurringJobManager recurringJobManager, ILogger<Form1> logger, IConnectionMultiplexer redisConnection, IServiceProvider serviceProvider,vmix_graphicsContext vmix_GraphicsContext,PostMatch postMatch)
+        public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness, TournamentBusiness tournamentBusiness, IBackgroundJobClient backgroundJobManager, ILogger<Form1> logger, IConnectionMultiplexer redisConnection, IServiceProvider serviceProvider, vmix_graphicsContext vmix_GraphicsContext, PostMatch postMatch, Reset reset)
         {
             _liveStatsBusiness = liveStatsBusiness;
             _Add_tournament = add_Tournament;
             _getLiveData = getLiveData;
             InitializeComponent();
-            _recurringJobManager = recurringJobManager;
+            _backgroundJobManager = backgroundJobManager;
             _logger = logger;
             _tournamentBusiness = tournamentBusiness;
             _redisConnection = redisConnection;
@@ -55,6 +56,7 @@ namespace Pubg_Ranking_System
             _serviceProvider = serviceProvider;
             _vmix_GraphicsContext = vmix_GraphicsContext;
             _postMatch = postMatch;
+            _reset = reset;
         }
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
@@ -67,7 +69,7 @@ namespace Pubg_Ranking_System
                 return;
             }
 
-            string processName = "Pubg Ranking System"; 
+            string processName = "Pubg Ranking System";
 
             try
             {
@@ -92,7 +94,7 @@ namespace Pubg_Ranking_System
             var result = await _tournamentBusiness.add_match(TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text);
             if (result.Item2 == 0)
             {
-                // EnqueueFetchAndPostDataJob(result.Item3, _recurringJobManager, _serviceProvider);
+                EnqueueFetchAndPostDataJob(result.Item3, _backgroundJobManager, _serviceProvider);
                 _getLiveData.FetchAndPostData(result.Item3);
                 MessageBox.Show("Recurring job started.");
                 _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
@@ -129,7 +131,7 @@ namespace Pubg_Ranking_System
         }
         private async void stop_Click(object sender, EventArgs e)
         {
-            _recurringJobManager.RemoveIfExists(HangfireJobNames.FetchAndPostDataJob);
+            _backgroundJobManager.Delete(HangfireJobNames.FetchAndPostDataJob);
             MessageBox.Show("Recurring job stopped.");
             _logger.LogInformation("Recurring job stopped.");
 
@@ -157,14 +159,11 @@ namespace Pubg_Ranking_System
                 }
             }
         }
-        public static void EnqueueFetchAndPostDataJob(Match match, IRecurringJobManager recurringJobManager, IServiceProvider serviceProvider)
+        public static void EnqueueFetchAndPostDataJob(Match match, IBackgroundJobClient recurringJobManager, IServiceProvider serviceProvider)
         {
             var getLiveData = serviceProvider.GetRequiredService<GetLiveData>();
-            recurringJobManager.AddOrUpdate(
-                HangfireJobNames.FetchAndPostDataJob, // Job ID
-                () => getLiveData.FetchAndPostData(match), // Method to call
-                "*/2 * * * * *" // Cron expression for every 2 seconds
-            );
+            recurringJobManager.Enqueue(HangfireQueues.HighPriority,
+                () => getLiveData.FetchAndPostData(match));
         }
 
         private async void button1_Click(object sender, EventArgs e)
@@ -174,6 +173,65 @@ namespace Pubg_Ranking_System
             var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
             var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
             _postMatch.TeamsToWatch(match);
+
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+          //  _reset.ResetAll();
+        }
+
+        private async void button3_Click(object sender, EventArgs e)
+        {
+            //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
+            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
+            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
+            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
+            _postMatch.MatchRankings(match);
+
+        }
+
+        private async void button4_Click(object sender, EventArgs e)
+        {
+            //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
+            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
+            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
+            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
+            _postMatch.OverallRankings(match);
+
+        }
+
+        private async void button5_Click(object sender, EventArgs e)
+        {
+            //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
+            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
+            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
+            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
+            _postMatch.MatchMvp(match);
+
+        }
+
+        private async void button7_Click(object sender, EventArgs e)
+        {
+            //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
+            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
+            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
+            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
+            _postMatch.WWCDStatsAsync(match);
+
+        }
+
+        private async void button6_Click(object sender, EventArgs e)
+        {
+            //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
+            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
+            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
+            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
+            _postMatch.WWCDStatsAsync(match);
+            _postMatch.MatchMvp(match);
+            _postMatch.MatchRankings(match);
+            _postMatch.OverallRankings(match);
+            _postMatch.OverallRankings(match);
 
         }
     }

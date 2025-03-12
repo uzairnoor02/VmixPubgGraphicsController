@@ -77,7 +77,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             }
             catch(Exception e)
             {
-                throw e;
+                Console.WriteLine(e);
             }
         }
     }

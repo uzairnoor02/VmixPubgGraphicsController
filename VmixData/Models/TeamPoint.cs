@@ -18,6 +18,7 @@ public partial class TeamPoint
     public int TeamId { get; set; }
 
     public int TeamName { get; set; }
+    public int WWCD { get; set; }
 
     public int PlacementPoints { get; set; }
 

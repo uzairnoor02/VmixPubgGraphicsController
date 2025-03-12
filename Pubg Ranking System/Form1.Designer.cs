@@ -42,7 +42,15 @@
             label4 = new Label();
             groupBox1 = new GroupBox();
             button1 = new Button();
+            button2 = new Button();
+            button3 = new Button();
+            button4 = new Button();
+            button5 = new Button();
+            button7 = new Button();
+            button6 = new Button();
+            groupBox2 = new GroupBox();
             groupBox1.SuspendLayout();
+            groupBox2.SuspendLayout();
             SuspendLayout();
             // 
             // Add_Tournamen_btn
@@ -168,20 +176,97 @@
             // 
             // button1
             // 
-            button1.Location = new Point(430, 143);
+            button1.Location = new Point(21, 41);
             button1.Name = "button1";
-            button1.Size = new Size(75, 23);
+            button1.Size = new Size(158, 23);
             button1.TabIndex = 4;
-            button1.Text = "button1";
+            button1.Text = "Teams to Watch";
             button1.UseVisualStyleBackColor = true;
             button1.Click += button1_Click;
+            // 
+            // button2
+            // 
+            button2.Location = new Point(21, 245);
+            button2.Name = "button2";
+            button2.Size = new Size(158, 27);
+            button2.TabIndex = 5;
+            button2.Text = "RESET";
+            button2.UseVisualStyleBackColor = true;
+            button2.Click += button2_Click;
+            // 
+            // button3
+            // 
+            button3.Location = new Point(21, 75);
+            button3.Name = "button3";
+            button3.Size = new Size(158, 23);
+            button3.TabIndex = 6;
+            button3.Text = "Match Rankings";
+            button3.UseVisualStyleBackColor = true;
+            button3.Click += button3_Click;
+            // 
+            // button4
+            // 
+            button4.Location = new Point(21, 109);
+            button4.Name = "button4";
+            button4.Size = new Size(158, 23);
+            button4.TabIndex = 7;
+            button4.Text = "OverAll Rankings";
+            button4.UseVisualStyleBackColor = true;
+            button4.Click += button4_Click;
+            // 
+            // button5
+            // 
+            button5.Location = new Point(21, 143);
+            button5.Name = "button5";
+            button5.Size = new Size(158, 23);
+            button5.TabIndex = 7;
+            button5.Text = "Match MVP";
+            button5.UseVisualStyleBackColor = true;
+            button5.Click += button5_Click;
+            // 
+            // button7
+            // 
+            button7.Location = new Point(21, 177);
+            button7.Name = "button7";
+            button7.Size = new Size(158, 23);
+            button7.TabIndex = 8;
+            button7.Text = "WWCD Team";
+            button7.UseVisualStyleBackColor = true;
+            button7.Click += button7_Click;
+            // 
+            // button6
+            // 
+            button6.BackColor = SystemColors.ButtonShadow;
+            button6.Location = new Point(21, 211);
+            button6.Name = "button6";
+            button6.Size = new Size(158, 23);
+            button6.TabIndex = 9;
+            button6.Text = "Set All";
+            button6.UseVisualStyleBackColor = false;
+            button6.Click += button6_Click;
+            // 
+            // groupBox2
+            // 
+            groupBox2.Controls.Add(button5);
+            groupBox2.Controls.Add(button2);
+            groupBox2.Controls.Add(button6);
+            groupBox2.Controls.Add(button1);
+            groupBox2.Controls.Add(button7);
+            groupBox2.Controls.Add(button3);
+            groupBox2.Controls.Add(button4);
+            groupBox2.Location = new Point(203, 105);
+            groupBox2.Name = "groupBox2";
+            groupBox2.Size = new Size(200, 301);
+            groupBox2.TabIndex = 10;
+            groupBox2.TabStop = false;
+            groupBox2.Text = "groupBox2";
             // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(784, 550);
-            Controls.Add(button1);
+            Controls.Add(groupBox2);
             Controls.Add(groupBox1);
             Controls.Add(Add_Tournamen_btn);
             Icon = (Icon)resources.GetObject("$this.Icon");
@@ -190,6 +275,7 @@
             Load += Form1_Load;
             groupBox1.ResumeLayout(false);
             groupBox1.PerformLayout();
+            groupBox2.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -208,5 +294,12 @@
         private Label label4;
         private GroupBox groupBox1;
         private Button button1;
+        private Button button2;
+        private Button button3;
+        private Button button4;
+        private Button button5;
+        private Button button7;
+        private Button button6;
+        private GroupBox groupBox2;
     }
 }

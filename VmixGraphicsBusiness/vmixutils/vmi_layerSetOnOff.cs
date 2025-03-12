@@ -62,7 +62,6 @@ namespace VmixGraphicsBusiness.vmixutils
                 string function = isOn ? "slide" : "slide";
                 string Overlay = isOn ? $"OverlayInput{layer}In" : $"OverlayInput{layer}Out";
                 await SendCommandToVmixAsync($"function={Overlay}&input={input}");
-                await Task.Delay(5000);
                 if (isOn)
                 {
                     await Task.Delay(animationTimeMs);

@@ -16,13 +16,14 @@ using Microsoft.Extensions.Logging;
 using VmixGraphicsBusiness.Utils;
 using VmixGraphicsBusiness.PostMatchStats;
 using VmixGraphicsBusiness.LiveMatch;
+using static VmixGraphicsBusiness.LiveMatch.GetLiveData;
 
 namespace Pubg_Ranking_System
 {
     internal static class Program
     {
         public static IConfiguration Configuration { get; private set; }
-        private static BackgroundJobServer _hangfireServer;
+        private static List<BackgroundJobServer> _hangfireServers;
 
         [STAThread]
         static void Main()
@@ -65,13 +66,19 @@ namespace Pubg_Ranking_System
                 using var serviceProvider = services.BuildServiceProvider();
 
                 GlobalConfiguration.Configuration.UseRedisStorage(redis);
-
-                _hangfireServer = new BackgroundJobServer(new BackgroundJobServerOptions
+                 var serverOptions = new BackgroundJobServerOptions
                 {
                     Queues = new[] { HangfireQueues.Default, HangfireQueues.HighPriority, HangfireQueues.LowPriority },
-                    WorkerCount = Environment.ProcessorCount * 4,
-                });
+                    WorkerCount = Environment.ProcessorCount * 6, // Adjust worker count as needed
+                    Activator = new DependencyJobActivator(serviceProvider)
+                };
 
+                // Create multiple servers
+                _hangfireServers = new List<BackgroundJobServer>();
+                for (int i = 0; i < 2; i++) // Adjust the number of servers as needed
+                {
+                    _hangfireServers.Add(new BackgroundJobServer(serverOptions));
+                }
                 using (var scope = serviceProvider.CreateScope())
                 {
                     var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
@@ -84,7 +91,7 @@ namespace Pubg_Ranking_System
                         .ConfigureWebHostDefaults(webBuilder =>
                         {
                             webBuilder.UseKestrel()
-                                .UseUrls("http://localhost:5001", "http://localhost:5000") 
+                                .UseUrls("http://localhost:5001")
                                 .ConfigureServices((context, services) =>
                                 {
                                     services.ConfigureHangfire(Configuration);
@@ -109,7 +116,13 @@ namespace Pubg_Ranking_System
             }
             finally
             {
-                _hangfireServer?.Dispose();
+                if (_hangfireServers != null)
+                {
+                    foreach (var server in _hangfireServers)
+                    {
+                        server.Dispose();
+                    }
+                }
             }
         }
 
@@ -122,16 +135,18 @@ namespace Pubg_Ranking_System
                 loggingBuilder.SetMinimumLevel(LogLevel.Information);
             });
 
+            services.AddTransient<VMIXDataoperations>(); // Add this line
             services.AddTransient<LiveStatsBusiness>();
             services.AddTransient<TournamentBusiness>();
             services.AddTransient<Add_tournament>();
             services.AddTransient<PostMatch>();
             services.AddTransient<SetPlayerAchievements>();
             services.AddTransient<vmi_layerSetOnOff>();
-            services.AddTransient<VMIXDataoperations>();
             services.AddTransient<GetLiveData>();
             services.AddSingleton<Form1>();
             services.AddScoped<ApiCallProcessor>();
+            services.AddScoped<Reset>();
+
             services.AddSingleton<IHostApplicationLifetime>(provider => provider.GetRequiredService<IHostApplicationLifetime>());
         }
 
@@ -153,6 +168,20 @@ namespace Pubg_Ranking_System
                 options.WorkerCount = Environment.ProcessorCount * 2;
             });
             GlobalConfiguration.Configuration.UseRedisStorage(redis);
+        }
+        public class DependencyJobActivator : JobActivator
+        {
+            private readonly IServiceProvider _serviceProvider;
+
+            public DependencyJobActivator(IServiceProvider serviceProvider)
+            {
+                _serviceProvider = serviceProvider;
+            }
+
+            public override object ActivateJob(Type jobType)
+            {
+                return _serviceProvider.GetService(jobType) ?? throw new InvalidOperationException($"JobActivator returned NULL instance of the '{jobType.Name}' type.");
+            }
         }
     }
 }

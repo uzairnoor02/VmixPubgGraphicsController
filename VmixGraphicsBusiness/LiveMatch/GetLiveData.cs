@@ -43,7 +43,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                     {
                         var data = await response.Content.ReadAsStringAsync();
                         var isInGameResponse = JsonSerializer.Deserialize<IsInGameResponse>(data);
-                        return isInGameResponse?.IsInGame ?? false;
+                        return true;// isInGameResponse?.IsInGame ?? false;
                     }
                     else
                     {
@@ -69,7 +69,6 @@ namespace VmixGraphicsBusiness.LiveMatch
             }
             using (var client = new HttpClient())
             {
-                //if (await IsInGame())
                 while (await IsInGame())
                 {
                     try
@@ -86,7 +85,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                                 LivePlayersList livePlayerInfo = JsonSerializer.Deserialize<LivePlayersList>(PlayerData)!;
                                 TeamInfoList TeamInfoList = JsonSerializer.Deserialize<TeamInfoList>(teamdata)!;
 
-                                _backgroundJobClient.Enqueue(HangfireQueues.HighPriority, () => _liveStatsBusiness.CreateLiveStats(livePlayerInfo, TeamInfoList, teampoints));
+                                _backgroundJobClient.Enqueue(() => _liveStatsBusiness.CreateLiveStats(livePlayerInfo, TeamInfoList, teampoints));
                                 previousData = PlayerData;
                                 var db = _redisConnection.GetDatabase();
                                 await db.StringSetAsync(HelperRedis.PlayerInfolist, PlayerData);
@@ -101,7 +100,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                         {
                             Console.WriteLine($"Failed to fetch PlayerData. Status code: {responsegetplayerData.StatusCode}");
                         }
-                        await Task.Delay(500);
+                        await Task.Delay(1000);
                     }
                     catch (Exception e)
                     {
@@ -115,10 +114,10 @@ namespace VmixGraphicsBusiness.LiveMatch
                 var liverakiingguid18 = a.LiverankingGuid18;
                 var liverakiingguid20 = a.LiverankingGuid20;
                 var liverakiingguid4 = a.LiverankingGuid4;
-                _vmi_LayerSetOnOff.PushAnimationAsync(liverakiingguid16, 4, false, 1);
-                _vmi_LayerSetOnOff.PushAnimationAsync(liverakiingguid4, 4, false, 1);
-                _vmi_LayerSetOnOff.PushAnimationAsync(liverakiingguid20, 4, false, 1);
-                _vmi_LayerSetOnOff.PushAnimationAsync(liverakiingguid18, 4, false, 1);
+                _vmi_LayerSetOnOff.PushAnimationAsync(liverakiingguid16, 3, false, 1);
+                _vmi_LayerSetOnOff.PushAnimationAsync(liverakiingguid4, 3, false, 1);
+                _vmi_LayerSetOnOff.PushAnimationAsync(liverakiingguid20, 3, false, 1);
+                _vmi_LayerSetOnOff.PushAnimationAsync(liverakiingguid18, 3, false, 1);
 
 
                 var responsegetplayerDatapost = await client.GetAsync(_pcobUrl + "gettotalplayerlist");
@@ -131,8 +130,6 @@ namespace VmixGraphicsBusiness.LiveMatch
                 {
 
                     var db = _redisConnection.GetDatabase();
-                    var responsegetplayerDatapostredis = await db.StringGetAsync(HelperRedis.PlayerInfolist);
-                    var responseTeamInfoListpostredis = await db.StringGetAsync(HelperRedis.TeamInfoList);
 
                     PlayerDatapost = await responsegetplayerDatapost.Content.ReadAsStringAsync();
                     teamdatapost = await responseTeamInfoListpost.Content.ReadAsStringAsync();

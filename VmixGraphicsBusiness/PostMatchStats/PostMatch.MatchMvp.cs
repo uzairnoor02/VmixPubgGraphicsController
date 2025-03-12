@@ -15,48 +15,55 @@ namespace VmixGraphicsBusiness.PostMatchStats
     {
         public async Task MatchMvp(Match matches)
         {
-            var mvpPlayer = _vmix_GraphicsContext.PlayerStats
-                .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId)
-                .Select(p => new
-                {
-                Player = p,
-                Score = (p.SurvivalTime * 0.4) + (p.Damage * 0.4) + (p.KillNum * 0.2)
-                })
-                .OrderByDescending(p => p.Score)
-                .FirstOrDefault();
-
-            //var mvpPlayer = playerStats
-            //    .Select(p => new
-            //    {
-            //        Player = p,
-            //        Score = (p.SurvivalTime * 0.4) + (p.Damage * 0.4) + (p.KillNum * 0.2)
-            //    })
-            //    .OrderByDescending(p => p.Score)
-            //    .FirstOrDefault();
-
-            if (mvpPlayer == null)
+            try
             {
-                throw new InvalidOperationException("MVP could not be determined.");
+                var mvpPlayer = _vmix_GraphicsContext.PlayerStats
+                    .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId)
+                    .Select(p => new
+                    {
+                        Player = p,
+                        Score = (p.SurvivalTime * 0.4) + (p.Damage * 0.4) + (p.KillNum * 0.2)
+                    })
+                    .OrderByDescending(p => p.Score)
+                    .FirstOrDefault();
+
+                //var mvpPlayer = playerStats
+                //    .Select(p => new
+                //    {
+                //        Player = p,
+                //        Score = (p.SurvivalTime * 0.4) + (p.Damage * 0.4) + (p.KillNum * 0.2)
+                //    })
+                //    .OrderByDescending(p => p.Score)
+                //    .FirstOrDefault();
+
+                if (mvpPlayer == null)
+                {
+                    throw new InvalidOperationException("MVP could not be determined.");
+                }
+                var teamdata = _vmix_GraphicsContext.Teams.Where(x => x.TeamId == mvpPlayer.Player.TeamId.ToString()).FirstOrDefault();
+                var player = mvpPlayer.Player;
+                var survivalTime = TimeSpan.FromSeconds(player.SurvivalTime);
+                var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
+
+                var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
+                List<string> apiCalls = new List<string>();
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"TEAMTAGP{1}", teamdata.TeamName));
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"MATCHN", matches.MatchId.ToString()));
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"NAMEP{1}", player.PlayerName));
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"ELIMSP{1}", player.KillNum.ToString()));
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"SURVP{1}", survivalTimeString));
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"DAMAGEP{1}", player.InDamage.ToString()));
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"ASSISTSP{1}", player.Assists.ToString()));
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"LOGOP{1}", $"{ConfigGlobal.LogosImages}\\{teamdata.TeamId}.png"));
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"IMAGEP{1}", $"{ConfigGlobal.PlayerImages}\\0.png"));
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"IMAGEP{1}", $"{ConfigGlobal.PlayerImages}\\{player.PlayerUId}.png"));
+
+                SetTexts setTexts = new SetTexts();
+                await setTexts.CallApiAsync(apiCalls);
+            }catch(Exception ex)
+            {
+                Console.WriteLine(ex);
             }
-            var teamdata=_vmix_GraphicsContext.Teams.Where(x => x.TeamId == mvpPlayer.Player.TeamId.ToString()).FirstOrDefault();
-            var player=mvpPlayer.Player;
-            var survivalTime = TimeSpan.FromSeconds(player.SurvivalTime);
-            var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
-
-            var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
-            List<string> apiCalls = new List<string>();
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"TEAMTAGP{1}", teamdata.TeamName));
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"NAMEP{1}", player.PlayerName));
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"ELIMSP{1}", player.KillNum.ToString()));
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"SURVP{1}", survivalTimeString));
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"DAMAGEP{1}", player.InDamage.ToString()));
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"ASSISTSP{1}", player.Assists.ToString()));
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"LOGOP{1}", $"{ConfigGlobal.LogosImages}\\{teamdata.TeamId}.png"));
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"IMAGEP{1}", $"{ConfigGlobal.PlayerImages}\\0.png"));
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"IMAGEP{1}", $"{ConfigGlobal.PlayerImages}\\{player.PlayerUId}.png"));
-
-            SetTexts setTexts = new SetTexts();
-            await setTexts.CallApiAsync(apiCalls);
         }
 
     }

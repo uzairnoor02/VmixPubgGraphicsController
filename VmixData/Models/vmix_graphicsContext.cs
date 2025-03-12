@@ -243,6 +243,7 @@ public partial class vmix_graphicsContext : DbContext
             entity.Property(e => e.StageId).HasColumnName("stage_id");
             entity.Property(e => e.TeamId).HasColumnName("team_id");
             entity.Property(e => e.TeamName).HasColumnName("team_name");
+            entity.Property(e => e.WWCD).HasColumnName("wwcd");
             entity.Property(e => e.TotalPoints).HasColumnName("total_points");
         });
 

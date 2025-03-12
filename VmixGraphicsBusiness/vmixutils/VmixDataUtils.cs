@@ -20,12 +20,13 @@ namespace VmixGraphicsBusiness.vmixutils
             vmixguidsclass.TeamEliminatedGuid = GetlIVElInputKey(VMIXData, "eliminated.gtzip") ?? "eliminated.gtzip";
             vmixguidsclass.GrenadePlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "Grenade_kill.gtzip") ?? "Player Achievements grenade.gtzip";
             vmixguidsclass.AirDropPlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "Airdrop_looted.gtzip") ?? "Player Achievements Airdrop.gtzip";
-            vmixguidsclass.VehiclePlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "Vehicle_kill.gtzip") ?? "Player Achievements vehicle.gtzip";
+            vmixguidsclass.VehiclePlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "Vehicle_kill.gtzip") ?? "Vehicle_kill.gtzip";
             vmixguidsclass.FirstBloodPlayerAcheivmentGuid = GetlIVElInputKey(VMIXData, "First_Blood.gtzip") ?? "Player Achievements First Blood.gtzip";
             vmixguidsclass.WWCDTEAMSTATSGuid = GetlIVElInputKey(VMIXData, "WWCD TEAM STATS.gtzip") ?? "WWCD TEAM STATS.gtzip";
             vmixguidsclass.TeamsToWatchGUID = GetlIVElInputKey(VMIXData, "TEAMS TO WATCH.gtzip") ?? "TEAMS TO WATCH.gtzip";
             vmixguidsclass.OverAllRankingGUID = GetlIVElInputKey(VMIXData, "OVERALL RANKINGS.gtzip") ?? "OVERALL RANKINGS.gtzip";
-            vmixguidsclass.MVPGUID = GetlIVElInputKey(VMIXData, "MVP.gtzip") ?? "MVP.gtzip";
+            vmixguidsclass.MatchRankingsGUID = GetlIVElInputKey(VMIXData, "MATCH RANKINGS.gtzip") ?? "MATCH RANKINGS.gtzip";
+            vmixguidsclass.MVPGUID = GetlIVElInputKey(VMIXData, "MVP OF THE MATCH.gtzip") ?? "MVP OF THE MATCH.gtzip";
             return vmixguidsclass;
         }
         public static string GetlIVElInputKey(VmixData.Models.MatchModels.VmixData vmixData, string inputTitle)
@@ -59,6 +60,7 @@ namespace VmixGraphicsBusiness.vmixutils
         public string WWCDTEAMSTATSGuid { get; set; }
         public string TeamsToWatchGUID { get; set; }
         public string OverAllRankingGUID { get; set; }
+        public string MatchRankingsGUID { get; set; }
         public string MVPGUID { get; set; }
 
     }

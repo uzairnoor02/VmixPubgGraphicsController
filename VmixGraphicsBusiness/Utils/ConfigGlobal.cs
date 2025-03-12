@@ -12,6 +12,7 @@ public static class ConfigGlobal
     public static string VmixUrl { get; private set; }
     public static string PcobUrl { get; private set; }
     public static string LogosImages { get; private set; }
+    public static string Images { get; private set; }
     public static string PlayerImages { get; private set; }
 
     public static void Initialize(IConfiguration configuration)
@@ -22,6 +23,7 @@ public static class ConfigGlobal
         VmixUrl = _configuration["VmixUrl"];
         PcobUrl = _configuration["pcobUrl"];
         LogosImages = _configuration["TeamLogosImages"];
+        Images = _configuration["Images"];
         PlayerImages = _configuration["PlayerImages"];
     }
 

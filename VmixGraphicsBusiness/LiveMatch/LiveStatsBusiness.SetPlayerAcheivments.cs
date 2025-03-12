@@ -32,10 +32,10 @@ namespace VmixGraphicsBusiness.LiveMatch
         {
 
             // Enqueue Hangfire Jobs (Runs one after another)
-            var jobId1 = _backgroundJobClient.Enqueue(HangfireQueues.Default, () => FirstBloodAsync(playerInfo, liveTeamPointStats));
-            var jobId2 = _backgroundJobClient.ContinueJobWith(jobId1, () => GrenadeEliminationsAsync(playerInfo, liveTeamPointStats));
-            var jobId3 = _backgroundJobClient.ContinueJobWith(jobId2, () => AirDropLootedAsync(playerInfo, liveTeamPointStats));
-            var jobId4 = _backgroundJobClient.ContinueJobWith(jobId3, () => VehicleEliminationsAsync(playerInfo, liveTeamPointStats));
+            //var jobId1 = _backgroundJobClient.Enqueue(HangfireQueues.Default, () => FirstBloodAsync(playerInfo, liveTeamPointStats));
+            var jobId2 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => GrenadeEliminationsAsync(playerInfo, liveTeamPointStats));
+            var jobId3 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => AirDropLootedAsync(playerInfo, liveTeamPointStats));
+            var jobId4 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => VehicleEliminationsAsync(playerInfo, liveTeamPointStats));
 
             return true;
         }

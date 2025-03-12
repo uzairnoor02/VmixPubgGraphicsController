@@ -38,6 +38,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     double playerContribution = totalTeamKills > 0 ? (double)player.KillNum / totalTeamKills : 0;
                     var TotalCont = playerContribution.ToString("P2");
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"NAMEP{playernum}", player.PlayerName));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"MATCHN", matches.MatchId.ToString()));
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"ELIMSP{playernum}", player.KillNum.ToString()));
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"DAMAGEP{playernum}", player.Damage.ToString()));
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"KNOCKSP{playernum}", player.Knockouts.ToString()));
@@ -55,7 +56,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             }
             catch(Exception ex)
             {
-                throw ex;
+                Console.WriteLine( ex);
             }
         }
 
