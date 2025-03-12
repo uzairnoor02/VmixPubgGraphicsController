@@ -109,8 +109,8 @@ namespace VmixGraphicsBusiness.LiveMatch
                     }
                 }
 
-                
-                var a=await VmixDataUtils.SetVMIXDataoperations();
+
+                var a = await VmixDataUtils.SetVMIXDataoperations();
                 var liverakiingguid16 = a.LiverankingGuid16;
                 var liverakiingguid18 = a.LiverankingGuid18;
                 var liverakiingguid20 = a.LiverankingGuid20;
