@@ -10,36 +10,53 @@ namespace VmixGraphicsBusiness.PostMatchStats
 {
     public partial class PostMatch
     {
-        public async Task WWCDStatsAsync(LivePlayersList livePlayersList, TeamInfoList teamInfoList, int match_id)
+        public async Task WWCDStatsAsync(Match matches)
         {
-            var playerimges = ConfigGlobal.PlayerImages;
-            int playernum = 1;
-            var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
-            List<string> apiCalls = new List<string>();
-
-            var winnerPlayers = livePlayersList.PlayerInfoList.Where(x => x.Rank == 1).ToList();
-            var winneerteam = _vmix_GraphicsContext.Teams.Where(x => x.TeamId == winnerPlayers.Select(x => x.TeamId).First().ToString()).First();
-
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TEAMNAME1", winneerteam.TeamName));
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"MATCHNumber", match_id.ToString()));
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"Image1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
-            apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"Image1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
-            foreach (var player in winnerPlayers)
+            try
             {
-                var players = _vmix_GraphicsContext.Players.Where(x => x.PlayerUid == player.UId.ToString()).First();
+                var playerimges = ConfigGlobal.PlayerImages;
+                int playernum = 1;
+                var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
+                List<string> apiCalls = new List<string>();
 
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"NAMEP{playernum}", players.PlayerDisplayName));
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"ELIMSP{playernum}", player.KillNum.ToString()));
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"DAMAGEP{playernum}", player.Damage.ToString()));
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"KNOCKSP{playernum}", player.Knockouts.ToString()));
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"ASSISTSP{playernum}", player.Assists.ToString()));
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"DMGTAKENP{playernum}", player.InDamage.ToString()));
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"THROWABLESP{playernum}", $"{player.UseBurnGrenadeNum + player.UseFlashGrenadeNum + player.UseSmokeGrenadeNum}"));
-                apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"IMAGEP{playernum}", $"{playerimges}//{player.UId.ToString()}.png"));
+
+
+                var winnerPlayers = _vmix_GraphicsContext.PlayerStats
+                    .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.Rank==1)
+                    .ToList();
+                var winneerteam = _vmix_GraphicsContext.Teams
+                    .Where(x => x.TeamId == winnerPlayers.Select(x => x.TeamId).First().ToString()).First();
+
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TNAME", winneerteam.TeamName));
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"MATCHNumber", matches.MatchId.ToString()));
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"Image1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
+                apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"Image1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
+                int totalTeamKills = (int)winnerPlayers.Sum(x => x.KillNum);
+
+                foreach (var player in winnerPlayers)
+                {
+                    double playerContribution = totalTeamKills > 0 ? (double)player.KillNum / totalTeamKills : 0;
+                    var TotalCont = playerContribution.ToString("P2");
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"NAMEP{playernum}", player.PlayerName));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"ELIMSP{playernum}", player.KillNum.ToString()));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"DAMAGEP{playernum}", player.Damage.ToString()));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"KNOCKSP{playernum}", player.Knockouts.ToString()));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"ASSISTSP{playernum}", player.Assists.ToString()));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"DMGTAKENP{playernum}", player.InDamage.ToString())); ;
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"CONTP{playernum}", TotalCont)); ;
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"THROWABLESP{playernum}", $"{player.useBurnGrenadeNum + player.UseSmokeGrenadeNum + player.UseSmokeGrenadeNum}"));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"IMAGEP{playernum}", $"{playerimges}//0.png"));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"IMAGEP{playernum}", $"{playerimges}//{player.PlayerUId.ToString()}.png"));
+                    playernum++;
+                }
+
+                SetTexts setTexts = new SetTexts();
+                await setTexts.CallApiAsync(apiCalls);
             }
-
-            SetTexts setTexts = new SetTexts();
-            await setTexts.CallApiAsync(apiCalls);
+            catch(Exception ex)
+            {
+                throw ex;
+            }
         }
 
 

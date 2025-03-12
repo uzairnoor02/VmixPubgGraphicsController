@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using VmixData.Models;
 using VmixData.Models.MatchModels;
 using VmixGraphicsBusiness.Utils;
 using VmixGraphicsBusiness.vmixutils;
@@ -12,42 +13,47 @@ namespace VmixGraphicsBusiness.PostMatchStats
 {
     partial class PostMatch
     {
-        public async Task CalculateMVP()
+        public async Task MatchMvp(Match matches)
         {
-            var playersData = JsonSerializer.Deserialize<LivePlayersList>(_redisConnection.GetDatabase().StringGet(HelperRedis.PlayerInfolist));
-            if (playersData == null || playersData.PlayerInfoList == null)
-            {
-                throw new InvalidOperationException("Player data could not be retrieved.");
-            }
-
-            var playerStats = playersData.PlayerInfoList;
-
-            if (!playerStats.Any())
-            {
-                throw new InvalidOperationException("No player stats found for the given match.");
-            }
-
-            var mvpPlayer = playerStats
+            var mvpPlayer = _vmix_GraphicsContext.PlayerStats
+                .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId)
                 .Select(p => new
                 {
-                    Player = p,
-                    Score = (p.SurvivalTime * 0.4) + (p.Damage * 0.4) + (p.KillNum * 0.2)
+                Player = p,
+                Score = (p.SurvivalTime * 0.4) + (p.Damage * 0.4) + (p.KillNum * 0.2)
                 })
                 .OrderByDescending(p => p.Score)
                 .FirstOrDefault();
+
+            //var mvpPlayer = playerStats
+            //    .Select(p => new
+            //    {
+            //        Player = p,
+            //        Score = (p.SurvivalTime * 0.4) + (p.Damage * 0.4) + (p.KillNum * 0.2)
+            //    })
+            //    .OrderByDescending(p => p.Score)
+            //    .FirstOrDefault();
 
             if (mvpPlayer == null)
             {
                 throw new InvalidOperationException("MVP could not be determined.");
             }
+            var teamdata=_vmix_GraphicsContext.Teams.Where(x => x.TeamId == mvpPlayer.Player.TeamId.ToString()).FirstOrDefault();
+            var player=mvpPlayer.Player;
+            var survivalTime = TimeSpan.FromSeconds(player.SurvivalTime);
+            var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
 
             var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
-            List<string> apiCalls = new List<string>
-    {
-        vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, "MVPName", mvpPlayer.Player.PlayerName),
-        vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, "MVPScore", mvpPlayer.Score.ToString("F2")),
-        vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, "MVPImage", $"{ConfigGlobal.PlayerImages}//{mvpPlayer.Player.UId}.png")
-    };
+            List<string> apiCalls = new List<string>();
+            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"TEAMTAGP{1}", teamdata.TeamName));
+            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"NAMEP{1}", player.PlayerName));
+            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"ELIMSP{1}", player.KillNum.ToString()));
+            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"SURVP{1}", survivalTimeString));
+            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"DAMAGEP{1}", player.InDamage.ToString()));
+            apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"ASSISTSP{1}", player.Assists.ToString()));
+            apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"LOGOP{1}", $"{ConfigGlobal.LogosImages}\\{teamdata.TeamId}.png"));
+            apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"IMAGEP{1}", $"{ConfigGlobal.PlayerImages}\\0.png"));
+            apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"IMAGEP{1}", $"{ConfigGlobal.PlayerImages}\\{player.PlayerUId}.png"));
 
             SetTexts setTexts = new SetTexts();
             await setTexts.CallApiAsync(apiCalls);

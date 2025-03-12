@@ -20,7 +20,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     .OrderByDescending(x => x.TotalPoints)
                     .Take(4)
                     .ToList();
-                var teamsdata = _vmix_GraphicsContext.Teams.ToList();
+                var teamsdata = _vmix_GraphicsContext.Teams.Where(x => x.StageId == matches.StageId).ToList();
 
 
 

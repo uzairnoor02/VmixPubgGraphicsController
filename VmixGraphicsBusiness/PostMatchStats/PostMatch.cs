@@ -63,7 +63,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     ShowPicUrl = player.ShowPicUrl,
                     MatchId = match.MatchId,
                     StageId = match.StageId,
-                    DayId=match.MatchDayId,
+                    DayId = match.MatchDayId,
                     useBurnGrenadeNum = player.UseBurnGrenadeNum,
 
                 };
@@ -79,6 +79,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             var teamPoints = new List<TeamPoint>();
             foreach (var team in TeamsinfoList.teamInfoList)
             {
+                var wwcd = liveplayerslist.PlayerInfoList.Where(x => x.TeamId == team.teamId).Any(x => x.Rank == 1);
                 int placementpoints = 0;
                 TeamPoint teamPoint = new TeamPoint()
                 {
@@ -87,6 +88,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     MatchId = match.MatchId,
                     StageId = match.StageId,
                     TeamId = team.teamId,
+                    WWCD = wwcd ? 1 : 0
                 };
                 var rank = liveplayerslist.PlayerInfoList.Where(x => x.TeamId == team.teamId).Select(x => x.Rank).FirstOrDefault();
                 switch (rank)
@@ -187,7 +189,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     Damage = model.Sum(x => x.Damage),
                     Eliminations = model.Sum(x => x.KillNum),
                     Name = _vmix_GraphicsContext.Players.Where(x => x.PlayerUid == model.Key.ToString()).Select(x => x.PlayerDisplayName).FirstOrDefault() ?? model.Select(x => x.PlayerName).FirstOrDefault(),
-                    StageId = match.StageId ==0? _vmix_GraphicsContext.Stages.Where(x => x.TournamentId == match.TournamentId).Select(x => x.StageId).FirstOrDefault():0,
+                    StageId = match.StageId == 0 ? _vmix_GraphicsContext.Stages.Where(x => x.TournamentId == match.TournamentId).Select(x => x.StageId).FirstOrDefault() : 0,
                     SurvivalTime = model.Average(x => x.SurvivalTime),
                     TeamId = model.Select(x => x.TeamId).FirstOrDefault(),
                     TournamentId = match.TournamentId

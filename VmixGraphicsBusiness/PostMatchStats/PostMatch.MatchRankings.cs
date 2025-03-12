@@ -18,32 +18,39 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 var teamRankings = _vmix_GraphicsContext.TeamPoints
                     .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId)
                     .OrderByDescending(x => x.TotalPoints)
+                    .ThenByDescending(x => x.PlacementPoints)
                     .ToList();
-                var teamsdata = _vmix_GraphicsContext.Teams.ToList();
+                var teamsdata = _vmix_GraphicsContext.Teams.Where(x => x.StageId == matches.StageId).ToList();
 
                 var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
                 int rankNum = 1;
                 foreach (var team in teamRankings)
                 {
+                    var wwcddata = _vmix_GraphicsContext.PlayerStats.Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.TeamId==team.TeamId).ToList();
+                    var wwcd = wwcddata.Any(x => x.Rank == 1);
+                    var ranks =wwcddata.Select(x => x.Rank);
                     var teamData = teamsdata.Where(x => x.TeamId == team.TeamId.ToString()).FirstOrDefault();
-                    if (teamData == null)
-                    {
-                        continue;
-                    }
-
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TAGT{rankNum}", teamData.TeamName));
                     apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TEAMNAME{rankNum}", teamData.TeamName));
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"ELIMST{rankNum}", teamData.TeamName));
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"PLACET{rankNum}", teamData.TeamName));
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TOTALT{rankNum}", teamData.TeamName));
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"LOGOTEAM{rankNum}", $"{ConfigGlobal.LogosImages}\\{teamData.TeamId}.png"));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"ELIMST{rankNum}", team.KillPoints.ToString()));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"PLACET{rankNum}", team.PlacementPoints.ToString()));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TOTALT{rankNum}", team.TotalPoints.ToString()));
+                    apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"LOGOT{rankNum}", $"{ConfigGlobal.LogosImages}\\{teamData.TeamId}.png"));
+                    if (wwcd)
+                    {
+                        apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"WWCDT{rankNum}", $"{ConfigGlobal.LogosImages}\\WWCD.png"));
+                    }
+                    else
+                    {
+                        apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"WWCDT{rankNum}", $"{ConfigGlobal.LogosImages}\\0.png"));
+                    }
 
-                    rankNum++;
+                        rankNum++;
                 }
                 SetTexts setTexts = new SetTexts();
                 await setTexts.CallApiAsync(apiCalls);
-                var MatchRankingsGUID = vmixdata.MatchRankingsGUID;
-                //await vmi_LayerSetOnOff.PushAnimationAsync(MatchRankingsGUID, 4, true, 1);
+                var OverAllRankingGUID = vmixdata.OverAllRankingGUID;
+                //await vmi_LayerSetOnOff.PushAnimationAsync(OverAllRankingGUID, 4, true, 1);
             }
             catch (Exception e)
             {
