@@ -14,7 +14,7 @@ namespace VmixGraphicsBusiness.vmixutils
             VMIXDataoperations vMIXDataoperation = new VMIXDataoperations();
             var VMIXData = await vMIXDataoperation.GetVMIXData();
             vmixguidsclass.LiverankingGuid4 = GetlIVElInputKey(VMIXData, "Live_Rankings_4.gtzip");
-            vmixguidsclass.LiverankingGuid16 = GetlIVElInputKey(VMIXData, "Live_Rankings_16.gtzip");
+            vmixguidsclass.LiverankingGuid16 = "LIVE_RANKINGS_16.gtzip";//GetlIVElInputKey(VMIXData, "Live_Rankings_16.gtzip");
             vmixguidsclass.LiverankingGuid18 = GetlIVElInputKey(VMIXData, "Live_Rankings_18.gtzip");
             vmixguidsclass.LiverankingGuid20 = GetlIVElInputKey(VMIXData, "Live_Rankings_20.gtzip");
             vmixguidsclass.TeamEliminatedGuid = GetlIVElInputKey(VMIXData, "eliminated.gtzip") ?? "eliminated.gtzip";

@@ -57,23 +57,23 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     var survivalTime = TimeSpan.FromSeconds(totalSurvivalTime);
                     var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
 
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"TAGT{teamnum}", teamData.TeamName));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"TAGT{teamnum}", teamData.TeamName));
 
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"MOLIUSEDT{teamnum}", totalBurnGrenades.ToString()));
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"SURVIVALT{teamnum}", survivalTimeString));
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"BUMUSEDT{teamnum}", totalFragGrenades.ToString()));
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"SMOKEUSEDT{teamnum}", totalSmokeGrenades.ToString()));
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"TRAVELDIST{teamnum}", totalDistance.ToString()));
-                    //apiCalls.Add(vmi_LayerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"MATCHNumber", matches.MatchId.ToString()));
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.TeamsToWatchGUID, $"LOGOTEAM{teamnum}", $"{ConfigGlobal.LogosImages}\\0.png"));
-                    apiCalls.Add(vmi_LayerSetOnOff.GetSetImageApiCall(vmixdata.TeamsToWatchGUID, $"LOGOTEAM{teamnum}", $"{ConfigGlobal.LogosImages}\\{teamData.TeamId}.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"MOLIUSEDT{teamnum}", totalBurnGrenades.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"SURVIVALT{teamnum}", survivalTimeString));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"BUMUSEDT{teamnum}", totalFragGrenades.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"SMOKEUSEDT{teamnum}", totalSmokeGrenades.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"TRAVELDIST{teamnum}", totalDistance.ToString()));
+                    //apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"MATCHNumber", matches.MatchId.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.TeamsToWatchGUID, $"LOGOTEAM{teamnum}", $"{ConfigGlobal.LogosImages}\\0.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.TeamsToWatchGUID, $"LOGOTEAM{teamnum}", $"{ConfigGlobal.LogosImages}\\{teamData.TeamId}.png"));
 
                     teamnum++;
                 }
                 SetTexts setTexts = new SetTexts();
                 await setTexts.CallApiAsync(apiCalls);
                 var TeamsToWatchGUID = vmixdata.TeamsToWatchGUID;
-                //await vmi_LayerSetOnOff.PushAnimationAsync(TeamsToWatchGUID, 4, true, 1);
+                //await vmi_layerSetOnOff.PushAnimationAsync(TeamsToWatchGUID, 4, true, 1);
             }
             catch(Exception e)
             {

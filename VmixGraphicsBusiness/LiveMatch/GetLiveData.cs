@@ -1,6 +1,7 @@
 ﻿
 using Hangfire;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -19,17 +20,19 @@ namespace VmixGraphicsBusiness.LiveMatch
         private readonly IBackgroundJobClient _backgroundJobClient;
         private readonly IConnectionMultiplexer _redisConnection;
         private readonly string _pcobUrl;
-        private readonly vmi_layerSetOnOff _vmi_LayerSetOnOff;
+        private readonly IServiceProvider serviceProvider1;
         private List<LiveTeamPointStats> teampoints = null;
 
-        public GetLiveData(LiveStatsBusiness liveStatsBusiness, PostMatch dbBusiness, IBackgroundJobClient backgroundJobClient, IConnectionMultiplexer connectionMultiplexer, vmi_layerSetOnOff vmi_LayerSetOnOff)
+        public GetLiveData(LiveStatsBusiness liveStatsBusiness, PostMatch dbBusiness, IBackgroundJobClient backgroundJobClient, IConnectionMultiplexer connectionMultiplexer, IServiceProvider serviceProvider)
         {
             _liveStatsBusiness = liveStatsBusiness;
             _dbBusiness = dbBusiness;
             _backgroundJobClient = backgroundJobClient;
             _pcobUrl = ConfigGlobal.PcobUrl;
             _redisConnection = connectionMultiplexer;
-            _vmi_LayerSetOnOff = vmi_LayerSetOnOff;
+            serviceProvider1 = serviceProvider;
+
+            using var scope = serviceProvider.CreateScope();
         }
 
         public async Task<bool> IsInGame()
@@ -43,7 +46,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                     {
                         var data = await response.Content.ReadAsStringAsync();
                         var isInGameResponse = JsonSerializer.Deserialize<IsInGameResponse>(data);
-                        return true;// isInGameResponse?.IsInGame ?? false;
+                        return isInGameResponse?.IsInGame ?? false;
                     }
                     else
                     {
@@ -84,8 +87,34 @@ namespace VmixGraphicsBusiness.LiveMatch
                             {
                                 LivePlayersList livePlayerInfo = JsonSerializer.Deserialize<LivePlayersList>(PlayerData)!;
                                 TeamInfoList TeamInfoList = JsonSerializer.Deserialize<TeamInfoList>(teamdata)!;
+                                var filteredPlayerInfo = new LivePlayersList
+                                {
+                                    PlayerInfoList = livePlayerInfo.PlayerInfoList.Select(player => new LivePlayerInfo
+                                    {
+                                        UId = player.UId,
+                                        PlayerName = player.PlayerName,
+                                        TeamId = player.TeamId,
+                                        TeamName = player.TeamName,
+                                        Health = player.Health,
+                                        HealthMax = player.HealthMax,
+                                        LiveState = player.LiveState,
+                                        KillNum = player.KillNum,
+                                        KillNumByGrenade = player.KillNumByGrenade,
+                                        KillNumInVehicle = player.KillNumInVehicle,
+                                        GotAirDropNum = player.GotAirDropNum,
+                                        UseFragGrenadeNum = player.UseFragGrenadeNum,
+                                        UseSmokeGrenadeNum = player.UseSmokeGrenadeNum,
+                                        UseBurnGrenadeNum = player.UseBurnGrenadeNum,
+                                        BHasDied = player.BHasDied,
+                                        IsOutsideBlueCircle=player.IsOutsideBlueCircle,
+                                        Rank=player.Rank,
+                                        Assists=player.Assists,
+                                        KillNumBeforeDie = player.KillNumBeforeDie,
+                                        
+                                    }).ToList()
+                                };
 
-                                _backgroundJobClient.Enqueue(() => _liveStatsBusiness.CreateLiveStats(livePlayerInfo, TeamInfoList, teampoints));
+                                _backgroundJobClient.Enqueue(HangfireQueues.HighPriority, () => _liveStatsBusiness.CreateLiveStats(filteredPlayerInfo, TeamInfoList, teampoints));
                                 previousData = PlayerData;
                                 var db = _redisConnection.GetDatabase();
                                 await db.StringSetAsync(HelperRedis.PlayerInfolist, PlayerData);
@@ -100,7 +129,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                         {
                             Console.WriteLine($"Failed to fetch PlayerData. Status code: {responsegetplayerData.StatusCode}");
                         }
-                        await Task.Delay(1000);
+                        await Task.Delay(2000);
                     }
                     catch (Exception e)
                     {
@@ -114,12 +143,14 @@ namespace VmixGraphicsBusiness.LiveMatch
                 var liverakiingguid18 = a.LiverankingGuid18;
                 var liverakiingguid20 = a.LiverankingGuid20;
                 var liverakiingguid4 = a.LiverankingGuid4;
-                _vmi_LayerSetOnOff.PushAnimationAsync(liverakiingguid16, 3, false, 1);
-                _vmi_LayerSetOnOff.PushAnimationAsync(liverakiingguid4, 3, false, 1);
-                _vmi_LayerSetOnOff.PushAnimationAsync(liverakiingguid20, 3, false, 1);
-                _vmi_LayerSetOnOff.PushAnimationAsync(liverakiingguid18, 3, false, 1);
+                _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid16, 1, false, 3000));
 
+                _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid16, 4, false, 3000));
+                _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid4, 4, false, 3400));
+                _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid20, 4, false, 789));
+                _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid18, 4, false, 7897));
 
+                await Task.Delay(10000);
                 var responsegetplayerDatapost = await client.GetAsync(_pcobUrl + "gettotalplayerlist");
                 var responseTeamInfoListpost = await client.GetAsync(_pcobUrl + "getteaminfolist");
                 string PlayerDatapost, teamdatapost;
@@ -129,12 +160,9 @@ namespace VmixGraphicsBusiness.LiveMatch
                 if (responsegetplayerDatapost.IsSuccessStatusCode)
                 {
 
-                    var db = _redisConnection.GetDatabase();
 
                     PlayerDatapost = await responsegetplayerDatapost.Content.ReadAsStringAsync();
                     teamdatapost = await responseTeamInfoListpost.Content.ReadAsStringAsync();
-                    await db.StringSetAsync(HelperRedis.PlayerInfolist, PlayerDatapost);
-                    await db.StringSetAsync(HelperRedis.TeamInfoList, teamdatapost);
                     LivePlayersList livePlayerInfo = JsonSerializer.Deserialize<LivePlayersList>(PlayerDatapost)!;
                     TeamInfoList TeamInfoList = JsonSerializer.Deserialize<TeamInfoList>(teamdatapost)!;
                     _dbBusiness.createPostMtachStats(livePlayerInfo!, match, TeamInfoList!);

@@ -94,9 +94,8 @@ namespace Pubg_Ranking_System
             var result = await _tournamentBusiness.add_match(TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text);
             if (result.Item2 == 0)
             {
-                EnqueueFetchAndPostDataJob(result.Item3, _backgroundJobManager, _serviceProvider);
+               // EnqueueFetchAndPostDataJob(result.Item3, _backgroundJobManager, _serviceProvider);
                 _getLiveData.FetchAndPostData(result.Item3);
-                MessageBox.Show("Recurring job started.");
                 _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
             }
             else
@@ -178,7 +177,7 @@ namespace Pubg_Ranking_System
 
         private void button2_Click(object sender, EventArgs e)
         {
-          //  _reset.ResetAll();
+           _reset.ResetAll();
         }
 
         private async void button3_Click(object sender, EventArgs e)
