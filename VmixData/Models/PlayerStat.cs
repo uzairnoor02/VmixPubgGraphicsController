@@ -61,7 +61,7 @@ public partial class PlayerStat
 
     public int SurvivalTime { get; set; }
 
-    public int? DriveDistance { get; set; }
+    public int DriveDistance { get; set; }
 
     public int MarchDistance { get; set; }
 

@@ -35,7 +35,7 @@ namespace VmixGraphicsBusiness.vmixutils
             if (apiCalls.Any())
             {
                 SetTexts setTexts = new SetTexts();
-                await setTexts.CallApiAsync(apiCalls);
+                await setTexts.CallMultipleApiAsync(apiCalls);
                 if (string.IsNullOrWhiteSpace(input))
                 {
                     throw new ArgumentException("Input cannot be null or empty.", nameof(input));
@@ -58,7 +58,7 @@ namespace VmixGraphicsBusiness.vmixutils
                     // Turn the layer on or off
                     string function = isOn ? "slide" : "slide";
                     string Overlay = isOn ? $"OverlayInput{layer}In" : $"OverlayInput{layer}Out";
-                     await SendCommandToVmixAsync($"function={Overlay}&input={input}");
+                    await SendCommandToVmixAsync($"function={Overlay}&input={input}");
                     if (isOn)
                     {
                         await Task.Delay(TimeSpan.FromMilliseconds(4000));
@@ -78,6 +78,66 @@ namespace VmixGraphicsBusiness.vmixutils
             }
         }
 
+        [DisableConcurrentExecution(timeoutInSeconds: 30)] // Prevent concurrent execution
+        public static async Task PushCircleAnimationAsync(string input, int layer, bool isOn, int counter)
+        {
+            SetTexts setTexts = new SetTexts();
+            var apiCall = GetSetTextApiCall(input, "counter", counter.ToString());
+            bool _isAnimationActive = false;
+            String _vmixapibaseurl = ConfigGlobal.VmixUrl;
+
+            _isAnimationActive = true;
+            try
+            {
+                // Turn the layer on or off
+                string function = isOn ? "slide" : "slide";
+                string Overlay = isOn ? $"OverlayInput{layer}In" : $"OverlayInput{layer}Out";
+                await SendCommandToVmixAsync($"function={Overlay}&input={input}");
+                for (var i = counter; i == 0; i--)
+                {
+                    await setTexts.CallApiAsync(apiCall);
+                    apiCall = GetSetTextApiCall(input, "counter", counter.ToString());
+                    await Task.Delay(998);
+                }
+                await SendCommandToVmixAsync($"function=OverlayInput{layer}Out"); //&input={input}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                throw;
+            }
+            finally
+            {
+                _isAnimationActive = false;
+            }
+        }
+
+        // Helper method to send a command to the vMix API
+        public static async Task SendCommandToVmixAsync(string command)
+        {
+            String _vmixapibaseurl = ConfigGlobal.VmixUrl;
+            string requestUrl = $"{_vmixapibaseurl}?{command}";
+
+            try
+            {
+                HttpResponseMessage response = await _httpClient.GetAsync(requestUrl);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Command sent successfully: {command}");
+                }
+                else
+                {
+                    Console.WriteLine($"Failed to send command. Status code: {response.StatusCode}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending command to vMix: {ex.Message}");
+                throw;
+            }
+
+        }
         public static async Task PushAnimationAsync(string input, int layer, bool isOn, int animationTimeMs)
         {
             bool _isAnimationActive = false;
@@ -124,31 +184,5 @@ namespace VmixGraphicsBusiness.vmixutils
             }
         }
 
-        // Helper method to send a command to the vMix API
-        public static async Task SendCommandToVmixAsync(string command)
-        {
-            String _vmixapibaseurl = ConfigGlobal.VmixUrl;
-            string requestUrl = $"{_vmixapibaseurl}?{command}";
-
-            try
-            {
-                HttpResponseMessage response = await _httpClient.GetAsync(requestUrl);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    Console.WriteLine($"Command sent successfully: {command}");
-                }
-                else
-                {
-                    Console.WriteLine($"Failed to send command. Status code: {response.StatusCode}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error sending command to vMix: {ex.Message}");
-                throw;
-            }
-
-        }
     }
 }

@@ -59,7 +59,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"IMAGEP{1}", $"{ConfigGlobal.PlayerImages}\\{player.PlayerUId}.png"));
 
                 SetTexts setTexts = new SetTexts();
-                await setTexts.CallApiAsync(apiCalls);
+                await setTexts.CallMultipleApiAsync(apiCalls);
             }catch(Exception ex)
             {
                 Console.WriteLine(ex);

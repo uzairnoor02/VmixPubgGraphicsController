@@ -50,7 +50,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     rankNum++;
                 }
                 SetTexts setTexts = new SetTexts();
-                await setTexts.CallApiAsync(apiCalls);
+                await setTexts.CallMultipleApiAsync(apiCalls);
                 var OverAllRankingGUID = vmixdata.OverAllRankingGUID;
                 //await vmi_layerSetOnOff.PushAnimationAsync(OverAllRankingGUID, 4, true, 1);
             }

@@ -52,7 +52,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 }
 
                 SetTexts setTexts = new SetTexts();
-                await setTexts.CallApiAsync(apiCalls);
+                await setTexts.CallMultipleApiAsync(apiCalls);
             }
             catch(Exception ex)
             {
@@ -61,45 +61,45 @@ namespace VmixGraphicsBusiness.PostMatchStats
         }
 
 
-        public async Task WinnerTeamStats()
-        {
-            var db = _redisConnection.GetDatabase();
-            var playerData = await db.StringGetAsync(HelperRedis.PlayerInfolist);
-            var teamData = await db.StringGetAsync(HelperRedis.TeamInfoList);
-            if (playerData.IsNullOrEmpty)
-            {
-                Console.WriteLine("No player data found in Redis.");
-                return;
-            }
+        //public async Task WinnerTeamStats()
+        //{
+        //    var db = _redisConnection.GetDatabase();
+        //    var playerData = await db.StringGetAsync(HelperRedis.PlayerInfolist);
+        //    var teamData = await db.StringGetAsync(HelperRedis.TeamInfoList);
+        //    if (playerData.IsNullOrEmpty)
+        //    {
+        //        Console.WriteLine("No player data found in Redis.");
+        //        return;
+        //    }
 
-            var livePlayersList = JsonSerializer.Deserialize<LivePlayersList>(playerData)!;
+        //    var livePlayersList = JsonSerializer.Deserialize<LivePlayersList>(playerData)!;
 
-            // Create a lookup on team
-            var teamLookup = livePlayersList.PlayerInfoList
-                .GroupBy(p => p.TeamId)
-                .ToDictionary(g => g.Key, g => g.ToList());
+        //    // Create a lookup on team
+        //    var teamLookup = livePlayersList.PlayerInfoList
+        //        .GroupBy(p => p.TeamId)
+        //        .ToDictionary(g => g.Key, g => g.ToList());
 
-            // Check which team members are alive
-            var winningTeam = teamLookup.Values
-                .FirstOrDefault(team => team.All(player => player.Health > 0));
+        //    // Check which team members are alive
+        //    var winningTeam = teamLookup.Values
+        //        .FirstOrDefault(team => team.All(player => player.Health > 0));
 
-            if (winningTeam == null)
-            {
-                Console.WriteLine("No winning team found.");
-                return;
-            }
+        //    if (winningTeam == null)
+        //    {
+        //        Console.WriteLine("No winning team found.");
+        //        return;
+        //    }
 
-            // Generate stats for the winning team
-            foreach (var player in winningTeam)
-            {
-                Console.WriteLine($"Player {player.Character} Stats:");
-                Console.WriteLine($"Eliminations: {player.Knockouts}");
-                Console.WriteLine($"Total Damage: {player.Damage}");
-                Console.WriteLine($"Assists: {player.Assists}"); // Assuming assists as throwables used
-                Console.WriteLine($"Damage Taken: {player.Health}");
-                Console.WriteLine($"Knocks: {player.Knockouts}");
-                Console.WriteLine($"Throwables Used: {player.UseBurnGrenadeNum + player.UseFlashGrenadeNum + player.UseSmokeGrenadeNum}");
-            }
-        }
+        //    // Generate stats for the winning team
+        //    foreach (var player in winningTeam)
+        //    {
+        //        Console.WriteLine($"Player {player.Character} Stats:");
+        //        Console.WriteLine($"Eliminations: {player.Knockouts}");
+        //        Console.WriteLine($"Total Damage: {player.Damage}");
+        //        Console.WriteLine($"Assists: {player.Assists}"); // Assuming assists as throwables used
+        //        Console.WriteLine($"Damage Taken: {player.Health}");
+        //        Console.WriteLine($"Knocks: {player.Knockouts}");
+        //        Console.WriteLine($"Throwables Used: {player.UseBurnGrenadeNum + player.UseFlashGrenadeNum + player.UseSmokeGrenadeNum}");
+        //    }
+        //}
     }
 }

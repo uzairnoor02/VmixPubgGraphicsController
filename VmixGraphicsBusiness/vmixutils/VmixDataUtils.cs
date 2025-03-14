@@ -14,7 +14,7 @@ namespace VmixGraphicsBusiness.vmixutils
             VMIXDataoperations vMIXDataoperation = new VMIXDataoperations();
             var VMIXData = await vMIXDataoperation.GetVMIXData();
             vmixguidsclass.LiverankingGuid4 = GetlIVElInputKey(VMIXData, "Live_Rankings_4.gtzip");
-            vmixguidsclass.LiverankingGuid16 = "LIVE_RANKINGS_16.gtzip";//GetlIVElInputKey(VMIXData, "Live_Rankings_16.gtzip");
+            vmixguidsclass.LiverankingGuid16 = GetlIVElInputKey(VMIXData, "Live_Rankings_16.gtzip")?? "LIVE_RANKINGS_16.gtzip";//
             vmixguidsclass.LiverankingGuid18 = GetlIVElInputKey(VMIXData, "Live_Rankings_18.gtzip");
             vmixguidsclass.LiverankingGuid20 = GetlIVElInputKey(VMIXData, "Live_Rankings_20.gtzip");
             vmixguidsclass.TeamEliminatedGuid = GetlIVElInputKey(VMIXData, "eliminated.gtzip") ?? "eliminated.gtzip";
@@ -27,6 +27,7 @@ namespace VmixGraphicsBusiness.vmixutils
             vmixguidsclass.OverAllRankingGUID = GetlIVElInputKey(VMIXData, "OVERALL RANKINGS.gtzip") ?? "OVERALL RANKINGS.gtzip";
             vmixguidsclass.MatchRankingsGUID = GetlIVElInputKey(VMIXData, "MATCH RANKINGS.gtzip") ?? "MATCH RANKINGS.gtzip";
             vmixguidsclass.MVPGUID = GetlIVElInputKey(VMIXData, "MVP OF THE MATCH.gtzip") ?? "MVP OF THE MATCH.gtzip";
+            vmixguidsclass.CircleClosing = GetlIVElInputKey(VMIXData, "CircleClosing.gtzip") ?? "CircleClosing.gtzip";
             return vmixguidsclass;
         }
         public static string GetlIVElInputKey(VmixData.Models.MatchModels.VmixData vmixData, string inputTitle)
@@ -37,12 +38,11 @@ namespace VmixGraphicsBusiness.vmixutils
                 var overallInput = vmixData.Inputs.FirstOrDefault(input =>
                     input.Title.Equals(inputTitle, StringComparison.OrdinalIgnoreCase) &&
                     input.Type.Equals("GT", StringComparison.OrdinalIgnoreCase));
-
-                return overallInput?.Key ?? Guid.NewGuid().ToString();
+                return overallInput?.Key ?? null;
             }
             catch
             {
-                return Guid.NewGuid().ToString();
+                return null;
             }
         }
     }
@@ -62,6 +62,7 @@ namespace VmixGraphicsBusiness.vmixutils
         public string OverAllRankingGUID { get; set; }
         public string MatchRankingsGUID { get; set; }
         public string MVPGUID { get; set; }
+        public string CircleClosing { get; set; }
 
     }
 
