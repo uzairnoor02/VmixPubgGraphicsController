@@ -49,6 +49,7 @@
             button7 = new Button();
             button6 = new Button();
             groupBox2 = new GroupBox();
+            button8 = new Button();
             groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
             SuspendLayout();
@@ -261,11 +262,22 @@
             groupBox2.TabStop = false;
             groupBox2.Text = "groupBox2";
             // 
+            // button8
+            // 
+            button8.Location = new Point(589, 120);
+            button8.Name = "button8";
+            button8.Size = new Size(75, 23);
+            button8.TabIndex = 11;
+            button8.Text = "button8";
+            button8.UseVisualStyleBackColor = true;
+            button8.Click += button8_Click;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(784, 550);
+            Controls.Add(button8);
             Controls.Add(groupBox2);
             Controls.Add(groupBox1);
             Controls.Add(Add_Tournamen_btn);
@@ -301,5 +313,6 @@
         private Button button7;
         private Button button6;
         private GroupBox groupBox2;
+        private Button button8;
     }
 }

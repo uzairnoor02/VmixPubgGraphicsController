@@ -12,7 +12,7 @@ namespace VmixData.Models.MatchModels
         public int score { get; set; }
         public string teamImage { get; set; }
         public string teamName { get; set; }
-        public string teamRank { get; set; }
+        public int totalScore { get; set; } = 0;
 
     }
 }

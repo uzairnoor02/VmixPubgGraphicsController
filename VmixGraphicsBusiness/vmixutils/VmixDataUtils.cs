@@ -27,7 +27,7 @@ namespace VmixGraphicsBusiness.vmixutils
             vmixguidsclass.OverAllRankingGUID = GetlIVElInputKey(VMIXData, "OVERALL RANKINGS.gtzip") ?? "OVERALL RANKINGS.gtzip";
             vmixguidsclass.MatchRankingsGUID = GetlIVElInputKey(VMIXData, "MATCH RANKINGS.gtzip") ?? "MATCH RANKINGS.gtzip";
             vmixguidsclass.MVPGUID = GetlIVElInputKey(VMIXData, "MVP OF THE MATCH.gtzip") ?? "MVP OF THE MATCH.gtzip";
-            vmixguidsclass.CircleClosing = GetlIVElInputKey(VMIXData, "CircleClosing.gtzip") ?? "CircleClosing.gtzip";
+            vmixguidsclass.CircleClosing = GetlIVElInputKey(VMIXData, "zoneclosingin.gtzip") ?? "zoneclosingin.gtzip";
             return vmixguidsclass;
         }
         public static string GetlIVElInputKey(VmixData.Models.MatchModels.VmixData vmixData, string inputTitle)

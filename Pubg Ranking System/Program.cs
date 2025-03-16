@@ -20,6 +20,8 @@ using static VmixGraphicsBusiness.LiveMatch.GetLiveData;
 using Microsoft.AspNetCore.Builder;
 using Hangfire.Server;
 using System.Diagnostics;
+using System.Linq;
+using Hangfire.Storage;
 
 namespace Pubg_Ranking_System
 {
@@ -72,31 +74,28 @@ namespace Pubg_Ranking_System
 
                 using var serviceProvider = services.BuildServiceProvider();
 
-                // ✅ Ensure Hangfire storage is initialized before any job execution
+                // ✅ Ensure Hangfire storage is initialized
                 var redis = serviceProvider.GetRequiredService<IConnectionMultiplexer>();
                 GlobalConfiguration.Configuration.UseStorage(new RedisStorage(redis));
 
                 var activator = new DependencyJobActivator(serviceProvider);
                 GlobalConfiguration.Configuration.UseActivator(activator);
 
+                // ✅ Remove all Hangfire jobs before starting
+                ClearAllHangfireJobs();
+
                 var serverOptions = new BackgroundJobServerOptions
                 {
-                    Queues = new[] { HangfireQueues.Default, HangfireQueues.HighPriority, HangfireQueues.LowPriority },
-                    WorkerCount = Environment.ProcessorCount * 6,
+                    Queues = new[] {  HangfireQueues.HighPriority, HangfireQueues.LowPriority, HangfireQueues.Default },
+                    WorkerCount = Environment.ProcessorCount * 5,
                     Activator = activator
                 };
 
-                // ✅ Create multiple Hangfire servers
+                // ✅ Start multiple Hangfire servers
                 _hangfireServers = new List<BackgroundJobServer>();
-                for (int i = 0; i < 2; i++) // Adjust number of servers as needed
+                for (int i = 0; i < 5; i++)
                 {
                     _hangfireServers.Add(new BackgroundJobServer(serverOptions));
-                }
-
-                using (var scope = serviceProvider.CreateScope())
-                {
-                    var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
-                    recurringJobManager.RemoveIfExists(HangfireJobNames.FetchAndPostDataJob);
                 }
 
                 var dashboardThread = new System.Threading.Thread(() =>
@@ -157,7 +156,7 @@ namespace Pubg_Ranking_System
             services.AddTransient<SetPlayerAchievements>();
             services.AddScoped<GetLiveData>();
             services.AddSingleton<Form1>();
-            services.AddScoped<ApiCallProcessor>();  
+            services.AddScoped<ApiCallProcessor>();
             services.AddScoped<Reset>();
 
             services.AddSingleton<IHostApplicationLifetime>(provider => provider.GetRequiredService<IHostApplicationLifetime>());
@@ -165,7 +164,6 @@ namespace Pubg_Ranking_System
 
         public static void ConfigureHangfire(this IServiceCollection services, IConfiguration configuration)
         {
-            // ✅ Ensure Redis is registered as a singleton
             services.AddSingleton<IConnectionMultiplexer>(provider =>
                 ConnectionMultiplexer.Connect(configuration.GetConnectionString("RedisConnection")));
 
@@ -178,7 +176,6 @@ namespace Pubg_Ranking_System
                     .UseSimpleAssemblyNameTypeSerializer()
                     .UseRecommendedSerializerSettings();
 
-                // ✅ Set Hangfire global storage instance
                 GlobalConfiguration.Configuration.UseStorage(new RedisStorage(redis));
             });
 
@@ -200,14 +197,8 @@ namespace Pubg_Ranking_System
 
             public override object ActivateJob(Type jobType)
             {
-                return _serviceProvider.GetService(jobType) ;
+                return _serviceProvider.GetService(jobType);
             }
-        }
-
-
-        public class HangfireActivator(IServiceProvider container) : JobActivator
-        {
-            public override object ActivateJob(Type type) => container.GetService(type);
         }
 
         public class ActivityServerFilter : IServerFilter
@@ -226,33 +217,57 @@ namespace Pubg_Ranking_System
                 activity?.Stop();
             }
         }
-        public static void ConfigureHangfire1(this IApplicationBuilder app, IConfiguration configuration, IServiceProvider serviceProvider)
+
+        public static void ClearAllHangfireJobs()
         {
-            GlobalConfiguration.Configuration.UseActivator(new HangfireActivator(serviceProvider));
-            GlobalConfiguration.Configuration.UseFilter(new ActivityServerFilter());
-            var hangfireConfig = serviceProvider.GetRequiredService<HangfireConfiguration>();
-            var dashboardOptions = new DashboardOptions
+            try
             {
-                DashboardTitle = "Hangfire Dashboard",
-                AppPath = "/swagger",
-                
-            };
+                var monitoringApi = JobStorage.Current.GetMonitoringApi();
 
-            app.UseHangfireDashboard("/hangfire", dashboardOptions);
-        }
+                // Remove all recurring jobs
+                using (var connection = JobStorage.Current.GetConnection())
+                {
+                    foreach (var recurringJob in connection.GetRecurringJobs())
+                    {
+                        RecurringJob.RemoveIfExists(recurringJob.Id);
+                    }
+                }
 
-    }
+                // Remove scheduled jobs
+                foreach (var job in monitoringApi.ScheduledJobs(0, int.MaxValue))
+                {
+                    BackgroundJob.Delete(job.Key);
+                }
 
-    public class HangfireConfiguration
-    {
-        public int JobExpirationTimeout { set; get; } = 6;
-        public string ServerPrefix { set; get; } = "Vmix-";
-        public int AutomaticRetry { set; get; } = 5;
-        public int[] DelaysInSeconds { set; get; } = [1,1,1,1,1];
-        public int DefaultWorkerCount { set; get; } = 40;
-        public int RegistrationWorkerCount { set; get; } = 9;
+                // Remove enqueued jobs
+                foreach (var queueDto in monitoringApi.Queues())
+                {
+                    string queueName = queueDto.Name; // Extract queue name
 
-        public string RegisterLogsCleanupCron { set; get; } = "0 0 * * *";
-        public string ReconcileFailedCustomersCron { set; get; } = "0 23 * * *";
+                    foreach (var job in monitoringApi.EnqueuedJobs(queueName, 0, int.MaxValue))
+                    {
+                        BackgroundJob.Delete(job.Key);
+                    }
+                }
+
+                // Remove processing jobs
+                foreach (var job in monitoringApi.ProcessingJobs(0, int.MaxValue))
+                {
+                    BackgroundJob.Delete(job.Key);
+                }
+
+                // Remove failed jobs
+                foreach (var job in monitoringApi.FailedJobs(0, int.MaxValue))
+                {
+                    BackgroundJob.Delete(job.Key);
+                }
+
+                Console.WriteLine("All Hangfire jobs have been cleared.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error clearing Hangfire jobs: {ex.Message}");
+            }
+            }
     }
 }

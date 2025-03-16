@@ -77,7 +77,14 @@ namespace VmixData.Models.MatchModels
         [XmlText]
         public string Value { get; set; }
     }
+    public class Overlay
+    {
+        [XmlAttribute("index")]
+        public int Index { get; set; }
 
+        [XmlAttribute("key")]
+        public string Key { get; set; }
+    }
     // Represents the image element in the input
     public class ImageElement
     {

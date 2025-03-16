@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using StackExchange.Redis;
+using System.Threading.Tasks;
 using VmixData.Models;
 using VmixData.Models.MatchModels;
 using VmixGraphicsBusiness.vmixutils;
@@ -12,11 +13,16 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
     {
         string logos = configuration["LogosImages"];
-        public void createPostMtachStats(LivePlayersList livePlayersList, Match match, TeamInfoList teamInfoList)
+        public async Task createPostMtachStats(LivePlayersList livePlayersList, Match match, TeamInfoList teamInfoList)
         {
             savePlayersinfo(livePlayersList, match);
             saveTeamsinfo(teamInfoList, match, livePlayersList);
-            SaveMvpInfo(match);
+            await SaveMvpInfo(match);
+            await WWCDStatsAsync(match);
+            await MatchMvp(match);
+            await MatchRankings(match);
+            await OverallRankings(match);
+            await TeamsToWatch(match);
         }
         public void savePlayersinfo(LivePlayersList liveplayerslist, Match match)
         {

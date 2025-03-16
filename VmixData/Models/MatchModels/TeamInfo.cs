@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Text.Json.Serialization;
 namespace VmixData.Models.MatchModels;
 
 public class TeamInfo
@@ -39,11 +40,27 @@ public class FirstBlood
     public DateTime DateTime { get; set; }
 }
 
+
+public class CircleDataWrapper
+{
+    [JsonPropertyName("circleInfo")]
+    public CircleInfo CircleInfo { get; set; }
+}
+
 public class CircleInfo
 {
-    public int GameTime { get; set; }  // Game time (0 ~ xxx seconds)
-    public int CircleStatus { get; set; }  // 0 = wait, 1 = delay, 2 = move
-    public int CircleIndex { get; set; }  // Number of the circle
-    public int Counter { get; set; }  // Current circle shrink counter
-    public int MaxTime { get; set; }  // Current circle max shrink counter
+    [JsonPropertyName("GameTime")]
+    public string GameTime { get; set; }
+
+    [JsonPropertyName("CircleStatus")]
+    public string CircleStatus { get; set; }
+
+    [JsonPropertyName("CircleIndex")]
+    public string CircleIndex { get; set; }
+
+    [JsonPropertyName("Counter")]
+    public string Counter { get; set; }
+
+    [JsonPropertyName("MaxTime")]
+    public string MaxTime { get; set; }
 }

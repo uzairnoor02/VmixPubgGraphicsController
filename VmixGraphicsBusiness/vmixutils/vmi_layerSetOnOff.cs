@@ -1,4 +1,5 @@
 ﻿using Hangfire;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
@@ -19,6 +20,11 @@ namespace VmixGraphicsBusiness.vmixutils
         {
             String _vmixapibaseurl = ConfigGlobal.VmixUrl;
             return $"{_vmixapibaseurl}/?Function=SetText&Input={input}&SelectedName={selectedName}.Text&Value={Uri.EscapeDataString(value)}";
+        }
+        public static string GetSetCountdownApiCall(string input, string selectedName, string value)
+        {
+            String _vmixapibaseurl = ConfigGlobal.VmixUrl;
+            return $"{_vmixapibaseurl}/?Function=SetCountdown&Input={input}&SelectedName={selectedName}.Text&Value={Uri.EscapeDataString(value)}";
         }
 
         public static string GetSetImageApiCall(string input, string selectedName, string value)
@@ -81,8 +87,9 @@ namespace VmixGraphicsBusiness.vmixutils
         [DisableConcurrentExecution(timeoutInSeconds: 30)] // Prevent concurrent execution
         public static async Task PushCircleAnimationAsync(string input, int layer, bool isOn, int counter)
         {
+            var Tcounter = counter;
             SetTexts setTexts = new SetTexts();
-            var apiCall = GetSetTextApiCall(input, "counter", counter.ToString());
+            var apiCall = GetSetTextApiCall(input, "count", Tcounter.ToString());
             bool _isAnimationActive = false;
             String _vmixapibaseurl = ConfigGlobal.VmixUrl;
 
@@ -91,15 +98,15 @@ namespace VmixGraphicsBusiness.vmixutils
             {
                 // Turn the layer on or off
                 string function = isOn ? "slide" : "slide";
-                string Overlay = isOn ? $"OverlayInput{layer}In" : $"OverlayInput{layer}Out";
+                string Overlay = $"OverlayInput{layer}In";
                 await SendCommandToVmixAsync($"function={Overlay}&input={input}");
-                for (var i = counter; i == 0; i--)
+                for (var i = Tcounter; i >= 0; i--)
                 {
                     await setTexts.CallApiAsync(apiCall);
-                    apiCall = GetSetTextApiCall(input, "counter", counter.ToString());
-                    await Task.Delay(998);
+                    apiCall = GetSetTextApiCall(input, "count", i.ToString());
+                    await Task.Delay(1000);
                 }
-                await SendCommandToVmixAsync($"function=OverlayInput{layer}Out"); //&input={input}");
+                await SendCommandToVmixAsync($"function=OverlayInput{layer}Out&input={input}");
             }
             catch (Exception ex)
             {
@@ -111,7 +118,6 @@ namespace VmixGraphicsBusiness.vmixutils
                 _isAnimationActive = false;
             }
         }
-
         // Helper method to send a command to the vMix API
         public static async Task SendCommandToVmixAsync(string command)
         {

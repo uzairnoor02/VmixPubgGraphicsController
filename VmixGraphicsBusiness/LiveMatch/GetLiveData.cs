@@ -1,4 +1,5 @@
 ﻿
+using Google.Apis.Sheets.v4.Data;
 using Hangfire;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +23,7 @@ namespace VmixGraphicsBusiness.LiveMatch
         private readonly string _pcobUrl;
         private readonly IServiceProvider serviceProvider1;
         private List<LiveTeamPointStats> teampoints = null;
+        int zonemoving=0;
 
         public GetLiveData(LiveStatsBusiness liveStatsBusiness, PostMatch dbBusiness, IBackgroundJobClient backgroundJobClient, IConnectionMultiplexer connectionMultiplexer, IServiceProvider serviceProvider)
         {
@@ -79,6 +81,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                     {
                         var responsegetplayerData = await client.GetAsync(_pcobUrl + "gettotalplayerlist");
                         var responseTeamInfoList = await client.GetAsync(_pcobUrl + "getteaminfolist");
+
 
                         if (responsegetplayerData.IsSuccessStatusCode)
                         {
@@ -169,28 +172,53 @@ namespace VmixGraphicsBusiness.LiveMatch
                     _dbBusiness.createPostMtachStats(livePlayerInfo!, match, TeamInfoList!);
                 }
             }
+
         }
 
         public async Task<int> GetCircleInfo()
         {
             using (var client = new HttpClient())
             {
-                var response = await client.GetAsync(_pcobUrl + "setcircleinfo");
-                if (response.IsSuccessStatusCode)
+                try
                 {
-                    var data = await response.Content.ReadAsStringAsync();
-                    var circleInfo = JsonSerializer.Deserialize<CircleInfo>(data);
-                    vmixguidsclass vmixguids = await VmixDataUtils.SetVMIXDataoperations();
-                    string circleClosingGtzip=vmixguids.CircleClosing;
-                    if (/*circleInfo.CircleIndex < 6 &&*/ circleInfo.Counter<=31)
+                    var response = await client.GetAsync(_pcobUrl + "getcircleinfo");
+                    if (response.IsSuccessStatusCode)
                     {
-                        _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushCircleAnimationAsync(circleClosingGtzip, 2, true, circleInfo.Counter));
+                        var data = await response.Content.ReadAsStringAsync();
+
+                        var circleInfoDaTA = JsonSerializer.Deserialize<CircleDataWrapper>(data);
+                        var circleInfo = circleInfoDaTA.CircleInfo;
+                        vmixguidsclass vmixguids = await VmixDataUtils.SetVMIXDataoperations();
+                        string circleClosingGtzip = vmixguids.CircleClosing;
+                        if (circleInfo.CircleStatus=="2" && zonemoving == 0 && int.Parse(circleInfo.CircleIndex) < 6 && (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter)) <= 30)
+                        {
+                            Console.WriteLine("maxtime:" + circleInfo.MaxTime + "shrinkprogress=" + circleInfo.Counter);
+                            zonemoving = 1;
+                            _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushCircleAnimationAsync(circleClosingGtzip, 2, true, (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter))));
+                            zonemoving = 1;
+                        }
+                        if(circleInfo.CircleStatus == "0" && zonemoving == 1)
+                        {
+                            zonemoving = 0;
+                        }
+                        return int.Parse(circleInfo.CircleIndex);
                     }
-                    return circleInfo.CircleIndex;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
                 }
                 return 0;
             }
         }
+
+        //public async Task<int> GetCircleInfo(int count)
+        //{
+        //    vmixguidsclass vmixguids = await VmixDataUtils.SetVMIXDataoperations();
+        //    string circleClosingGtzip = vmixguids.CircleClosing;
+        //    _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushCircleAnimationAsync(circleClosingGtzip, 2, true, count));
+        //    return count;
+        //}
         public class DependencyJobActivator : JobActivator
         {
             private readonly IServiceProvider _serviceProvider;
@@ -210,6 +238,23 @@ namespace VmixGraphicsBusiness.LiveMatch
             [JsonPropertyName("isInGame")]
             public bool IsInGame { get; set; }
         }
+        //private static readonly Dictionary<string, int[]> ZoneTimings = new()
+        //{
+        //    { "Erangel", new[] { 300, 200, 150, 120, 120, 90, 90, 60 } },
+        //    { "Miramar", new[] { 300, 200, 150, 120, 120, 90, 90, 60 } },
+        //    { "Sanhok", new[] { 180, 120, 105, 90, 90, 60, 60, 45 } }
+        //};
+
+        ////public async Task TrackCircleTiming(string mapName, int circleCount, int triggerTime)
+        ////{
+        ////    // Immediately trigger the animation for the current closing circle
+        ////    vmixguidsclass vmixguids = await VmixDataUtils.SetVMIXDataoperations();
+        ////    string circleClosingGtzip = vmixguids.CircleClosing;
+
+        ////    _backgroundJobClient.Enqueue(() =>
+        ////        vmi_layerSetOnOff.PushCircleAnimationAsync(circleClosingGtzip, 2, true, triggerTime, ZoneTimings, circleCount, mapName));
+
+        ////}
 
     }
 }

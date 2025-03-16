@@ -48,11 +48,12 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.OverAllRankingGUID, $"TAGT{rankNum}", teamData.TeamName));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.OverAllRankingGUID, $"WWCD{rankNum}", chicken.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.OverAllRankingGUID, $"MATCHN", matches.MatchId.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.OverAllRankingGUID, $"ELIMST{rankNum}", team.KillPoints.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.OverAllRankingGUID, $"PLACET{rankNum}", team.PlacementPoints.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.OverAllRankingGUID, $"TOTALT{rankNum}", team.TotalPoints.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.OverAllRankingGUID, $"LOGOT{rankNum}", $"{ConfigGlobal.LogosImages}\\0.png"));
-                    //apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.OverAllRankingGUID, $"LOGOT{rankNum}", $"{ConfigGlobal.LogosImages}\\{teamData.TeamId}.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.OverAllRankingGUID, $"LOGOT{rankNum}", $"{ConfigGlobal.LogosImages}\\{teamData.TeamId}.png"));
 
                     rankNum++;
                 }

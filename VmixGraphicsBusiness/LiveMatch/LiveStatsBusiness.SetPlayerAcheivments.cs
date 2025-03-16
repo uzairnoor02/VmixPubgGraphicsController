@@ -29,7 +29,7 @@ namespace VmixGraphicsBusiness.LiveMatch
         {
 
             // Enqueue Hangfire Jobs (Runs one after another)
-            var jobId1 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => FirstBloodAsync(playerInfo, liveTeamPointStats));
+           // var jobId1 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => FirstBloodAsync(playerInfo, liveTeamPointStats));
             var jobId2 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => GrenadeEliminationsAsync(playerInfo, liveTeamPointStats));
             var jobId3 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => AirDropLootedAsync(playerInfo, liveTeamPointStats));
             var jobId4 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => VehicleEliminationsAsync(playerInfo, liveTeamPointStats));
@@ -183,7 +183,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             }
         }
 
-        [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
+        [AutomaticRetry(Attempts = 0, DelaysInSeconds = new[] { 1, 1 })]
         public async Task<bool> FirstBloodAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             using var scope = _serviceProvider.CreateScope();
@@ -204,7 +204,6 @@ namespace VmixGraphicsBusiness.LiveMatch
 
                 foreach (var firstBloodPlayer in playerInfo.PlayerInfoList)
                 {
-                    if (firstBloodPlayer.KillNum < 1) return false;
 
                     var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == firstBloodPlayer.TeamId);
 
