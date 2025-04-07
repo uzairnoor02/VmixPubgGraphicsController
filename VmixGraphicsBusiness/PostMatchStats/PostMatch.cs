@@ -9,8 +9,7 @@ using VmixGraphicsBusiness.vmixutils;
 
 namespace VmixGraphicsBusiness.PostMatchStats
 {
-    public partial class PostMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration, IConnectionMultiplexer _redisConnection)
-
+    public partial class PostMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration)
     {
         string logos = configuration["LogosImages"];
         public async Task createPostMtachStats(LivePlayersList livePlayersList, Match match, TeamInfoList teamInfoList)
@@ -81,13 +80,16 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
                 _vmix_GraphicsContext.SaveChanges();
             }
-            catch (Exception ex){
-            
-            Console.WriteLine("error in getting player stats.",ex);}
+            catch (Exception ex)
+            {
+
+                Console.WriteLine("error in getting player stats.", ex);
+            }
         }
 
         public void saveTeamsinfo(TeamInfoList TeamsinfoList, Match match, LivePlayersList liveplayerslist)
         {
+            string Map="Erangel";
             try
             {
                 var teamPoints = new List<TeamPoint>();
@@ -133,6 +135,22 @@ namespace VmixGraphicsBusiness.PostMatchStats
                             placementpoints = 0;
                             break;
                     }
+                    switch(match.MatchId)
+                    {
+                        case 1:
+                        case 5:
+                            Map = "Erangel";
+                            break;
+                        case 2:
+                        case 4:
+                            Map = "Miramar";
+                            break;
+                        case 3:
+                            Map = "Sanhok";
+                            break;
+                    }
+                    teamPoint.Map = Map;
+
                     teamPoint.PlacementPoints = placementpoints;
                     teamPoint.TotalPoints = placementpoints + teamPoint.KillPoints;
 
@@ -143,7 +161,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
                 _vmix_GraphicsContext.SaveChanges();
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Console.WriteLine(ex);
             }

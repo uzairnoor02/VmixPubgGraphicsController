@@ -28,6 +28,8 @@ namespace VmixGraphicsBusiness.vmixutils
             vmixguidsclass.MatchRankingsGUID = GetlIVElInputKey(VMIXData, "MATCH RANKINGS.gtzip") ?? "MATCH RANKINGS.gtzip";
             vmixguidsclass.MVPGUID = GetlIVElInputKey(VMIXData, "MVP OF THE MATCH.gtzip") ?? "MVP OF THE MATCH.gtzip";
             vmixguidsclass.CircleClosing = GetlIVElInputKey(VMIXData, "zoneclosingin.gtzip") ?? "zoneclosingin.gtzip";
+            vmixguidsclass.TopMapPerformers = GetlIVElInputKey(VMIXData, "TOP MAP PERFORMERS.gtzip") ?? "TOP MAP PERFORMERS.gtzip";
+            vmixguidsclass.WWCDoverlay = GetlIVElInputKey(VMIXData, "WWCD OVERLAY TEAM.gtzip") ?? "WWCD OVERLAY TEAM.gtzip";
             return vmixguidsclass;
         }
         public static string GetlIVElInputKey(VmixData.Models.MatchModels.VmixData vmixData, string inputTitle)
@@ -63,6 +65,8 @@ namespace VmixGraphicsBusiness.vmixutils
         public string MatchRankingsGUID { get; set; }
         public string MVPGUID { get; set; }
         public string CircleClosing { get; set; }
+        public string WWCDoverlay { get; set; }
+        public string TopMapPerformers { get; set; }
 
     }
 

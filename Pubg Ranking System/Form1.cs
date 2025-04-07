@@ -14,6 +14,7 @@ using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using VmixGraphicsBusiness.PostMatchStats;
 using System.Diagnostics;
+using VmixGraphicsBusiness.PreMatch;
 
 namespace Pubg_Ranking_System
 {
@@ -30,9 +31,10 @@ namespace Pubg_Ranking_System
         private readonly IServiceProvider _serviceProvider;
         private readonly VmixData.Models.vmix_graphicsContext _vmix_GraphicsContext;
         private readonly PostMatch _postMatch;
+        private readonly PreMatch _preMatch;
         private readonly Reset _reset;
 
-        public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness, TournamentBusiness tournamentBusiness, IBackgroundJobClient backgroundJobManager, ILogger<Form1> logger, IConnectionMultiplexer redisConnection, IServiceProvider serviceProvider, vmix_graphicsContext vmix_GraphicsContext, PostMatch postMatch, Reset reset)
+        public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness, TournamentBusiness tournamentBusiness, IBackgroundJobClient backgroundJobManager, ILogger<Form1> logger, IConnectionMultiplexer redisConnection, IServiceProvider serviceProvider, vmix_graphicsContext vmix_GraphicsContext, PostMatch postMatch, Reset reset, PreMatch preMatch)
         {
             _liveStatsBusiness = liveStatsBusiness;
             _Add_tournament = add_Tournament;
@@ -51,11 +53,16 @@ namespace Pubg_Ranking_System
             days.Add("1"); days.Add("2"); days.Add("3"); days.Add("4"); days.Add("5"); days.Add("6"); days.Add("7"); days.Add("8");
             var matches = new List<string>();
             matches.Add("1"); matches.Add("2"); matches.Add("3"); matches.Add("4"); matches.Add("5"); matches.Add("6"); matches.Add("7"); matches.Add("8");
+
+            var MapNames = new List<string>();
+            MapNames.Add("Erangel"); MapNames.Add("Miramar"); MapNames.Add("Sanhok");
+            MapName_cmb.DataSource = MapNames;
             Day_cmb.DataSource = days;
             Match_cmb.DataSource = matches;
             _serviceProvider = serviceProvider;
             _vmix_GraphicsContext = vmix_GraphicsContext;
             _postMatch = postMatch;
+            _preMatch = preMatch;
             _reset = reset;
         }
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -234,11 +241,14 @@ namespace Pubg_Ranking_System
 
         }
 
-        private void button8_Click(object sender, EventArgs e)
+        private async void button8_Click(object sender, EventArgs e)
         {
-            // _getLiveData.GetCircleInfo(10);
-
-           // _getLiveData.TrackCircleTiming("Sanhok", 5, 30);
+            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
+            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
+            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
+            
+            _preMatch.MapTopPerformers(match,MapName_cmb.Text);
         }
+
     }
 }

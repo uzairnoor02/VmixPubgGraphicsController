@@ -133,7 +133,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                         {
                             Console.WriteLine($"Failed to fetch PlayerData. Status code: {responsegetplayerData.StatusCode}");
                         }
-                        await Task.Delay(2000);
+                        await Task.Delay(1000);
                     }
                     catch (Exception e)
                     {
@@ -190,11 +190,11 @@ namespace VmixGraphicsBusiness.LiveMatch
                         var circleInfo = circleInfoDaTA.CircleInfo;
                         vmixguidsclass vmixguids = await VmixDataUtils.SetVMIXDataoperations();
                         string circleClosingGtzip = vmixguids.CircleClosing;
-                        if (circleInfo.CircleStatus=="2" && zonemoving == 0 && int.Parse(circleInfo.CircleIndex) < 6 && (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter)) <= 30)
+                        if (circleInfo.CircleStatus=="2" && zonemoving == 0 && int.Parse(circleInfo.CircleIndex) < 6 && (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter)) <= 32)
                         {
                             Console.WriteLine("maxtime:" + circleInfo.MaxTime + "shrinkprogress=" + circleInfo.Counter);
                             zonemoving = 1;
-                            _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushCircleAnimationAsync(circleClosingGtzip, 2, true, (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter))));
+                            _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushCircleAnimationAsync(circleClosingGtzip, 2, true, (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter)-3)));
                             zonemoving = 1;
                         }
                         if(circleInfo.CircleStatus == "0" && zonemoving == 1)

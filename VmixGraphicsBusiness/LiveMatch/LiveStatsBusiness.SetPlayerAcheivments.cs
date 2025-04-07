@@ -29,7 +29,7 @@ namespace VmixGraphicsBusiness.LiveMatch
         {
 
             // Enqueue Hangfire Jobs (Runs one after another)
-           // var jobId1 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => FirstBloodAsync(playerInfo, liveTeamPointStats));
+            // var jobId1 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => FirstBloodAsync(playerInfo, liveTeamPointStats));
             var jobId2 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => GrenadeEliminationsAsync(playerInfo, liveTeamPointStats));
             var jobId3 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => AirDropLootedAsync(playerInfo, liveTeamPointStats));
             var jobId4 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => VehicleEliminationsAsync(playerInfo, liveTeamPointStats));
@@ -40,7 +40,6 @@ namespace VmixGraphicsBusiness.LiveMatch
         [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
         public async Task VehicleEliminationsAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
-
             using var scope = _serviceProvider.CreateScope();
             var backgroundJobClient = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
             var connectionMultiplexer = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
@@ -52,10 +51,11 @@ namespace VmixGraphicsBusiness.LiveMatch
             {
                 if (player.KillNumInVehicle <= 0) continue;
 
-                var redisKey = $"{Utils.HelperRedis.VehicleEliminationsKey}:{player.UId}:{player.UId}";
+                var redisKey = $"{Utils.HelperRedis.VehicleEliminationsKey}:{player.UId}";
                 var existingData = await _redisDb.StringGetAsync(redisKey);
+                var vehicleKills = JsonSerializer.Deserialize<VehicleEliminationInfo>(existingData);
 
-                if (existingData.IsNullOrEmpty || JsonSerializer.Deserialize<VehicleEliminationInfo>(existingData).VehicleKills < player.KillNumInVehicle)
+                if (vehicleKills.VehicleKills < player.KillNumInVehicle)
                 {
                     var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == player.TeamId);
                     //var currentPlayer = players.FirstOrDefault(x => x.PlayerUid == player.UId.ToString());
@@ -191,48 +191,164 @@ namespace VmixGraphicsBusiness.LiveMatch
             var backgroundJobClient = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
             var connectionMultiplexer = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
             var _redisDb = connectionMultiplexer.GetDatabase();
-            var redisKey = "FirstBlood";
-            var existingData = await _redisDb.StringGetAsync(redisKey);
+            var redisKey = HelperRedis.FirstBloodKey;
+            var existingData = (await _redisDb.StringGetAsync(redisKey)).ToString();
 
-            if (existingData.IsNullOrEmpty)
+            if (string.IsNullOrEmpty(existingData))
             {
-                if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
-                    return false;
-
-                var vmixData = await VmixDataUtils.SetVMIXDataoperations();
-                // backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.FirstBloodPlayerAcheivmentGuid, 3, false, 300));
-
-                foreach (var firstBloodPlayer in playerInfo.PlayerInfoList)
+                if (playerInfo.PlayerInfoList.Any(x => x.KillNum > 0))
                 {
+                    if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
+                        return false;
 
-                    var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == firstBloodPlayer.TeamId);
-
-                    if (currentTeam == null) return false;
+                    var vmixData = await VmixDataUtils.SetVMIXDataoperations();
+                    // backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.FirstBloodPlayerAcheivmentGuid, 3, false, 300));
+                    var FirstBloodplayer = playerInfo.PlayerInfoList.OrderByDescending(x => x.KillNum).Take(1).FirstOrDefault();
 
                     var firstBloodInfo = new FirstBlood
                     {
                         DateTime = DateTime.UtcNow,
-                        PlayerId = firstBloodPlayer.UId.ToString()
+                        PlayerId = FirstBloodplayer.UId.ToString()
                     };
+
+                    await _redisDb.StringSetAsync(redisKey, JsonSerializer.Serialize(firstBloodInfo));
+                    var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == FirstBloodplayer.TeamId);
+
+                    if (currentTeam == null) return false;
 
                     await _redisDb.StringSetAsync(redisKey, JsonSerializer.Serialize(firstBloodInfo));
 
                     var apiCalls = new List<string>
                 {
-                    vmi_layerSetOnOff.GetSetTextApiCall(vmixData.FirstBloodPlayerAcheivmentGuid, "PNAME", firstBloodPlayer.PlayerName ?? "Unknown"),
+                    vmi_layerSetOnOff.GetSetTextApiCall(vmixData.FirstBloodPlayerAcheivmentGuid, "PNAME", FirstBloodplayer.PlayerName ?? "Unknown"),
                      vmi_layerSetOnOff.GetSetImageApiCall(vmixData.FirstBloodPlayerAcheivmentGuid, "TLOGO", $"{ConfigGlobal.LogosImages}\\{currentTeam.teamid}.png"),
                          vmi_layerSetOnOff.GetSetImageApiCall(vmixData.FirstBloodPlayerAcheivmentGuid, $"PICP1", $"{ConfigGlobal.PlayerImages}\\0.png"),
-                         vmi_layerSetOnOff.GetSetImageApiCall(vmixData.FirstBloodPlayerAcheivmentGuid, $"PICP1", $"{ConfigGlobal.PlayerImages}\\{firstBloodPlayer.UId}.png")
+                         vmi_layerSetOnOff.GetSetImageApiCall(vmixData.FirstBloodPlayerAcheivmentGuid, $"PICP1", $"{ConfigGlobal.PlayerImages}\\{FirstBloodplayer.UId}.png")
                 };
 
                     backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.FirstBloodPlayerAcheivmentGuid, 3, true, 4000, apiCalls));
                 }
                 return true;
-            }
 
+            }
 
             return false;
         }
+
+
+        [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
+        public async Task KillDominationAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
+        {
+            List<int> killsindexes = new List<int>() { 3, 5, 7, 10, 13, 15 };
+            using var scope = _serviceProvider.CreateScope();
+
+            var backgroundJobClient = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
+            var connectionMultiplexer = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
+            var _redisDb = connectionMultiplexer.GetDatabase();
+            if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
+                return;
+
+            var vmixData = await VmixDataUtils.SetVMIXDataoperations();
+
+            foreach (var killDominationPlayer in playerInfo.PlayerInfoList
+                .Where(x => killsindexes.Any(k => x.KillNum > k)))
+            {
+                int? exceededKillIndex = killsindexes
+                    .Where(k => killDominationPlayer.KillNum > k)
+                    .DefaultIfEmpty(-1)
+                    .Max();
+
+                var redisKey = $"{Utils.HelperRedis.KillDominationKey}:{killDominationPlayer.UId}";
+
+                var existingData = JsonSerializer.Deserialize<killDominationInfo>(
+                    await _redisDb.StringGetAsync(redisKey)
+                ) ?? new killDominationInfo();
+
+                if (exceededKillIndex == -1 || existingData.KillInfo == exceededKillIndex)
+                {
+                    continue;
+                }
+
+                var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == killDominationPlayer.TeamId);
+                if (currentTeam == null) continue;
+
+                var airdropInfo = new killDominationInfo
+                {
+                    KillInfo = exceededKillIndex,
+                    DateTime = DateTime.UtcNow,
+                    PlayerId = killDominationPlayer.UId.ToString()
+                };
+
+                await _redisDb.StringSetAsync(redisKey, JsonSerializer.Serialize(airdropInfo));
+
+                var apiCalls = new List<string>
+                {
+                    vmi_layerSetOnOff.GetSetTextApiCall(vmixData.AirDropPlayerAcheivmentGuid, "PNAME", killDominationPlayer.PlayerName ?? "Unknown"),
+                     vmi_layerSetOnOff.GetSetImageApiCall(vmixData.AirDropPlayerAcheivmentGuid, "TLOGO", $"{ConfigGlobal.LogosImages}\\{currentTeam.teamid}.png"),
+                         vmi_layerSetOnOff.GetSetImageApiCall(vmixData.AirDropPlayerAcheivmentGuid, $"PICP1", $"{ConfigGlobal.PlayerImages}\\0.png"),
+                         vmi_layerSetOnOff.GetSetImageApiCall(vmixData.AirDropPlayerAcheivmentGuid, $"PICP1", $"{ConfigGlobal.PlayerImages}\\{killDominationPlayer.UId}.png")
+                };
+
+                backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.AirDropPlayerAcheivmentGuid, 3, true, 4000, apiCalls));
+            }
+        }
+        [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
+        public async Task DamageDominationAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
+        {
+            List<int> damageIndexes = new List<int>() { 500, 800, 1000, 1200, 1400, 1500, 1600, 2000 };
+            using var scope = _serviceProvider.CreateScope();
+
+            var backgroundJobClient = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
+            var connectionMultiplexer = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
+            var _redisDb = connectionMultiplexer.GetDatabase();
+            if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
+                return;
+
+            var vmixData = await VmixDataUtils.SetVMIXDataoperations();
+
+            foreach (var damageDominationPlayer in playerInfo.PlayerInfoList
+                .Where(x => damageIndexes.Any(d => x.Damage > d)))
+            {
+                int? exceededDamageIndex = damageIndexes
+                    .Where(d => damageDominationPlayer.Damage > d)
+                    .DefaultIfEmpty(-1)
+                    .Max();
+
+                var redisKey = $"{Utils.HelperRedis.DamageDominationKey}:{damageDominationPlayer.UId}";
+                var existingData = JsonSerializer.Deserialize<DamageDominationInfo>(
+                    await _redisDb.StringGetAsync(redisKey)
+                ) ?? new DamageDominationInfo();
+
+                if (exceededDamageIndex == -1 || existingData.DamageInfo == exceededDamageIndex)
+                {
+                    continue;
+                }
+
+                var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == damageDominationPlayer.TeamId);
+                if (currentTeam == null) continue;
+
+                var damageInfo = new DamageDominationInfo
+                {
+                    DamageInfo = exceededDamageIndex,
+                    DateTime = DateTime.UtcNow,
+                    PlayerId = damageDominationPlayer.UId.ToString()
+                };
+
+                await _redisDb.StringSetAsync(redisKey, JsonSerializer.Serialize(damageInfo));
+
+                var apiCalls = new List<string>
+                {
+                    vmi_layerSetOnOff.GetSetTextApiCall(vmixData.AirDropPlayerAcheivmentGuid, "PNAME", damageDominationPlayer.PlayerName ?? "Unknown"),
+                     vmi_layerSetOnOff.GetSetImageApiCall(vmixData.AirDropPlayerAcheivmentGuid, "TLOGO", $"{ConfigGlobal.LogosImages}\\{currentTeam.teamid}.png"),
+                         vmi_layerSetOnOff.GetSetImageApiCall(vmixData.AirDropPlayerAcheivmentGuid, $"PICP1", $"{ConfigGlobal.PlayerImages}\\0.png"),
+                         vmi_layerSetOnOff.GetSetImageApiCall(vmixData.AirDropPlayerAcheivmentGuid, $"PICP1", $"{ConfigGlobal.PlayerImages}\\{damageDominationPlayer.UId}.png")
+                };
+
+                backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.AirDropPlayerAcheivmentGuid, 3, true, 4000, apiCalls));
+            }
+        }
+
+
     }
 }
 

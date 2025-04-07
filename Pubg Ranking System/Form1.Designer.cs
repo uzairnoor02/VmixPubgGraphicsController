@@ -50,6 +50,7 @@
             button6 = new Button();
             groupBox2 = new GroupBox();
             button8 = new Button();
+            MapName_cmb = new ComboBox();
             groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
             SuspendLayout();
@@ -272,11 +273,20 @@
             button8.UseVisualStyleBackColor = true;
             button8.Click += button8_Click;
             // 
+            // MapName_cmb
+            // 
+            MapName_cmb.FormattingEnabled = true;
+            MapName_cmb.Location = new Point(573, 90);
+            MapName_cmb.Name = "MapName_cmb";
+            MapName_cmb.Size = new Size(121, 23);
+            MapName_cmb.TabIndex = 12;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(784, 550);
+            Controls.Add(MapName_cmb);
             Controls.Add(button8);
             Controls.Add(groupBox2);
             Controls.Add(groupBox1);
@@ -314,5 +324,6 @@
         private Button button6;
         private GroupBox groupBox2;
         private Button button8;
+        private ComboBox MapName_cmb;
     }
 }

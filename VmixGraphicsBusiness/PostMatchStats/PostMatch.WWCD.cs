@@ -22,7 +22,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
 
                 var winnerPlayers = _vmix_GraphicsContext.PlayerStats
-                    .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.Rank==1)
+                    .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.Rank == 1)
                     .ToList();
                 var winneerteam = _vmix_GraphicsContext.Teams
                     .Where(x => x.TeamId == winnerPlayers.Select(x => x.TeamId).First().ToString()).First();
@@ -33,6 +33,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"Image1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
                 int totalTeamKills = (int)winnerPlayers.Sum(x => x.KillNum);
 
+                int totalTeamDamage = (int)winnerPlayers.Sum(x => x.Damage);
                 foreach (var player in winnerPlayers)
                 {
                     double playerContribution = totalTeamKills > 0 ? (double)player.KillNum / totalTeamKills : 0;
@@ -49,15 +50,27 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"THROWABLESP{playernum}", $"{player.useBurnGrenadeNum + player.UseSmokeGrenadeNum + player.UseSmokeGrenadeNum}"));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"IMAGEP{playernum}", $"{playerimges}//0.png"));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"IMAGEP{playernum}", $"{playerimges}//{player.PlayerUId.ToString()}.png"));
+                    #region wwcd team overlay
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDoverlay, $"IMAGEP{playernum}", $"{playerimges}//0.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDoverlay, $"IMAGEP{playernum}", $"{playerimges}//{player.PlayerUId.ToString()}.png"));
                     playernum++;
                 }
 
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDoverlay, $"TAGT1", winneerteam.TeamName));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDoverlay, $"LOGOT1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDoverlay, $"LOGOT1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDoverlay, $"ELIMST1", totalTeamKills.ToString()));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDoverlay, $"DAMAGET1", totalTeamDamage.ToString()));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDoverlay, $"TOTALT1", (10 + totalTeamKills).ToString()));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDoverlay, $"RANKT1", "#01"));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDoverlay, $"/16 OR TEAMS1", "/16"));
+                #endregion
                 SetTexts setTexts = new SetTexts();
                 await setTexts.CallMultipleApiAsync(apiCalls);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
-                Console.WriteLine( ex);
+                Console.WriteLine(ex);
             }
         }
 

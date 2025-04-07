@@ -7,21 +7,18 @@ using StackExchange.Redis;
 using VmixData.Models;
 using VmixGraphicsBusiness;
 using VmixGraphicsBusiness.vmixutils;
-using System;
-using System.IO;
-using System.Windows.Forms;
 using Hangfire.Redis.StackExchange;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using VmixGraphicsBusiness.Utils;
 using VmixGraphicsBusiness.PostMatchStats;
 using VmixGraphicsBusiness.LiveMatch;
-using static VmixGraphicsBusiness.LiveMatch.GetLiveData;
 using Microsoft.AspNetCore.Builder;
 using Hangfire.Server;
 using System.Diagnostics;
 using System.Linq;
 using Hangfire.Storage;
+using VmixGraphicsBusiness.PreMatch;
 
 namespace Pubg_Ranking_System
 {
@@ -153,6 +150,7 @@ namespace Pubg_Ranking_System
             services.AddScoped<TournamentBusiness>();
             services.AddTransient<Add_tournament>();
             services.AddScoped<PostMatch>();
+            services.AddScoped<PreMatch>();
             services.AddTransient<SetPlayerAchievements>();
             services.AddScoped<GetLiveData>();
             services.AddSingleton<Form1>();

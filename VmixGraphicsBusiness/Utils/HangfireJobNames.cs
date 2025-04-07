@@ -22,5 +22,7 @@ namespace VmixGraphicsBusiness.Utils
         public const string TeamInfoList = "TeamInfoList";
         public const string PlayerInfolist = "PlayerInfolist";
         public const string LiveRankingGuid = "LiveRankingGuid";
+        public const string KillDominationKey = "KillDominationKey";
+        public const string DamageDominationKey = "DamageDominationKey";
     }
 }

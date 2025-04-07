@@ -149,7 +149,7 @@ public class LiveStatsBusiness(
                     teamStats.Tag = currentTeamInfo.teamName;
                     _logger.LogInformation(currentTeamInfo.teamName + currentTeamInfo.score.ToString());
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"ELIMST{teamRanks[teamGroup.Key]}", teamStats.Eliminations.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TOTALT{teamRanks[teamGroup.Key]}", currentTeamInfo.score.ToString()));//currentTeamInfo.score.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TOTALT{teamRanks[teamGroup.Key]}", "-"));//currentTeamInfo.score.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TAGT{teamRanks[teamGroup.Key]}", currentTeamInfo.teamName));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{teamRanks[teamGroup.Key]}", $"{ConfigGlobal.LogosImages}" + $"\\0.png"));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{teamRanks[teamGroup.Key]}", $"{ConfigGlobal.LogosImages}" + $"\\{currentTeamInfo.teamid}.png"));

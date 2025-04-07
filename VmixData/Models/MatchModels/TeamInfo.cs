@@ -34,6 +34,18 @@ public class AirDropLootedInfo
     public int AirdropLootedNumber { get; set; }
     public DateTime DateTime { get; set; }
 }
+public class killDominationInfo
+{
+    public string PlayerId { get; set; }
+    public int? KillInfo { get; set; }
+    public DateTime DateTime { get; set; }
+}
+public class DamageDominationInfo
+{
+    public string PlayerId { get; set; }
+    public int? DamageInfo { get; set; }
+    public DateTime DateTime { get; set; }
+}
 public class FirstBlood
 {
     public string PlayerId { get; set; }

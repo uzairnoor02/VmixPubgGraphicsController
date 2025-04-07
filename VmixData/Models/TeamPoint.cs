@@ -25,4 +25,6 @@ public partial class TeamPoint
     public int KillPoints { get; set; }
 
     public int TotalPoints { get; set; }
+
+    public string Map { get; set; }
 }
