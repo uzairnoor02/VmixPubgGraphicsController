@@ -1,0 +1,161 @@
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using VmixData.Models;
+using VmixData.Models.MatchModels;
+using VmixGraphicsBusiness.Utils;
+using VmixGraphicsBusiness.vmixutils;
+
+namespace VmixGraphicsBusiness.PostMatchStats
+{
+    partial class PostMatch
+    {
+        public async Task Top5MatchMVP(Match matches)
+        {
+            try
+            {
+                var top5MVPs = _vmix_GraphicsContext.PlayerStats
+                    .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId)
+                    .Select(p => new
+                    {
+                        Player = p,
+                        Score = (p.SurvivalTime * 0.4) + (p.Damage * 0.4) + (p.KillNum * 0.2)
+                    })
+                    .OrderByDescending(p => p.Score)
+                    .Take(5)
+                    .ToList();
+
+                if (!top5MVPs.Any())
+                {
+                    throw new InvalidOperationException("No players found for Top 5 MVP calculation.");
+                }
+
+                var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
+                List<string> apiCalls = new List<string>();
+
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"MATCHN", matches.MatchId.ToString()));
+
+                int rank = 1;
+                foreach (var mvpPlayer in top5MVPs)
+                {
+                    var teamdata = _vmix_GraphicsContext.Teams.Where(x => x.TeamId == mvpPlayer.Player.TeamId.ToString()).FirstOrDefault();
+                    var player = mvpPlayer.Player;
+                    var survivalTime = TimeSpan.FromSeconds(player.SurvivalTime);
+                    var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
+
+                    var totalTeamKills = _vmix_GraphicsContext.PlayerStats
+                        .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.TeamId == player.TeamId)
+                        .Sum(x => x.KillNum ?? 0);
+
+                    var playerContribution = totalTeamKills > 0
+                        ? Math.Round((double)player.KillNum / totalTeamKills * 100, 1)
+                        : 0;
+
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"RANK{rank}", $"#{rank}"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"TEAMTAGP{rank}", teamdata?.TeamName ?? "Unknown"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"NAMEP{rank}", player.PlayerName));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"ELIMSP{rank}", player.KillNum.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"SURVP{rank}", survivalTimeString));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"DAMAGEP{rank}", player.Damage.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"ASSISTSP{rank}", player.Assists.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"KNOCKP{rank}", player.Knockouts.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"CONTP{rank}", playerContribution.ToString("F1") + "%"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"SCOREP{rank}", Math.Round(mvpPlayer.Score, 1).ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.Top5MVPMatchGUID, $"LOGOP{rank}", $"{ConfigGlobal.LogosImages}\\{teamdata?.TeamId ?? "0"}.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.Top5MVPMatchGUID, $"IMAGEP{rank}", $"{ConfigGlobal.PlayerImages}\\0.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.Top5MVPMatchGUID, $"IMAGEP{rank}", $"{ConfigGlobal.PlayerImages}\\{player.PlayerUId}.png"));
+
+                    rank++;
+                }
+
+                SetTexts setTexts = new SetTexts();
+                await setTexts.CallMultipleApiAsync(apiCalls);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in Top5MatchMVP: {ex}");
+            }
+        }
+
+        public async Task Top5StageMVP(Match matches)
+        {
+            try
+            {
+                var top5StageMVPs = _vmix_GraphicsContext.PlayerStats
+                    .Where(x => x.StageId == matches.StageId)
+                    .GroupBy(x => x.PlayerUId)
+                    .Select(g => new
+                    {
+                        PlayerUId = g.Key,
+                        PlayerName = g.First().PlayerName,
+                        TeamId = g.First().TeamId,
+                        TotalKills = g.Sum(x => x.KillNum ?? 0),
+                        TotalDamage = g.Sum(x => x.Damage ?? 0),
+                        AverageSurvivalTime = g.Average(x => x.SurvivalTime ?? 0),
+                        TotalAssists = g.Sum(x => x.Assists ?? 0),
+                        TotalKnockouts = g.Sum(x => x.Knockouts ?? 0),
+                        MatchesPlayed = g.Count(),
+                        Score = (g.Average(x => x.SurvivalTime ?? 0) * 0.4) + (g.Sum(x => x.Damage ?? 0) * 0.4) + (g.Sum(x => x.KillNum ?? 0) * 0.2)
+                    })
+                    .OrderByDescending(p => p.Score)
+                    .Take(5)
+                    .ToList();
+
+                if (!top5StageMVPs.Any())
+                {
+                    throw new InvalidOperationException("No players found for Top 5 Stage MVP calculation.");
+                }
+
+                var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
+                var stageInfo = _vmix_GraphicsContext.Stages.Where(x => x.StageId == matches.StageId).FirstOrDefault();
+                List<string> apiCalls = new List<string>();
+
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPStageGUID, $"STAGEN", stageInfo?.Name ?? "Unknown Stage"));
+
+                int rank = 1;
+                foreach (var mvpPlayer in top5StageMVPs)
+                {
+                    var teamdata = _vmix_GraphicsContext.Teams.Where(x => x.TeamId == mvpPlayer.TeamId.ToString()).FirstOrDefault();
+                    var survivalTime = TimeSpan.FromSeconds(mvpPlayer.AverageSurvivalTime);
+                    var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
+
+                    // Calculate player's contribution to team kills across all matches in stage
+                    var totalTeamKills = _vmix_GraphicsContext.PlayerStats
+                        .Where(x => x.StageId == matches.StageId && x.TeamId == mvpPlayer.TeamId)
+                        .Sum(x => x.KillNum ?? 0);
+
+                    var playerContribution = totalTeamKills > 0
+                        ? Math.Round((double)mvpPlayer.TotalKills / totalTeamKills * 100, 1)
+                        : 0;
+
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPStageGUID, $"RANK{rank}", $"#{rank}"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPStageGUID, $"TEAMTAGP{rank}", teamdata?.TeamName ?? "Unknown"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPStageGUID, $"NAMEP{rank}", mvpPlayer.PlayerName));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPStageGUID, $"ELIMSP{rank}", mvpPlayer.TotalKills.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPStageGUID, $"SURVP{rank}", survivalTimeString));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPStageGUID, $"DAMAGEP{rank}", mvpPlayer.TotalDamage.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPStageGUID, $"ASSISTSP{rank}", mvpPlayer.TotalAssists.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPStageGUID, $"KNOCKP{rank}", mvpPlayer.TotalKnockouts.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPStageGUID, $"CONTP{rank}", playerContribution.ToString("F1") + "%"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPStageGUID, $"SCOREP{rank}", Math.Round(mvpPlayer.Score, 1).ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPStageGUID, $"MATCHESP{rank}", mvpPlayer.MatchesPlayed.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.Top5MVPStageGUID, $"LOGOP{rank}", $"{ConfigGlobal.LogosImages}\\{teamdata?.TeamId ?? "0"}.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.Top5MVPStageGUID, $"IMAGEP{rank}", $"{ConfigGlobal.PlayerImages}\\0.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.Top5MVPStageGUID, $"IMAGEP{rank}", $"{ConfigGlobal.PlayerImages}\\{mvpPlayer.PlayerUId}.png"));
+
+                    rank++;
+                }
+
+                SetTexts setTexts = new SetTexts();
+                await setTexts.CallMultipleApiAsync(apiCalls);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in Top5StageMVP: {ex}");
+            }
+        }
+    }
+}

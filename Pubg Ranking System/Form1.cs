@@ -237,7 +237,8 @@ namespace Pubg_Ranking_System
             _postMatch.MatchMvp(match);
             _postMatch.MatchRankings(match);
             _postMatch.OverallRankings(match);
-            _postMatch.OverallRankings(match);
+            _postMatch.Top5MatchMVP(match);
+            _postMatch.Top5StageMVP(match);
 
         }
 

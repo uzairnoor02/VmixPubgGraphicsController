@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -98,6 +98,8 @@ namespace VmixGraphicsBusiness.vmixutils
         public string WWCDoverlay { get; set; }
         public string TopMapPerformers { get; set; }
         public string MatchSummaryGUID { get; set; }
+        public string Top5MVPMatchGUID { get; set; }
+        public string Top5MVPStageGUID { get; set; }
         public string Top5Grenadiers { get; set; }
         public string Top5MatchMVPGUID { get; set; }
         public string Top5StageMVPGUID { get; set; }
