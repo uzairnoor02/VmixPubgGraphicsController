@@ -50,8 +50,8 @@ namespace VmixGraphicsBusiness.vmixutils
             vmixguidsclass.OverAllRankingGUID3 = GetlIVElInputKey(VMIXData, "OVERALL RANKINGS P3.gtzip") ?? "OVERALL RANKINGS.gtzip";
             vmixguidsclass.MatchRankingsGUID = GetlIVElInputKey(VMIXData, "MATCH RANKINGS.gtzip") ?? "MATCH RANKINGS.gtzip";
             vmixguidsclass.MVPGUID = GetlIVElInputKey(VMIXData, "MATCH MVP.gtzip") ?? "MVP OF THE MATCH.gtzip";
-            vmixguidsclass.MVPGUID = GetlIVElInputKey(VMIXData, "TOP 5 PLAYERS.gtzip") ?? "TOP 5 PLAYERS.gtzip";
-            vmixguidsclass.MVPGUID = GetlIVElInputKey(VMIXData, "TOP 5 PLAYERS OVERALL STAGE.gtzip") ?? "TOP 5 PLAYERS STAGE.gtzip";
+            vmixguidsclass.Top5MatchMVPGUID = GetlIVElInputKey(VMIXData, "TOP 5 PLAYERS.gtzip") ?? "TOP 5 PLAYERS.gtzip";
+            vmixguidsclass.Top5StageMVPGUID = GetlIVElInputKey(VMIXData, "TOP 5 PLAYERS OVERALL STAGE.gtzip") ?? "TOP 5 PLAYERS STAGE.gtzip";
             vmixguidsclass.CircleClosing = GetlIVElInputKey(VMIXData, "ZONECLOSING.gtzip") ?? "zoneclosingin.gtzip";
             vmixguidsclass.TopMapPerformers = GetlIVElInputKey(VMIXData, "TOP MAP PERFORMERS.gtzip") ?? "TOP MAP PERFORMERS.gtzip";
             vmixguidsclass.WWCDoverlay = GetlIVElInputKey(VMIXData, "WWCD OVERLAY TEAM.gtzip") ?? "WWCD OVERLAY TEAM.gtzip";
@@ -99,6 +99,8 @@ namespace VmixGraphicsBusiness.vmixutils
         public string TopMapPerformers { get; set; }
         public string MatchSummaryGUID { get; set; }
         public string Top5Grenadiers { get; set; }
+        public string Top5MatchMVPGUID { get; set; }
+        public string Top5StageMVPGUID { get; set; }
 
 
 
