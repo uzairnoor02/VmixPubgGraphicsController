@@ -156,15 +156,15 @@ public class LiveStatsBusiness(
                     _logger.LogInformation(currentTeamInfo.teamName + currentTeamInfo.score.ToString());
                     if (isEliminated)
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{teamRanks[teamGroup.Key]}EliminatedBG", HeatlhImages + "\\EliminatedBG\\Team Dead.png"));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{teamRanks[teamGroup.Key]}", HeatlhImages + "\\EliminatedBG\\Team Dead.png"));
                     }
                     else if (isinBlue)
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{teamRanks[teamGroup.Key]}EliminatedBG", HeatlhImages + "\\EliminatedBG\\Team In Zone.png"));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{teamRanks[teamGroup.Key]}", HeatlhImages + "\\EliminatedBG\\Team In Zone.png"));
                     }
                     else
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{teamRanks[teamGroup.Key]}EliminatedBG", HeatlhImages + "\\EliminatedBG\\Team Out Zone.png"));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{teamRanks[teamGroup.Key]}", HeatlhImages + "\\EliminatedBG\\Team Out Zone.png"));
                     }
                     teamLiveStats.Add(teamStats);
                 }

@@ -21,8 +21,4 @@
     <ProjectReference Include="..\VmixData\VmixData.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="MatchBusiness\" />
-  </ItemGroup>
-
 </Project>

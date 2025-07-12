@@ -46,6 +46,17 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
 
                 var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
+                var totalTeamKills = _vmix_GraphicsContext.PlayerStats
+                    .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.TeamId == player.TeamId)
+                    .Sum(x => x.KillNum ?? 0);
+
+                var playerContribution = totalTeamKills > 0
+                    ? (double)player.KillNum / totalTeamKills * 100
+                    : 0;
+                //var playerContribution = teamdata != null && teamdata.KillPoints > 0
+                //    ? (double)player.KillNum / 
+                //    : 0;
+
                 List<string> apiCalls = new List<string>();
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"TEAMTAGP{1}", teamdata.TeamName));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"MATCHN", matches.MatchId.ToString()));
@@ -54,6 +65,8 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"SURVP{1}", survivalTimeString));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"DAMAGEP{1}", player.Damage.ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"ASSISTSP{1}", player.Assists.ToString()));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"KNOCKP{1}", player.Knockouts.ToString()));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"CONTP{1}", playerContribution.ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"LOGOP{1}", $"{ConfigGlobal.LogosImages}\\{teamdata.TeamId}.png"));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"IMAGEP{1}", $"{ConfigGlobal.PlayerImages}\\0.png"));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"IMAGEP{1}", $"{ConfigGlobal.PlayerImages}\\{player.PlayerUId}.png"));

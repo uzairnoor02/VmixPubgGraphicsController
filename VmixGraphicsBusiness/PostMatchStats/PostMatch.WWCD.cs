@@ -48,6 +48,11 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"DMGTAKENP{playernum}", player.InDamage.ToString())); ;
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"CONTP{playernum}", TotalCont)); ;
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"THROWABLESP{playernum}", $"{player.useBurnGrenadeNum + player.UseSmokeGrenadeNum + player.UseSmokeGrenadeNum}"));
+                    //todo: Add survival Time   
+
+                    var survivalTime = TimeSpan.FromSeconds(player.SurvivalTime);
+                    var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"THROWABLESP{playernum}", $"{survivalTimeString}")); 
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"IMAGEP{playernum}", $"{playerimges}//0.png"));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"IMAGEP{playernum}", $"{playerimges}//{player.PlayerUId.ToString()}.png"));
                     #region wwcd team overlay

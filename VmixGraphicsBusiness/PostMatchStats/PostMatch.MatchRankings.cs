@@ -1,4 +1,5 @@
 ﻿using StackExchange.Redis;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using VmixData.Models;
@@ -38,7 +39,12 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TOTALT{rankNum}", team.TotalPoints.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"LOGOT{rankNum}", $"{ConfigGlobal.LogosImages}\\{team.TeamId}.png"));
                     if (wwcd)
-                    {
+                    {foreach (var player in wwcddata)
+                        {
+                            var plN = 1;
+                            apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"PICP{plN}", player.PlayerUId.ToString()));
+                            plN++;
+                        }
                         apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"WWCDT{rankNum}", $"{ConfigGlobal.LogosImages}\\WWCD.gif"));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"WWCDT{rankNum}", $"{ConfigGlobal.LogosImages}\\WWCD.png"));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"WWCDT{rankNum}", $"{ConfigGlobal.LogosImages}\\WWCD.PNG"));
