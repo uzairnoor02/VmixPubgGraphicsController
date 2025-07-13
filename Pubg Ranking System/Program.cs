@@ -20,6 +20,8 @@ using System.Linq;
 using Hangfire.Storage;
 using VmixGraphicsBusiness.PreMatch;
 using Newtonsoft.Json;
+using System.Collections.ObjectModel;
+using System.Collections;
 
 namespace Pubg_Ranking_System
 {
@@ -330,16 +332,16 @@ namespace Pubg_Ranking_System
         {
             try
             {
-                var jsonFilePath = _configuration["JsonTeamDataPath"];  // Make sure to define 'JsonTeamDataPath' in appsettings.json
+                var jsonFilePath = _configuration["JsonTeamDataPath"];
                 if (string.IsNullOrEmpty(jsonFilePath))
                 {
-                    _logger.LogWarning("JsonTeamDataPath is not configured in appsettings.json. Skipping data loading.");
+                    _logger.LogWarning("JsonTeamDataPath is not configured in appsettings.json.");
                     return;
                 }
 
                 if (!File.Exists(jsonFilePath))
                 {
-                    _logger.LogError($"JSON data file not found at {jsonFilePath}.");
+                    _logger.LogError($"JSON file not found at path: {jsonFilePath}");
                     return;
                 }
 
@@ -348,68 +350,126 @@ namespace Pubg_Ranking_System
 
                 if (tournamentData == null)
                 {
-                    _logger.LogError("Failed to deserialize tournament data from JSON.");
+                    _logger.LogError("Failed to deserialize tournament data.");
                     return;
                 }
 
-                // Process tournament data
-                foreach (var stage in tournamentData.Stages)
+                var tournament = await _context.Tournaments
+                    .Include(t => t.Stages)
+                    .ThenInclude(s => s.TeamsStages)
+                    .FirstOrDefaultAsync(x => x.Name.ToLower() == tournamentData.TournamentName.ToLower());
+
+                if (tournament == null)
                 {
-                    foreach (var teamData in stage.Teams)
+                    var result = MessageBox.Show(
+                        $"Tournament '{tournamentData.TournamentName}' does not exist.\nDo you want to create it?",
+                        "Create Tournament",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+
+                    if (result == DialogResult.Yes)
                     {
-                        // Check if the team already exists in the database
-                        var existingTeam = await _context.Teams.FirstOrDefaultAsync(t => t.TeamId == teamData.TeamId);
+                        tournament = new Tournament
+                        {
+                            Name = tournamentData.TournamentName,
+                            Stages = new List<Stage>()
+                        };
+
+                        _context.Tournaments.Add(tournament);
+                        await _context.SaveChangesAsync();
+
+                        MessageBox.Show($"Tournament '{tournament.Name}' created successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Tournament data import cancelled.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
+
+                foreach (var stageData in tournamentData.Stages)
+                {
+                    // Check if stage exists
+                    var stage = tournament.Stages.FirstOrDefault(s => s.Name.ToLower() == stageData.StageName.ToLower());
+                    if (stage == null)
+                    {
+                        stage = new Stage
+                        {
+                            Name = stageData.StageName,
+                            TournamentId = tournament.TournamentId
+                        };
+
+                        _context.Stages.Add(stage);
+                        _context.SaveChanges();
+                        tournament.Stages.Add(stage);
+
+                        _logger.LogInformation($"Created new stage '{stage.Name}' for tournament '{tournament.Name}'.");
+                    }
+
+                    foreach (var teamData in stageData.Teams)
+                    {
+                        // Check if the team exists in this stage
+                        var existingTeam = await _context.Teams
+                            .FirstOrDefaultAsync(t => t.TeamId == teamData.TeamId.ToString() && t.StageId == stage.StageId);
 
                         if (existingTeam == null)
                         {
-                            // Add the team to the database
                             var newTeam = new Team
                             {
-                                TeamId = teamData.TeamId,
+                                TeamId = teamData.TeamId.ToString(),
                                 TeamName = teamData.TeamName,
-                                // Set other team properties as needed
+                                StageId = stage.StageId
                             };
 
                             _context.Teams.Add(newTeam);
-                            _logger.LogInformation($"Added team {newTeam.TeamName} with ID {newTeam.TeamId} to the database.");
+                            _logger.LogInformation($"Added team {newTeam.TeamName} to stage '{stage.Name}'.");
                         }
                         else
                         {
-                            // Optionally, update existing team data
                             existingTeam.TeamName = teamData.TeamName;
-                            // Update other team properties as needed
-                            _logger.LogInformation($"Team {existingTeam.TeamName} with ID {existingTeam.TeamId} already exists. Updating data.");
+                            _logger.LogInformation($"Updated existing team '{existingTeam.TeamName}' in stage '{stage.Name}'.");
                         }
                     }
                 }
 
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("Team data loaded and synchronized with the database successfully.");
+                _logger.LogInformation("Tournament, stages, and teams loaded and synced successfully.");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An error occurred while loading team data from JSON.");
             }
         }
+
     }
 
-    // Define data structures for JSON deserialization
+    // Define data structures for JSON deserializationusing System.Text.Json.Serialization;
     public class TournamentData
-    {
-        public string TournamentName { get; set; }
-        public List<StageData> Stages { get; set; }
-    }
+{
+    [JsonProperty("tournament_name")]
+    public string TournamentName { get; set; }
 
-    public class StageData
-    {
-        public string StageName { get; set; }
-        public List<TeamData> Teams { get; set; }
-    }
+    [JsonProperty("stages")]
+    public List<StageData> Stages { get; set; }
+}
 
-    public class TeamData
-    {
-        public int TeamId { get; set; }
-        public string TeamName { get; set; }
-        // Add other team properties as needed
-    }
+public class StageData
+{
+    [JsonProperty("stage_name")]
+    public string StageName { get; set; }
+
+    [JsonProperty("teams")]
+    public List<TeamData> Teams { get; set; }
+}
+
+public class TeamData
+{
+    [JsonProperty("team_id")]
+    public int TeamId { get; set; }
+
+    [JsonProperty("team_name")]
+    public string TeamName { get; set; }
+}
+
+
 }

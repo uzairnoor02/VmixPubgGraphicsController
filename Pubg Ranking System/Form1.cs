@@ -121,7 +121,7 @@ namespace Pubg_Ranking_System
             try
             {
                 var jsonTeamService = _serviceProvider.GetRequiredService<JsonTeamDataService>();
-                await jsonTeamService.ReloadTeamDataAsync();
+                await jsonTeamService.LoadTeamDataAsync();
                 MessageBox.Show("Teams data reloaded successfully from JSON file.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 
                 // Refresh the tournament dropdown

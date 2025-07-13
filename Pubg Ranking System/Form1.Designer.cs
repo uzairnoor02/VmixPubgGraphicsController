@@ -51,6 +51,7 @@ namespace Pubg_Ranking_System
             groupBox2 = new GroupBox();
             button8 = new Button();
             MapName_cmb = new ComboBox();
+            reload_teams_btn = new Button();
             groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
             SuspendLayout();
@@ -291,6 +292,16 @@ namespace Pubg_Ranking_System
             MapName_cmb.Size = new Size(121, 23);
             MapName_cmb.TabIndex = 12;
             // 
+            // reload_teams_btn
+            // 
+            reload_teams_btn.Location = new Point(117, 12);
+            reload_teams_btn.Name = "reload_teams_btn";
+            reload_teams_btn.Size = new Size(99, 42);
+            reload_teams_btn.TabIndex = 0;
+            reload_teams_btn.Text = "Reload Teams";
+            reload_teams_btn.UseVisualStyleBackColor = true;
+            reload_teams_btn.Click += Add_Tournament_btn_Click;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -300,6 +311,7 @@ namespace Pubg_Ranking_System
             Controls.Add(button8);
             Controls.Add(groupBox2);
             Controls.Add(groupBox1);
+            Controls.Add(reload_teams_btn);
             Controls.Add(Add_Tournamen_btn);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "Form1";
@@ -335,5 +347,6 @@ namespace Pubg_Ranking_System
         private GroupBox groupBox2;
         private Button button8;
         private ComboBox MapName_cmb;
+        private Button reload_teams_btn;
     }
 }
