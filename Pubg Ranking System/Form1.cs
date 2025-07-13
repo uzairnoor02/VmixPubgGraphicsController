@@ -1,3 +1,4 @@
+
 using Hangfire;
 using Microsoft.Extensions.Logging;
 using VmixGraphicsBusiness.Utils;
@@ -34,50 +35,173 @@ namespace Pubg_Ranking_System
         private readonly PreMatch _preMatch;
         private readonly Reset _reset;
 
+        // Animation and UI enhancement variables
+        private Timer _animationTimer;
+        private int _animationStep = 0;
+        private bool _isAnimating = false;
+
         public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness, TournamentBusiness tournamentBusiness, IBackgroundJobClient backgroundJobManager, ILogger<Form1> logger, IConnectionMultiplexer redisConnection, IServiceProvider serviceProvider, vmix_graphicsContext vmix_GraphicsContext, PostMatch postMatch, Reset reset, PreMatch preMatch)
         {
             _liveStatsBusiness = liveStatsBusiness;
             _Add_tournament = add_Tournament;
             _getLiveData = getLiveData;
             InitializeComponent();
+            SetupModernUI();
             _backgroundJobManager = backgroundJobManager;
             _logger = logger;
             _tournamentBusiness = tournamentBusiness;
             _redisConnection = redisConnection;
-            _redisDb = _redisConnection.GetDatabase(); // Initialize Redis database
+            _redisDb = _redisConnection.GetDatabase();
 
             var tournamentnames = _tournamentBusiness.getAll().Select(x => x.Name).ToList();
             Stage_cmb.DataSource = _tournamentBusiness.getAllStages().Select(x => x.Name).ToList();
             TournamentName_cmb.DataSource = tournamentnames;
-            var days = new List<string>();
-            days.Add("1"); days.Add("2"); days.Add("3"); days.Add("4"); days.Add("5"); days.Add("6"); days.Add("7"); days.Add("8");
-            var matches = new List<string>();
-            matches.Add("1"); matches.Add("2"); matches.Add("3"); matches.Add("4"); matches.Add("5"); matches.Add("6"); matches.Add("7"); matches.Add("8");
-
-            var MapNames = new List<string>();
-            MapNames.Add("Erangel"); MapNames.Add("Miramar"); MapNames.Add("Sanhok");
-            MapName_cmb.DataSource = MapNames;
+            
+            var days = new List<string> { "1", "2", "3", "4", "5", "6", "7", "8" };
+            var matches = new List<string> { "1", "2", "3", "4", "5", "6", "7", "8" };
+            var mapNames = new List<string> { "Erangel", "Miramar", "Sanhok" };
+            
+            MapName_cmb.DataSource = mapNames;
             Day_cmb.DataSource = days;
             Match_cmb.DataSource = matches;
+            
             _serviceProvider = serviceProvider;
             _vmix_GraphicsContext = vmix_GraphicsContext;
             _postMatch = postMatch;
             _preMatch = preMatch;
             _reset = reset;
+
+            // Initialize animation timer
+            _animationTimer = new Timer();
+            _animationTimer.Interval = 50;
+            _animationTimer.Tick += AnimationTimer_Tick;
         }
+
+        private void SetupModernUI()
+        {
+            // Set form properties for modern look
+            this.BackColor = Color.FromArgb(25, 25, 25);
+            this.ForeColor = Color.White;
+            this.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
+            this.FormBorderStyle = FormBorderStyle.None;
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.Size = new Size(1200, 800);
+
+            // Add rounded corners effect
+            this.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, Width, Height, 20, 20));
+
+            // Enable double buffering for smooth animations
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.DoubleBuffer, true);
+        }
+
+        [System.Runtime.InteropServices.DllImport("Gdi32.dll", EntryPoint = "CreateRoundRectRgn")]
+        private static extern IntPtr CreateRoundRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect, int nWidthEllipse, int nHeightEllipse);
+
+        private void AnimationTimer_Tick(object sender, EventArgs e)
+        {
+            if (_isAnimating)
+            {
+                _animationStep++;
+                this.Invalidate();
+                
+                if (_animationStep >= 100)
+                {
+                    _animationStep = 0;
+                }
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            DrawModernBackground(e.Graphics);
+            DrawAnimatedElements(e.Graphics);
+        }
+
+        private void DrawModernBackground(Graphics g)
+        {
+            // Create gradient background
+            using (var brush = new LinearGradientBrush(
+                this.ClientRectangle,
+                Color.FromArgb(45, 45, 48),
+                Color.FromArgb(25, 25, 25),
+                LinearGradientMode.Vertical))
+            {
+                g.FillRectangle(brush, this.ClientRectangle);
+            }
+
+            // Draw header area
+            using (var headerBrush = new LinearGradientBrush(
+                new Rectangle(0, 0, Width, 80),
+                Color.FromArgb(0, 122, 204),
+                Color.FromArgb(0, 102, 184),
+                LinearGradientMode.Horizontal))
+            {
+                g.FillRectangle(headerBrush, 0, 0, Width, 80);
+            }
+
+            // Draw title
+            using (var titleFont = new Font("Segoe UI", 24, FontStyle.Bold))
+            using (var titleBrush = new SolidBrush(Color.White))
+            {
+                var titleText = "PUBG Ranking System Dashboard";
+                var titleSize = g.MeasureString(titleText, titleFont);
+                g.DrawString(titleText, titleFont, titleBrush, 
+                    (Width - titleSize.Width) / 2, 25);
+            }
+
+            // Draw decorative elements
+            DrawDecorativeElements(g);
+        }
+
+        private void DrawDecorativeElements(Graphics g)
+        {
+            // Draw animated circles
+            using (var pen = new Pen(Color.FromArgb(100, 0, 122, 204), 2))
+            {
+                for (int i = 0; i < 5; i++)
+                {
+                    int size = 50 + i * 20;
+                    int x = Width - 150 + (int)(Math.Sin((_animationStep + i * 20) * 0.1) * 20);
+                    int y = 100 + i * 30 + (int)(Math.Cos((_animationStep + i * 20) * 0.1) * 10);
+                    g.DrawEllipse(pen, x, y, size, size);
+                }
+            }
+        }
+
+        private void DrawAnimatedElements(Graphics g)
+        {
+            if (_isAnimating)
+            {
+                // Draw pulsing effect around active elements
+                using (var pen = new Pen(Color.FromArgb(150, 0, 255, 127), 3))
+                {
+                    float pulseSize = 5 + (float)(Math.Sin(_animationStep * 0.2) * 3);
+                    // Add pulsing effects to important buttons
+                }
+            }
+        }
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             base.OnFormClosing(e);
-
             _logger.LogInformation("Form is closing.");
 
-            if (MessageBox.Show("Are you sure you want to close the application?", "Confirm Exit", MessageBoxButtons.YesNo) == DialogResult.No)
+            // Show modern confirmation dialog
+            var result = ShowModernMessageBox("Are you sure you want to close the application?", 
+                "Confirm Exit", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            
+            if (result == DialogResult.No)
             {
+                e.Cancel = true;
                 return;
             }
 
-            string processName = "Pubg Ranking System";
+            // Stop animation timer
+            _animationTimer?.Stop();
+            _animationTimer?.Dispose();
 
+            string processName = "Pubg Ranking System";
             try
             {
                 foreach (var process in Process.GetProcessesByName(processName))
@@ -92,72 +216,70 @@ namespace Pubg_Ranking_System
             }
         }
 
-        private void Add_Tournament_btn_Click(object sender, EventArgs e)
+        private DialogResult ShowModernMessageBox(string message, string title, MessageBoxButtons buttons, MessageBoxIcon icon)
         {
-            _Add_tournament.Show();
-        }
-        private async void start_btn_Click(object sender, EventArgs e)
-        {
-            var result = await _tournamentBusiness.add_match(TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text);
-            if (result.Item2 == 0)
+            // Create a modern-looking message box
+            var form = new Form()
             {
-                // EnqueueFetchAndPostDataJob(result.Item3, _backgroundJobManager, _serviceProvider);
-                _getLiveData.FetchAndPostData(result.Item3);
-                _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
-            }
-            else
-            {
-                if (MessageBox.Show(result.Item1, "", MessageBoxButtons.YesNo) == DialogResult.Yes)
-                {
-                    _getLiveData.FetchAndPostData(result.Item3);
-                    // MessageBox.Show("Recurring job started.");
-                    _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
-                }
-            }
-        }
+                Width = 400,
+                Height = 200,
+                FormBorderStyle = FormBorderStyle.None,
+                StartPosition = FormStartPosition.CenterParent,
+                BackColor = Color.FromArgb(45, 45, 48),
+                ForeColor = Color.White
+            };
 
-        private async void reload_teams_btn_Click(object sender, EventArgs e)
-        {
-            try
+            var lblMessage = new Label()
             {
-                var jsonTeamService = _serviceProvider.GetRequiredService<JsonTeamDataService>();
-                await jsonTeamService.LoadTeamDataAsync();
-                MessageBox.Show("Teams data reloaded successfully from JSON file.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Left = 20,
+                Top = 20,
+                Width = 360,
+                Height = 80,
+                Text = message,
+                Font = new Font("Segoe UI", 11),
+                ForeColor = Color.White,
+                TextAlign = ContentAlignment.MiddleCenter
+            };
 
-                // Refresh the tournament dropdown
-                await LoadTournamentsAsync();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error reloading teams data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _logger.LogError(ex, "Error reloading teams data");
-            }
+            var btnYes = CreateModernButton("Yes", new Point(100, 120));
+            btnYes.DialogResult = DialogResult.Yes;
+            
+            var btnNo = CreateModernButton("No", new Point(220, 120));
+            btnNo.DialogResult = DialogResult.No;
+
+            form.Controls.Add(lblMessage);
+            form.Controls.Add(btnYes);
+            form.Controls.Add(btnNo);
+
+            return form.ShowDialog();
         }
 
-        private async Task LoadTournamentsAsync()
+        private Button CreateModernButton(string text, Point location)
         {
-            try
+            var button = new Button()
             {
-                using var scope = _serviceProvider.CreateScope();
-                var context = scope.ServiceProvider.GetRequiredService<vmix_graphicsContext>();
-                var tournaments = await context.Tournaments.Select(t => t.Name).ToListAsync();
+                Text = text,
+                Location = location,
+                Size = new Size(80, 35),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(0, 122, 204),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 10),
+                Cursor = Cursors.Hand
+            };
 
-                TournamentName_cmb.DataSource = tournaments;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading tournaments");
-            }
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(0, 142, 224);
+            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(0, 102, 184);
+
+            return button;
         }
 
         private async void Form1_Load(object sender, EventArgs e)
         {
-            // Show authentication form first
-            if (!await ShowAuthenticationAsync())
-            {
-                Application.Exit();
-                return;
-            }
+            // Start animations
+            _isAnimating = true;
+            _animationTimer.Start();
 
             // Define the output folder path
             string outputFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "resources");
@@ -175,35 +297,24 @@ namespace Pubg_Ranking_System
             }
             catch (Exception ex)
             {
-                // Log or handle exceptions
                 _logger.LogInformation($"Error deleting folder: {ex.Message}");
             }
 
             // Sync keys with cloud on startup
             await SyncKeysWithCloudAsync();
+
+            // Show welcome animation
+            await ShowWelcomeAnimation();
         }
 
-        private async Task<bool> ShowAuthenticationAsync()
+        private async Task ShowWelcomeAnimation()
         {
-            try
+            // Fade in effect
+            this.Opacity = 0;
+            for (double opacity = 0; opacity <= 1; opacity += 0.05)
             {
-                using var authForm = new AuthenticationForm(_serviceProvider);
-                var result = authForm.ShowDialog();
-
-                if (result == DialogResult.OK && authForm.IsAuthenticated)
-                {
-                    var authKeyService = _serviceProvider.GetRequiredService<AuthKeyService>();
-                    await authKeyService.SaveKeyToDbAsync(authForm.ValidatedKey);
-                    _logger.LogInformation($"User authenticated successfully with key: {authForm.ValidatedKey}");
-                    return true;
-                }
-                return false;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during authentication process");
-                MessageBox.Show("Authentication error occurred. Application will close.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return false;
+                this.Opacity = opacity;
+                await Task.Delay(20);
             }
         }
 
@@ -220,14 +331,79 @@ namespace Pubg_Ranking_System
                 _logger.LogError(ex, "Error syncing keys with cloud");
             }
         }
+
+        private async Task LoadTournamentsAsync()
+        {
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<vmix_graphicsContext>();
+                var tournaments = await context.Tournaments.Select(t => t.Name).ToListAsync();
+                TournamentName_cmb.DataSource = tournaments;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading tournaments");
+            }
+        }
+
+        // Event handlers for buttons with enhanced UI feedback
+        private async void Add_Tournament_btn_Click(object sender, EventArgs e)
+        {
+            await AnimateButtonClick((Button)sender);
+            _Add_tournament.Show();
+        }
+
+        private async void start_btn_Click(object sender, EventArgs e)
+        {
+            await AnimateButtonClick((Button)sender);
+            
+            var result = await _tournamentBusiness.add_match(TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text);
+            if (result.Item2 == 0)
+            {
+                _getLiveData.FetchAndPostData(result.Item3);
+                _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
+                ShowSuccessNotification("Match started successfully!");
+            }
+            else
+            {
+                var confirmResult = ShowModernMessageBox(result.Item1, "Confirmation", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (confirmResult == DialogResult.Yes)
+                {
+                    _getLiveData.FetchAndPostData(result.Item3);
+                    _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
+                    ShowSuccessNotification("Match started successfully!");
+                }
+            }
+        }
+
+        private async void reload_teams_btn_Click(object sender, EventArgs e)
+        {
+            await AnimateButtonClick((Button)sender);
+            
+            try
+            {
+                var jsonTeamService = _serviceProvider.GetRequiredService<JsonTeamDataService>();
+                await jsonTeamService.LoadTeamDataAsync();
+                ShowSuccessNotification("Teams data reloaded successfully!");
+                await LoadTournamentsAsync();
+            }
+            catch (Exception ex)
+            {
+                ShowErrorNotification($"Error reloading teams data: {ex.Message}");
+                _logger.LogError(ex, "Error reloading teams data");
+            }
+        }
+
         private async void stop_Click(object sender, EventArgs e)
         {
+            await AnimateButtonClick((Button)sender);
+            
             _backgroundJobManager.Delete(HangfireJobNames.FetchAndPostDataJob);
-            MessageBox.Show("Recurring job stopped.");
+            ShowSuccessNotification("Match stopped successfully!");
             _logger.LogInformation("Recurring job stopped.");
 
-
-            // Remove all Redis keys related to the achievements
+            // Remove Redis keys
             var redisKeys = new List<string>
             {
                 $"{HelperRedis.VehicleEliminationsKey}:*",
@@ -250,101 +426,194 @@ namespace Pubg_Ranking_System
                 }
             }
         }
+
+        // Post-match button handlers with animations
+        private async void TeamsToWatch_Click(object sender, EventArgs e)
+        {
+            await AnimateButtonClick((Button)sender);
+            var match = await GetSelectedMatch();
+            if (match != null)
+            {
+                _postMatch.TeamsToWatch(match);
+                ShowSuccessNotification("Teams to Watch updated!");
+            }
+        }
+
+        private async void MatchRankings_Click(object sender, EventArgs e)
+        {
+            await AnimateButtonClick((Button)sender);
+            var match = await GetSelectedMatch();
+            if (match != null)
+            {
+                _postMatch.MatchRankings(match);
+                ShowSuccessNotification("Match Rankings updated!");
+            }
+        }
+
+        private async void OverallRankings_Click(object sender, EventArgs e)
+        {
+            await AnimateButtonClick((Button)sender);
+            var match = await GetSelectedMatch();
+            if (match != null)
+            {
+                _postMatch.OverallRankings(match);
+                ShowSuccessNotification("Overall Rankings updated!");
+            }
+        }
+
+        private async void MatchMvp_Click(object sender, EventArgs e)
+        {
+            await AnimateButtonClick((Button)sender);
+            var match = await GetSelectedMatch();
+            if (match != null)
+            {
+                _postMatch.MatchMvp(match);
+                ShowSuccessNotification("Match MVP updated!");
+            }
+        }
+
+        private async void SetAll_Click(object sender, EventArgs e)
+        {
+            await AnimateButtonClick((Button)sender);
+            var match = await GetSelectedMatch();
+            if (match != null)
+            {
+                _postMatch.WWCDStatsAsync(match);
+                _postMatch.MatchMvp(match);
+                _postMatch.MatchRankings(match);
+                _postMatch.OverallRankings(match);
+                _postMatch.MatchSummary(match);
+                _postMatch.Top5MatchMVP(match);
+                _postMatch.Top5StageMVP(match);
+                _postMatch.TopGrenadiers(match);
+                ShowSuccessNotification("All statistics updated!");
+            }
+        }
+
+        private async void Reset_Click(object sender, EventArgs e)
+        {
+            await AnimateButtonClick((Button)sender);
+            _reset.ResetAll();
+            ShowSuccessNotification("System reset completed!");
+        }
+
+        private async void MapTopPerformers_Click(object sender, EventArgs e)
+        {
+            await AnimateButtonClick((Button)sender);
+            var match = await GetSelectedMatch();
+            if (match != null)
+            {
+                _preMatch.MapTopPerformers(match, MapName_cmb.Text);
+                ShowSuccessNotification("Map Top Performers updated!");
+            }
+        }
+
+        private async Task<Match> GetSelectedMatch()
+        {
+            try
+            {
+                var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
+                var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
+                
+                if (tournament == null || stage == null)
+                {
+                    ShowErrorNotification("Please select valid tournament and stage!");
+                    return null;
+                }
+
+                var match = await _vmix_GraphicsContext.Matches
+                    .Where(x => x.TournamentId == tournament.TournamentId && 
+                               x.StageId == stage.StageId && 
+                               x.MatchDayId == int.Parse(Day_cmb.Text) && 
+                               x.MatchId == int.Parse(Match_cmb.Text))
+                    .FirstOrDefaultAsync();
+
+                if (match == null)
+                {
+                    ShowErrorNotification("Match not found!");
+                }
+
+                return match;
+            }
+            catch (Exception ex)
+            {
+                ShowErrorNotification($"Error getting match: {ex.Message}");
+                return null;
+            }
+        }
+
+        private async Task AnimateButtonClick(Button button)
+        {
+            var originalColor = button.BackColor;
+            var originalSize = button.Size;
+
+            // Scale down effect
+            button.Size = new Size(originalSize.Width - 5, originalSize.Height - 5);
+            button.BackColor = Color.FromArgb(0, 142, 224);
+            await Task.Delay(100);
+
+            // Scale back up
+            button.Size = originalSize;
+            button.BackColor = originalColor;
+        }
+
+        private void ShowSuccessNotification(string message)
+        {
+            ShowNotification(message, Color.FromArgb(0, 150, 0));
+        }
+
+        private void ShowErrorNotification(string message)
+        {
+            ShowNotification(message, Color.FromArgb(200, 0, 0));
+        }
+
+        private void ShowNotification(string message, Color backgroundColor)
+        {
+            var notification = new Form()
+            {
+                Width = 300,
+                Height = 80,
+                FormBorderStyle = FormBorderStyle.None,
+                StartPosition = FormStartPosition.Manual,
+                BackColor = backgroundColor,
+                ForeColor = Color.White,
+                TopMost = true,
+                ShowInTaskbar = false
+            };
+
+            notification.Location = new Point(
+                this.Location.X + this.Width - notification.Width - 20,
+                this.Location.Y + 100
+            );
+
+            var label = new Label()
+            {
+                Text = message,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = new Font("Segoe UI", 10),
+                ForeColor = Color.White
+            };
+
+            notification.Controls.Add(label);
+            notification.Show();
+
+            // Auto-close after 3 seconds
+            var timer = new System.Windows.Forms.Timer();
+            timer.Interval = 3000;
+            timer.Tick += (s, e) =>
+            {
+                timer.Stop();
+                notification.Close();
+            };
+            timer.Start();
+        }
+
         public static void EnqueueFetchAndPostDataJob(Match match, IBackgroundJobClient recurringJobManager, IServiceProvider serviceProvider)
         {
             var getLiveData = serviceProvider.GetRequiredService<GetLiveData>();
             recurringJobManager.Enqueue(HangfireQueues.HighPriority,
                 () => getLiveData.FetchAndPostData(match));
         }
-
-        private async void button1_Click(object sender, EventArgs e)
-        {
-            //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
-            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
-            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
-            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
-            _postMatch.TeamsToWatch(match);
-
-        }
-
-        private void button2_Click(object sender, EventArgs e)
-        {
-            _reset.ResetAll();
-        }
-
-        private async void button3_Click(object sender, EventArgs e)
-        {
-            //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
-            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
-            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
-            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
-            _postMatch.MatchRankings(match);
-
-        }
-
-        private async void button4_Click(object sender, EventArgs e)
-        {
-            //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
-            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
-            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
-            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
-            _postMatch.OverallRankings(match);
-
-        }
-
-        private async void button5_Click(object sender, EventArgs e)
-        {
-            //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
-            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
-            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
-            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
-            _postMatch.MatchMvp(match);
-
-        }
-
-        private async void button7_Click(object sender, EventArgs e)
-        {
-            //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
-            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
-            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
-            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
-            _postMatch.WWCDStatsAsync(match);
-            _postMatch.WWCDStatsAsync(match);
-            _postMatch.MatchMvp(match);
-            _postMatch.MatchRankings(match);
-            _postMatch.OverallRankings(match);
-            _postMatch.MatchSummary(match);
-            _postMatch.Top5MatchMVP(match);
-            _postMatch.Top5StageMVP(match);
-            _postMatch.TopGrenadiers(match);
-
-        }
-
-        private async void button6_Click(object sender, EventArgs e)
-        {
-            //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
-            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
-            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
-            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
-            _postMatch.WWCDStatsAsync(match);
-            _postMatch.MatchMvp(match);
-            _postMatch.MatchRankings(match);
-            _postMatch.OverallRankings(match);
-            _postMatch.MatchSummary(match);
-            _postMatch.Top5MatchMVP(match);
-            _postMatch.Top5StageMVP(match);
-            _postMatch.TopGrenadiers(match);
-
-        }
-
-        private async void button8_Click(object sender, EventArgs e)
-        {
-            var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
-            var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
-            var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
-
-            _preMatch.MapTopPerformers(match,MapName_cmb.Text);
-        }
-
     }
 }

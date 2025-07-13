@@ -1,16 +1,10 @@
+
 namespace Pubg_Ranking_System
 {
     partial class Form1
     {
-        /// <summary>
-        ///  Required designer variable.
-        /// </summary>
         private System.ComponentModel.IContainer components = null;
 
-        /// <summary>
-        ///  Clean up any resources being used.
-        /// </summary>
-        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null))
@@ -22,330 +16,370 @@ namespace Pubg_Ranking_System
 
         #region Windows Form Designer generated code
 
-        /// <summary>
-        ///  Required method for Designer support - do not modify
-        ///  the contents of this method with the code editor.
-        /// </summary>
         private void InitializeComponent()
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
-            Add_Tournamen_btn = new Button();
-            start_btn = new Button();
-            stop_btn = new Button();
+            
+            // Header Panel
+            headerPanel = new Panel();
+            titleLabel = new Label();
+            closeButton = new Button();
+            minimizeButton = new Button();
+            
+            // Main Content Panel
+            mainPanel = new Panel();
+            
+            // Left Panel - Tournament Selection
+            leftPanel = new Panel();
+            tournamentGroupBox = new GroupBox();
             TournamentName_cmb = new ComboBox();
             Stage_cmb = new ComboBox();
+            Day_cmb = new ComboBox();
+            Match_cmb = new ComboBox();
+            MapName_cmb = new ComboBox();
             label1 = new Label();
             label2 = new Label();
-            Day_cmb = new ComboBox();
             label3 = new Label();
-            Match_cmb = new ComboBox();
             label4 = new Label();
-            groupBox1 = new GroupBox();
-            button1 = new Button();
-            button2 = new Button();
-            button3 = new Button();
-            button4 = new Button();
-            button5 = new Button();
-            button7 = new Button();
-            button6 = new Button();
-            groupBox2 = new GroupBox();
-            button8 = new Button();
-            MapName_cmb = new ComboBox();
+            label5 = new Label();
+            
+            // Center Panel - Match Controls
+            centerPanel = new Panel();
+            matchControlsGroupBox = new GroupBox();
+            start_btn = new Button();
+            stop_btn = new Button();
             reload_teams_btn = new Button();
-            groupBox1.SuspendLayout();
-            groupBox2.SuspendLayout();
+            Add_Tournament_btn = new Button();
+            
+            // Right Panel - Post Match Stats
+            rightPanel = new Panel();
+            postMatchGroupBox = new GroupBox();
+            teamsToWatch_btn = new Button();
+            matchRankings_btn = new Button();
+            overallRankings_btn = new Button();
+            matchMvp_btn = new Button();
+            setAll_btn = new Button();
+            reset_btn = new Button();
+            
+            // Bottom Panel - Pre Match
+            bottomPanel = new Panel();
+            preMatchGroupBox = new GroupBox();
+            mapTopPerformers_btn = new Button();
+            
             SuspendLayout();
-            // 
-            // Add_Tournamen_btn
-            // 
-            Add_Tournamen_btn.Location = new Point(12, 12);
-            Add_Tournamen_btn.Name = "Add_Tournamen_btn";
-            Add_Tournamen_btn.Size = new Size(99, 42);
-            Add_Tournamen_btn.TabIndex = 0;
-            Add_Tournamen_btn.Text = "Add tournament";
-            Add_Tournamen_btn.UseVisualStyleBackColor = true;
-            Add_Tournamen_btn.Click += Add_Tournament_btn_Click;
-            // 
-            // start_btn
-            // 
-            start_btn.Location = new Point(18, 213);
-            start_btn.Name = "start_btn";
-            start_btn.Size = new Size(99, 42);
-            start_btn.TabIndex = 0;
-            start_btn.Text = "Start Match";
-            start_btn.UseVisualStyleBackColor = true;
-            start_btn.Click += start_btn_Click;
-            // 
-            // stop_btn
-            // 
-            stop_btn.Location = new Point(18, 261);
-            stop_btn.Name = "stop_btn";
-            stop_btn.Size = new Size(99, 42);
-            stop_btn.TabIndex = 0;
-            stop_btn.Text = "Stop";
-            stop_btn.UseVisualStyleBackColor = true;
-            stop_btn.Click += stop_Click;
-            // 
-            // reload_teams_btn
-            // 
-            reload_teams_btn.Location = new Point(18, 309);
-            reload_teams_btn.Name = "reload_teams_btn";
-            reload_teams_btn.Size = new Size(99, 42);
-            reload_teams_btn.TabIndex = 0;
-            reload_teams_btn.Text = "Reload Teams";
-            reload_teams_btn.UseVisualStyleBackColor = true;
-            reload_teams_btn.Click += reload_teams_btn_Click;
-            // 
-            // TournamentName_cmb
-            // 
+            
+            // Form
+            this.AutoScaleDimensions = new SizeF(7F, 15F);
+            this.AutoScaleMode = AutoScaleMode.Font;
+            this.ClientSize = new Size(1200, 800);
+            this.FormBorderStyle = FormBorderStyle.None;
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.BackColor = Color.FromArgb(25, 25, 25);
+            this.ForeColor = Color.White;
+            this.Font = new Font("Segoe UI", 10F);
+            this.Icon = (Icon)resources.GetObject("$this.Icon");
+            this.Name = "Form1";
+            this.Text = "PUBG Ranking System Dashboard";
+            this.Load += Form1_Load;
+            
+            // Header Panel
+            headerPanel.BackColor = Color.FromArgb(0, 122, 204);
+            headerPanel.Dock = DockStyle.Top;
+            headerPanel.Height = 80;
+            headerPanel.Controls.Add(titleLabel);
+            headerPanel.Controls.Add(closeButton);
+            headerPanel.Controls.Add(minimizeButton);
+            
+            // Title Label
+            titleLabel.Text = "PUBG RANKING SYSTEM";
+            titleLabel.Font = new Font("Segoe UI", 18, FontStyle.Bold);
+            titleLabel.ForeColor = Color.White;
+            titleLabel.AutoSize = false;
+            titleLabel.Size = new Size(400, 40);
+            titleLabel.Location = new Point(50, 20);
+            titleLabel.TextAlign = ContentAlignment.MiddleLeft;
+            
+            // Close Button
+            closeButton.Text = "✕";
+            closeButton.Size = new Size(40, 30);
+            closeButton.Location = new Point(1150, 25);
+            closeButton.FlatStyle = FlatStyle.Flat;
+            closeButton.FlatAppearance.BorderSize = 0;
+            closeButton.BackColor = Color.Transparent;
+            closeButton.ForeColor = Color.White;
+            closeButton.Font = new Font("Segoe UI", 14, FontStyle.Bold);
+            closeButton.Cursor = Cursors.Hand;
+            closeButton.Click += (s, e) => this.Close();
+            
+            // Minimize Button
+            minimizeButton.Text = "–";
+            minimizeButton.Size = new Size(40, 30);
+            minimizeButton.Location = new Point(1100, 25);
+            minimizeButton.FlatStyle = FlatStyle.Flat;
+            minimizeButton.FlatAppearance.BorderSize = 0;
+            minimizeButton.BackColor = Color.Transparent;
+            minimizeButton.ForeColor = Color.White;
+            minimizeButton.Font = new Font("Segoe UI", 14, FontStyle.Bold);
+            minimizeButton.Cursor = Cursors.Hand;
+            minimizeButton.Click += (s, e) => this.WindowState = FormWindowState.Minimized;
+            
+            // Main Panel
+            mainPanel.Dock = DockStyle.Fill;
+            mainPanel.BackColor = Color.Transparent;
+            mainPanel.Padding = new Padding(20);
+            
+            // Left Panel
+            leftPanel.Size = new Size(300, 500);
+            leftPanel.Location = new Point(20, 20);
+            leftPanel.BackColor = Color.FromArgb(45, 45, 48);
+            leftPanel.Controls.Add(tournamentGroupBox);
+            
+            // Tournament GroupBox
+            tournamentGroupBox.Text = "Tournament Selection";
+            tournamentGroupBox.ForeColor = Color.White;
+            tournamentGroupBox.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            tournamentGroupBox.Dock = DockStyle.Fill;
+            tournamentGroupBox.Padding = new Padding(15);
+            
+            // Tournament ComboBox
+            TournamentName_cmb.Size = new Size(250, 30);
+            TournamentName_cmb.Location = new Point(15, 50);
             TournamentName_cmb.DropDownStyle = ComboBoxStyle.DropDownList;
-            TournamentName_cmb.FormattingEnabled = true;
-            TournamentName_cmb.Location = new Point(18, 33);
-            TournamentName_cmb.Name = "TournamentName_cmb";
-            TournamentName_cmb.Size = new Size(121, 23);
-            TournamentName_cmb.TabIndex = 1;
-            // 
-            // Stage_cmb
-            // 
+            TournamentName_cmb.BackColor = Color.FromArgb(60, 60, 63);
+            TournamentName_cmb.ForeColor = Color.White;
+            TournamentName_cmb.FlatStyle = FlatStyle.Flat;
+            
+            // Stage ComboBox
+            Stage_cmb.Size = new Size(250, 30);
+            Stage_cmb.Location = new Point(15, 110);
             Stage_cmb.DropDownStyle = ComboBoxStyle.DropDownList;
-            Stage_cmb.FormattingEnabled = true;
-            Stage_cmb.Location = new Point(18, 79);
-            Stage_cmb.Name = "Stage_cmb";
-            Stage_cmb.Size = new Size(121, 23);
-            Stage_cmb.TabIndex = 1;
-            // 
-            // label1
-            // 
-            label1.AutoSize = true;
-            label1.Location = new Point(18, 15);
-            label1.Name = "label1";
-            label1.Size = new Size(72, 15);
-            label1.TabIndex = 2;
-            label1.Text = "Tournament";
-            // 
-            // label2
-            // 
-            label2.AutoSize = true;
-            label2.Location = new Point(18, 61);
-            label2.Name = "label2";
-            label2.Size = new Size(36, 15);
-            label2.TabIndex = 2;
-            label2.Text = "Stage";
-            // 
-            // Day_cmb
-            // 
+            Stage_cmb.BackColor = Color.FromArgb(60, 60, 63);
+            Stage_cmb.ForeColor = Color.White;
+            Stage_cmb.FlatStyle = FlatStyle.Flat;
+            
+            // Day ComboBox
+            Day_cmb.Size = new Size(250, 30);
+            Day_cmb.Location = new Point(15, 170);
             Day_cmb.DropDownStyle = ComboBoxStyle.DropDownList;
-            Day_cmb.FormattingEnabled = true;
-            Day_cmb.Location = new Point(18, 125);
-            Day_cmb.Name = "Day_cmb";
-            Day_cmb.Size = new Size(121, 23);
-            Day_cmb.TabIndex = 1;
-            // 
-            // label3
-            // 
-            label3.AutoSize = true;
-            label3.Location = new Point(18, 107);
-            label3.Name = "label3";
-            label3.Size = new Size(27, 15);
-            label3.TabIndex = 2;
-            label3.Text = "Day";
-            // 
-            // Match_cmb
-            // 
+            Day_cmb.BackColor = Color.FromArgb(60, 60, 63);
+            Day_cmb.ForeColor = Color.White;
+            Day_cmb.FlatStyle = FlatStyle.Flat;
+            
+            // Match ComboBox
+            Match_cmb.Size = new Size(250, 30);
+            Match_cmb.Location = new Point(15, 230);
             Match_cmb.DropDownStyle = ComboBoxStyle.DropDownList;
-            Match_cmb.FormattingEnabled = true;
-            Match_cmb.Location = new Point(18, 172);
-            Match_cmb.Name = "Match_cmb";
-            Match_cmb.Size = new Size(121, 23);
-            Match_cmb.TabIndex = 1;
-            // 
-            // label4
-            // 
-            label4.AutoSize = true;
-            label4.Location = new Point(18, 154);
-            label4.Name = "label4";
-            label4.Size = new Size(41, 15);
-            label4.TabIndex = 2;
+            Match_cmb.BackColor = Color.FromArgb(60, 60, 63);
+            Match_cmb.ForeColor = Color.White;
+            Match_cmb.FlatStyle = FlatStyle.Flat;
+            
+            // Map ComboBox
+            MapName_cmb.Size = new Size(250, 30);
+            MapName_cmb.Location = new Point(15, 290);
+            MapName_cmb.DropDownStyle = ComboBoxStyle.DropDownList;
+            MapName_cmb.BackColor = Color.FromArgb(60, 60, 63);
+            MapName_cmb.ForeColor = Color.White;
+            MapName_cmb.FlatStyle = FlatStyle.Flat;
+            
+            // Labels
+            label1.Text = "Tournament";
+            label1.Location = new Point(15, 30);
+            label1.Size = new Size(100, 20);
+            label1.ForeColor = Color.LightGray;
+            
+            label2.Text = "Stage";
+            label2.Location = new Point(15, 90);
+            label2.Size = new Size(100, 20);
+            label2.ForeColor = Color.LightGray;
+            
+            label3.Text = "Day";
+            label3.Location = new Point(15, 150);
+            label3.Size = new Size(100, 20);
+            label3.ForeColor = Color.LightGray;
+            
             label4.Text = "Match";
-            // 
-            // groupBox1
-            // 
-            groupBox1.Controls.Add(Day_cmb);
-            groupBox1.Controls.Add(stop_btn);
-            groupBox1.Controls.Add(label4);
-            groupBox1.Controls.Add(start_btn);
-            groupBox1.Controls.Add(label3);
-            groupBox1.Controls.Add(TournamentName_cmb);
-            groupBox1.Controls.Add(label2);
-            groupBox1.Controls.Add(Stage_cmb);
-            groupBox1.Controls.Add(label1);
-            groupBox1.Controls.Add(Match_cmb);
-            groupBox1.Location = new Point(12, 90);
-            groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(169, 316);
-            groupBox1.TabIndex = 3;
-            groupBox1.TabStop = false;
-            groupBox1.Text = "MatchBox1";
-            // 
-            // button1
-            // 
-            button1.Location = new Point(21, 41);
-            button1.Name = "button1";
-            button1.Size = new Size(158, 23);
-            button1.TabIndex = 4;
-            button1.Text = "Teams to Watch";
-            button1.UseVisualStyleBackColor = true;
-            button1.Click += button1_Click;
-            // 
-            // button2
-            // 
-            button2.Location = new Point(21, 245);
-            button2.Name = "button2";
-            button2.Size = new Size(158, 27);
-            button2.TabIndex = 5;
-            button2.Text = "RESET";
-            button2.UseVisualStyleBackColor = true;
-            button2.Click += button2_Click;
-            // 
-            // button3
-            // 
-            button3.Location = new Point(21, 75);
-            button3.Name = "button3";
-            button3.Size = new Size(158, 23);
-            button3.TabIndex = 6;
-            button3.Text = "Match Rankings";
-            button3.UseVisualStyleBackColor = true;
-            button3.Click += button3_Click;
-            // 
-            // button4
-            // 
-            button4.Location = new Point(21, 109);
-            button4.Name = "button4";
-            button4.Size = new Size(158, 23);
-            button4.TabIndex = 7;
-            button4.Text = "OverAll Rankings";
-            button4.UseVisualStyleBackColor = true;
-            button4.Click += button4_Click;
-            // 
-            // button5
-            // 
-            button5.Location = new Point(21, 143);
-            button5.Name = "button5";
-            button5.Size = new Size(158, 23);
-            button5.TabIndex = 7;
-            button5.Text = "Match MVP";
-            button5.UseVisualStyleBackColor = true;
-            button5.Click += button5_Click;
-            // 
-            // button7
-            // 
-            button7.Location = new Point(21, 177);
-            button7.Name = "button7";
-            button7.Size = new Size(158, 23);
-            button7.TabIndex = 8;
-            button7.Text = "WWCD Team";
-            button7.UseVisualStyleBackColor = true;
-            button7.Click += button7_Click;
-            // 
-            // button6
-            // 
-            button6.BackColor = SystemColors.ButtonShadow;
-            button6.Location = new Point(21, 211);
-            button6.Name = "button6";
-            button6.Size = new Size(158, 23);
-            button6.TabIndex = 9;
-            button6.Text = "Set All";
-            button6.UseVisualStyleBackColor = false;
-            button6.Click += button6_Click;
-            // 
-            // groupBox2
-            // 
-            groupBox2.Controls.Add(button5);
-            groupBox2.Controls.Add(button2);
-            groupBox2.Controls.Add(button6);
-            groupBox2.Controls.Add(button1);
-            groupBox2.Controls.Add(button7);
-            groupBox2.Controls.Add(button3);
-            groupBox2.Controls.Add(button4);
-            groupBox2.Location = new Point(203, 105);
-            groupBox2.Name = "groupBox2";
-            groupBox2.Size = new Size(200, 301);
-            groupBox2.TabIndex = 10;
-            groupBox2.TabStop = false;
-            groupBox2.Text = "groupBox2";
-            // 
-            // button8
-            // 
-            button8.Location = new Point(589, 120);
-            button8.Name = "button8";
-            button8.Size = new Size(75, 23);
-            button8.TabIndex = 11;
-            button8.Text = "button8";
-            button8.UseVisualStyleBackColor = true;
-            button8.Click += button8_Click;
-            // 
-            // MapName_cmb
-            // 
-            MapName_cmb.FormattingEnabled = true;
-            MapName_cmb.Location = new Point(573, 90);
-            MapName_cmb.Name = "MapName_cmb";
-            MapName_cmb.Size = new Size(121, 23);
-            MapName_cmb.TabIndex = 12;
-            // 
-            // reload_teams_btn
-            // 
-            reload_teams_btn.Location = new Point(117, 12);
-            reload_teams_btn.Name = "reload_teams_btn";
-            reload_teams_btn.Size = new Size(99, 42);
-            reload_teams_btn.TabIndex = 0;
-            reload_teams_btn.Text = "Reload Teams";
-            reload_teams_btn.UseVisualStyleBackColor = true;
-            // 
-            // Form1
-            // 
-            AutoScaleDimensions = new SizeF(7F, 15F);
-            AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(784, 550);
-            Controls.Add(MapName_cmb);
-            Controls.Add(button8);
-            Controls.Add(groupBox2);
-            Controls.Add(groupBox1);
-            Controls.Add(reload_teams_btn);
-            Controls.Add(Add_Tournamen_btn);
-            Icon = (Icon)resources.GetObject("$this.Icon");
-            Name = "Form1";
-            Text = "Dashboard";
-            Load += Form1_Load;
-            groupBox1.ResumeLayout(false);
-            groupBox1.PerformLayout();
-            groupBox2.ResumeLayout(false);
+            label4.Location = new Point(15, 210);
+            label4.Size = new Size(100, 20);
+            label4.ForeColor = Color.LightGray;
+            
+            label5.Text = "Map";
+            label5.Location = new Point(15, 270);
+            label5.Size = new Size(100, 20);
+            label5.ForeColor = Color.LightGray;
+            
+            // Add controls to tournament group box
+            tournamentGroupBox.Controls.AddRange(new Control[] {
+                TournamentName_cmb, Stage_cmb, Day_cmb, Match_cmb, MapName_cmb,
+                label1, label2, label3, label4, label5
+            });
+            
+            // Center Panel
+            centerPanel.Size = new Size(300, 500);
+            centerPanel.Location = new Point(340, 20);
+            centerPanel.BackColor = Color.FromArgb(45, 45, 48);
+            centerPanel.Controls.Add(matchControlsGroupBox);
+            
+            // Match Controls GroupBox
+            matchControlsGroupBox.Text = "Match Controls";
+            matchControlsGroupBox.ForeColor = Color.White;
+            matchControlsGroupBox.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            matchControlsGroupBox.Dock = DockStyle.Fill;
+            matchControlsGroupBox.Padding = new Padding(15);
+            
+            // Buttons styling method
+            void StyleButton(Button btn, Color color, Point location)
+            {
+                btn.Size = new Size(250, 45);
+                btn.Location = location;
+                btn.FlatStyle = FlatStyle.Flat;
+                btn.BackColor = color;
+                btn.ForeColor = Color.White;
+                btn.Font = new Font("Segoe UI", 11, FontStyle.Bold);
+                btn.FlatAppearance.BorderSize = 0;
+                btn.Cursor = Cursors.Hand;
+                btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(
+                    Math.Min(255, color.R + 30),
+                    Math.Min(255, color.G + 30),
+                    Math.Min(255, color.B + 30));
+            }
+            
+            // Style buttons
+            StyleButton(Add_Tournament_btn, Color.FromArgb(0, 150, 136), new Point(15, 40));
+            Add_Tournament_btn.Text = "➕ Add Tournament";
+            Add_Tournament_btn.Click += Add_Tournament_btn_Click;
+            
+            StyleButton(start_btn, Color.FromArgb(76, 175, 80), new Point(15, 100));
+            start_btn.Text = "▶️ Start Match";
+            start_btn.Click += start_btn_Click;
+            
+            StyleButton(stop_btn, Color.FromArgb(244, 67, 54), new Point(15, 160));
+            stop_btn.Text = "⏹️ Stop Match";
+            stop_btn.Click += stop_Click;
+            
+            StyleButton(reload_teams_btn, Color.FromArgb(255, 152, 0), new Point(15, 220));
+            reload_teams_btn.Text = "🔄 Reload Teams";
+            reload_teams_btn.Click += reload_teams_btn_Click;
+            
+            matchControlsGroupBox.Controls.AddRange(new Control[] {
+                Add_Tournament_btn, start_btn, stop_btn, reload_teams_btn
+            });
+            
+            // Right Panel
+            rightPanel.Size = new Size(300, 500);
+            rightPanel.Location = new Point(660, 20);
+            rightPanel.BackColor = Color.FromArgb(45, 45, 48);
+            rightPanel.Controls.Add(postMatchGroupBox);
+            
+            // Post Match GroupBox
+            postMatchGroupBox.Text = "Post Match Statistics";
+            postMatchGroupBox.ForeColor = Color.White;
+            postMatchGroupBox.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            postMatchGroupBox.Dock = DockStyle.Fill;
+            postMatchGroupBox.Padding = new Padding(15);
+            
+            // Post match buttons
+            StyleButton(teamsToWatch_btn, Color.FromArgb(63, 81, 181), new Point(15, 40));
+            teamsToWatch_btn.Text = "👥 Teams to Watch";
+            teamsToWatch_btn.Click += TeamsToWatch_Click;
+            
+            StyleButton(matchRankings_btn, Color.FromArgb(103, 58, 183), new Point(15, 95));
+            matchRankings_btn.Text = "📊 Match Rankings";
+            matchRankings_btn.Click += MatchRankings_Click;
+            
+            StyleButton(overallRankings_btn, Color.FromArgb(156, 39, 176), new Point(15, 150));
+            overallRankings_btn.Text = "🏆 Overall Rankings";
+            overallRankings_btn.Click += OverallRankings_Click;
+            
+            StyleButton(matchMvp_btn, Color.FromArgb(233, 30, 99), new Point(15, 205));
+            matchMvp_btn.Text = "⭐ Match MVP";
+            matchMvp_btn.Click += MatchMvp_Click;
+            
+            StyleButton(setAll_btn, Color.FromArgb(0, 150, 136), new Point(15, 260));
+            setAll_btn.Text = "📋 Set All Stats";
+            setAll_btn.Click += SetAll_Click;
+            
+            StyleButton(reset_btn, Color.FromArgb(96, 125, 139), new Point(15, 315));
+            reset_btn.Text = "🔄 Reset All";
+            reset_btn.Click += Reset_Click;
+            
+            postMatchGroupBox.Controls.AddRange(new Control[] {
+                teamsToWatch_btn, matchRankings_btn, overallRankings_btn,
+                matchMvp_btn, setAll_btn, reset_btn
+            });
+            
+            // Bottom Panel
+            bottomPanel.Size = new Size(1160, 180);
+            bottomPanel.Location = new Point(20, 540);
+            bottomPanel.BackColor = Color.FromArgb(45, 45, 48);
+            bottomPanel.Controls.Add(preMatchGroupBox);
+            
+            // Pre Match GroupBox
+            preMatchGroupBox.Text = "Pre Match Analysis";
+            preMatchGroupBox.ForeColor = Color.White;
+            preMatchGroupBox.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            preMatchGroupBox.Dock = DockStyle.Fill;
+            preMatchGroupBox.Padding = new Padding(15);
+            
+            StyleButton(mapTopPerformers_btn, Color.FromArgb(121, 85, 72), new Point(15, 40));
+            mapTopPerformers_btn.Text = "🗺️ Map Top Performers";
+            mapTopPerformers_btn.Click += MapTopPerformers_Click;
+            mapTopPerformers_btn.Size = new Size(300, 45);
+            
+            preMatchGroupBox.Controls.Add(mapTopPerformers_btn);
+            
+            // Add panels to main panel
+            mainPanel.Controls.AddRange(new Control[] {
+                leftPanel, centerPanel, rightPanel, bottomPanel
+            });
+            
+            // Add main controls to form
+            this.Controls.AddRange(new Control[] {
+                headerPanel, mainPanel
+            });
+            
             ResumeLayout(false);
         }
 
         #endregion
 
-        private Button Add_Tournamen_btn;
+        private Panel headerPanel;
+        private Label titleLabel;
+        private Button closeButton;
+        private Button minimizeButton;
+        private Panel mainPanel;
+        private Panel leftPanel;
+        private Panel centerPanel;
+        private Panel rightPanel;
+        private Panel bottomPanel;
+        
+        private GroupBox tournamentGroupBox;
+        private GroupBox matchControlsGroupBox;
+        private GroupBox postMatchGroupBox;
+        private GroupBox preMatchGroupBox;
+        
+        private Button Add_Tournament_btn;
         private Button start_btn;
         private Button stop_btn;
+        private Button reload_teams_btn;
+        
         private ComboBox TournamentName_cmb;
         private ComboBox Stage_cmb;
+        private ComboBox Day_cmb;
+        private ComboBox Match_cmb;
+        private ComboBox MapName_cmb;
+        
         private Label label1;
         private Label label2;
-        private ComboBox Day_cmb;
         private Label label3;
-        private ComboBox Match_cmb;
         private Label label4;
-        private GroupBox groupBox1;
-        private Button button1;
-        private Button button2;
-        private Button button3;
-        private Button button4;
-        private Button button5;
-        private Button button7;
-        private Button button6;
-        private GroupBox groupBox2;
-        private Button button8;
-        private ComboBox MapName_cmb;
-        private Button reload_teams_btn;
+        private Label label5;
+        
+        private Button teamsToWatch_btn;
+        private Button matchRankings_btn;
+        private Button overallRankings_btn;
+        private Button matchMvp_btn;
+        private Button setAll_btn;
+        private Button reset_btn;
+        private Button mapTopPerformers_btn;
     }
 }
