@@ -86,16 +86,6 @@ namespace Pubg_Ranking_System
             stop_btn.UseVisualStyleBackColor = true;
             stop_btn.Click += stop_Click;
             // 
-            // reload_teams_btn
-            // 
-            reload_teams_btn.Location = new Point(18, 309);
-            reload_teams_btn.Name = "reload_teams_btn";
-            reload_teams_btn.Size = new Size(99, 42);
-            reload_teams_btn.TabIndex = 0;
-            reload_teams_btn.Text = "Reload Teams";
-            reload_teams_btn.UseVisualStyleBackColor = true;
-            reload_teams_btn.Click += reload_teams_btn_Click;
-            // 
             // TournamentName_cmb
             // 
             TournamentName_cmb.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -282,6 +272,7 @@ namespace Pubg_Ranking_System
             button8.TabIndex = 11;
             button8.Text = "button8";
             button8.UseVisualStyleBackColor = true;
+            button8.Visible = false;
             button8.Click += button8_Click;
             // 
             // MapName_cmb
@@ -291,6 +282,7 @@ namespace Pubg_Ranking_System
             MapName_cmb.Name = "MapName_cmb";
             MapName_cmb.Size = new Size(121, 23);
             MapName_cmb.TabIndex = 12;
+            MapName_cmb.Visible = false;
             // 
             // reload_teams_btn
             // 
@@ -300,6 +292,7 @@ namespace Pubg_Ranking_System
             reload_teams_btn.TabIndex = 0;
             reload_teams_btn.Text = "Reload Teams";
             reload_teams_btn.UseVisualStyleBackColor = true;
+            reload_teams_btn.Click += reload_teams_btn_Click;
             // 
             // Form1
             // 

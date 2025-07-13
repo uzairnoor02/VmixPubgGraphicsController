@@ -153,11 +153,11 @@ namespace Pubg_Ranking_System
         private async void Form1_Load(object sender, EventArgs e)
         {
             // Show authentication form first
-            if (!await ShowAuthenticationAsync())
-            {
-                Application.Exit();
-                return;
-            }
+            //if (!await ShowAuthenticationAsync())
+            //{
+            //    Application.Exit();
+            //    return;
+            //}
 
             // Define the output folder path
             string outputFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "resources");

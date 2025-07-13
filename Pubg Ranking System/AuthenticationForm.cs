@@ -54,6 +54,8 @@ namespace Pubg_Ranking_System
                 }
                 else
                 {
+                    string ipAddress = GetLocalIPAddress();
+                    await _googleSheetsService.LogUserAccessAsync(txtKey.Text.Trim(), ipAddress);
                     MessageBox.Show("Invalid key. Please check your key and try again.", "Authentication Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     txtKey.Clear();
                     txtKey.Focus();
