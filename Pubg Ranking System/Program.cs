@@ -432,7 +432,8 @@ namespace Pubg_Ranking_System
                             {
                                 TeamId = teamData.TeamId.ToString(),
                                 TeamName = teamData.TeamName,
-                                StageId = stage.StageId
+                                StageId = stage.StageId,
+                                TournamentId=stage.TournamentId
                             };
 
                             _context.Teams.Add(newTeam);
