@@ -74,10 +74,33 @@ public class LiveStatsBusiness(
             {
                 teamdata.totalScore = teamdata.score + liveTeamInfos.teamInfoList.Where(x => x.teamId == teamdata.teamid).Select(x => x.killNum).FirstOrDefault();
             }
-            var teamRanks = pastMatchStats
-                    .OrderByDescending(t => t.totalScore)
-                    .Select((t, index) => new { Rank = index + 1, TeamId = t.teamid })
-                    .ToDictionary(t => t.TeamId, t => t.Rank);
+            // Get overall rankings for all teams from database
+            using var scope2 = serviceProvider.CreateScope();
+            var context = scope2.ServiceProvider.GetRequiredService<vmix_graphicsContext>();
+
+            // Get overall team rankings from database (you may need to adjust this query based on your actual overall ranking logic)
+            var overallRankings = context.TeamPoints
+                .GroupBy(tp => tp.TeamId)
+                .Select(g => new
+                {
+                    TeamId = g.Key,
+                    TotalPoints = g.Sum(x => x.KillPoints) + g.Sum(x => x.PlacementPoints),
+                    WWCD = g.Sum(x => x.WWCD)
+                })
+                .OrderByDescending(x => x.TotalPoints)
+                .ThenByDescending(x => x.WWCD)
+                .Select((team, index) => new { TeamId = team.TeamId, OverallRank = index + 1 })
+                .ToDictionary(x => x.TeamId, x => x.OverallRank);
+
+            // Filter to only include teams that are playing today (have live members > 0)
+            var playingToday = liveTeamInfos.teamInfoList.Where(x => x.liveMemberNum > 0).Select(x => x.teamId).ToList();
+
+            // Create ranking mapping for only teams playing today, ordered by their overall ranking
+            var todaysTeamRanks = overallRankings
+                .Where(kvp => playingToday.Contains(kvp.Key))
+                .OrderBy(kvp => kvp.Value) // Order by overall rank
+                .Select((kvp, index) => new { TeamId = kvp.Key, DisplayRank = index + 1 })
+                .ToDictionary(x => x.TeamId, x => x.DisplayRank);
 
 
             var groupedByTeam = playerInfo.PlayerInfoList.ToLookup(info => info.TeamId);
@@ -118,25 +141,25 @@ public class LiveStatsBusiness(
                         {
                             case 1:
                                 teamStats.Player1Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
-                                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{teamRanks[teamGroup.Key]}P1", teamStats.Player1Health));
+                                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{todaysTeamRanks[teamGroup.Key]}P1", teamStats.Player1Health));
                                 if (player.IsOutsideBlueCircle)
                                     isinBlue = true;
                                 break;
                             case 2:
                                 teamStats.Player2Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
-                                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{teamRanks[teamGroup.Key]}P2", teamStats.Player2Health));
+                                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{todaysTeamRanks[teamGroup.Key]}P2", teamStats.Player2Health));
                                 if (player.IsOutsideBlueCircle)
                                     isinBlue = true;
                                 break;
                             case 3:
                                 teamStats.Player3Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
-                                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{teamRanks[teamGroup.Key]}P3", teamStats.Player3Health));
+                                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{todaysTeamRanks[teamGroup.Key]}P3", teamStats.Player3Health));
                                 if (player.IsOutsideBlueCircle)
                                     isinBlue = true;
                                 break;
                             case 4:
                                 teamStats.Player4Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
-                                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{teamRanks[teamGroup.Key]}P4", teamStats.Player4Health));
+                                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{todaysTeamRanks[teamGroup.Key]}P4", teamStats.Player4Health));
                                 if (player.IsOutsideBlueCircle)
                                     isinBlue = true;
                                 break;
@@ -148,23 +171,24 @@ public class LiveStatsBusiness(
                     teamStats.Eliminations = eliminations;
                     teamStats.Tag = currentTeamInfo.teamName;
                     _logger.LogInformation(currentTeamInfo.teamName + currentTeamInfo.score.ToString());
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"ELIMST{teamRanks[teamGroup.Key]}", teamStats.Eliminations.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TOTALT{teamRanks[teamGroup.Key]}", currentTeamInfo.score.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TAGT{teamRanks[teamGroup.Key]}", currentTeamInfo.teamName));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{teamRanks[teamGroup.Key]}", $"{ConfigGlobal.LogosImages}" + $"\\0.png"));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{teamRanks[teamGroup.Key]}", $"{ConfigGlobal.LogosImages}" + $"\\{currentTeamInfo.teamid}.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"ELIMST{todaysTeamRanks[teamGroup.Key]}", teamStats.Eliminations.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TOTALT{todaysTeamRanks[teamGroup.Key]}", currentTeamInfo.score.ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TAGT{todaysTeamRanks[teamGroup.Key]}", currentTeamInfo.teamName));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"RANKT{todaysTeamRanks[teamGroup.Key]}", todaysTeamRanks[teamGroup.Key].ToString()));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{todaysTeamRanks[teamGroup.Key]}", $"{ConfigGlobal.LogosImages}" + $"\\0.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{todaysTeamRanks[teamGroup.Key]}", $"{ConfigGlobal.LogosImages}" + $"\\{currentTeamInfo.teamid}.png"));
                     _logger.LogInformation(currentTeamInfo.teamName + currentTeamInfo.score.ToString());
                     if (isEliminated)
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{teamRanks[teamGroup.Key]}", HeatlhImages + "\\EliminatedBG\\Team Dead.png"));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{todaysTeamRanks[teamGroup.Key]}", HeatlhImages + "\\EliminatedBG\\Team Dead.png"));
                     }
                     else if (isinBlue)
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{teamRanks[teamGroup.Key]}", HeatlhImages + "\\EliminatedBG\\Team In Zone.png"));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{todaysTeamRanks[teamGroup.Key]}", HeatlhImages + "\\EliminatedBG\\Team In Zone.png"));
                     }
                     else
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{teamRanks[teamGroup.Key]}", HeatlhImages + "\\EliminatedBG\\Team Out Zone.png"));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{todaysTeamRanks[teamGroup.Key]}", HeatlhImages + "\\EliminatedBG\\Team Out Zone.png"));
                     }
                     teamLiveStats.Add(teamStats);
                 }
