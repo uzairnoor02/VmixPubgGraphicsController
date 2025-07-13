@@ -47,6 +47,11 @@ namespace Pubg_Ranking_System
             _getLiveData = getLiveData;
             InitializeComponent();
             SetupModernUI();
+            
+            // Set the form to full screen
+            this.WindowState = FormWindowState.Maximized;
+            this.FormBorderStyle = FormBorderStyle.None;
+            
             _backgroundJobManager = backgroundJobManager;
             _logger = logger;
             _tournamentBusiness = tournamentBusiness;

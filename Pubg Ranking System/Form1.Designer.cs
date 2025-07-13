@@ -138,7 +138,9 @@ namespace Pubg_Ranking_System
             tournamentGroupBox.Text = "Tournament Selection";
             tournamentGroupBox.ForeColor = Color.White;
             tournamentGroupBox.Font = new Font("Segoe UI", 12, FontStyle.Bold);
-            tournamentGroupBox.Dock = DockStyle.Fill;
+            tournamentGroupBox.Location = new Point(15, 30);
+            tournamentGroupBox.Size = new Size(250, 450);
+            tournamentGroupBox.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             tournamentGroupBox.Padding = new Padding(15);
 
             // Tournament ComboBox
@@ -225,7 +227,9 @@ namespace Pubg_Ranking_System
             matchControlsGroupBox.Text = "Match Controls";
             matchControlsGroupBox.ForeColor = Color.White;
             matchControlsGroupBox.Font = new Font("Segoe UI", 12, FontStyle.Bold);
-            matchControlsGroupBox.Dock = DockStyle.Fill;
+            matchControlsGroupBox.Location = new Point(15, 30);
+            matchControlsGroupBox.Size = new Size(250, 450);
+            matchControlsGroupBox.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             matchControlsGroupBox.Padding = new Padding(15);
 
             // Buttons styling method
@@ -276,7 +280,9 @@ namespace Pubg_Ranking_System
             postMatchGroupBox.Text = "Post Match Statistics";
             postMatchGroupBox.ForeColor = Color.White;
             postMatchGroupBox.Font = new Font("Segoe UI", 12, FontStyle.Bold);
-            postMatchGroupBox.Dock = DockStyle.Fill;
+            postMatchGroupBox.Location = new Point(15, 30);
+            postMatchGroupBox.Size = new Size(250, 450);
+            postMatchGroupBox.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             postMatchGroupBox.Padding = new Padding(15);
 
             // Post match buttons
@@ -319,7 +325,9 @@ namespace Pubg_Ranking_System
             preMatchGroupBox.Text = "Pre Match Analysis";
             preMatchGroupBox.ForeColor = Color.White;
             preMatchGroupBox.Font = new Font("Segoe UI", 12, FontStyle.Bold);
-            preMatchGroupBox.Dock = DockStyle.Fill;
+            preMatchGroupBox.Location = new Point(15, 30);
+            preMatchGroupBox.Size = new Size(1130, 120);
+            preMatchGroupBox.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             preMatchGroupBox.Padding = new Padding(15);
 
             StyleButton(mapTopPerformers_btn, Color.FromArgb(121, 85, 72), new Point(15, 40));
