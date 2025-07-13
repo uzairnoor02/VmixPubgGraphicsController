@@ -32,7 +32,7 @@ public partial class vmix_graphicsContext : DbContext
     public virtual DbSet<TeamsStage> TeamsStages { get; set; }
 
     public virtual DbSet<Tournament> Tournaments { get; set; }
-    public virtual DbSet<VmixGraphicsBusiness.AuthKey> AuthKeys { get; set; }
+    public virtual DbSet<AuthKey> AuthKeys { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -289,6 +289,26 @@ public partial class vmix_graphicsContext : DbContext
                 .IsRequired()
                 .HasMaxLength(255)
                 .HasColumnName("name");
+        });
+
+        modelBuilder.Entity<AuthKey>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("auth_keys");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.KeyValue)
+                .IsRequired()
+                .HasMaxLength(500)
+                .HasColumnName("key_value");
+            entity.Property(e => e.CreatedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("updated_at");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
         });
 
         OnModelCreatingPartial(modelBuilder);

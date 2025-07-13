@@ -99,14 +99,4 @@ namespace VmixGraphicsBusiness
             }
         }
     }
-
-    // Add this model to your VmixData Models
-    public class AuthKey
-    {
-        public int Id { get; set; }
-        public string KeyValue { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime? UpdatedAt { get; set; }
-        public bool IsActive { get; set; }
-    }
 }
