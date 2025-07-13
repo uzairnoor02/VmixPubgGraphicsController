@@ -116,10 +116,47 @@ namespace Pubg_Ranking_System
             }
         }
 
+        private async void reload_teams_btn_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                var jsonTeamService = _serviceProvider.GetRequiredService<JsonTeamDataService>();
+                await jsonTeamService.ReloadTeamDataAsync();
+                MessageBox.Show("Teams data reloaded successfully from JSON file.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                
+                // Refresh the tournament dropdown
+                await LoadTournamentsAsync();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error reloading teams data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _logger.LogError(ex, "Error reloading teams data");
+            }
+        }
+
+        private async Task LoadTournamentsAsync()
+        {
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<vmix_graphicsContext>();
+                var tournaments = await context.Tournaments.Select(t => t.Name).ToListAsync();
+                
+                TournamentName_cmb.DataSource = tournaments;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading tournaments");
+            }
+        }
+
         private void Form1_Load(object sender, EventArgs e)
         {
             // Define the output folder path
             string outputFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "resources");
+            
+            // Load tournaments on form load
+            LoadTournamentsAsync().ConfigureAwait(false);
 
             try
             {

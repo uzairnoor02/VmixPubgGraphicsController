@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -19,6 +19,7 @@ using System.Diagnostics;
 using System.Linq;
 using Hangfire.Storage;
 using VmixGraphicsBusiness.PreMatch;
+using Newtonsoft.Json;
 
 namespace Pubg_Ranking_System
 {
@@ -28,7 +29,7 @@ namespace Pubg_Ranking_System
         private static List<BackgroundJobServer> _hangfireServers;
 
         [STAThread]
-        static void Main()
+        static async Task Main()
         {
             try
             {
@@ -71,6 +72,9 @@ namespace Pubg_Ranking_System
 
                 using var serviceProvider = services.BuildServiceProvider();
 
+                // Initialize database
+                await InitializeDatabaseAsync(serviceProvider);
+
                 // ✅ Ensure Hangfire storage is initialized
                 var redis = serviceProvider.GetRequiredService<IConnectionMultiplexer>();
                 GlobalConfiguration.Configuration.UseStorage(new RedisStorage(redis));
@@ -83,7 +87,7 @@ namespace Pubg_Ranking_System
 
                 var serverOptions = new BackgroundJobServerOptions
                 {
-                    Queues = new[] {  HangfireQueues.HighPriority, HangfireQueues.LowPriority, HangfireQueues.Default },
+                    Queues = new[] { HangfireQueues.HighPriority, HangfireQueues.LowPriority, HangfireQueues.Default },
                     WorkerCount = Environment.ProcessorCount * 5,
                     Activator = activator
                 };
@@ -136,6 +140,17 @@ namespace Pubg_Ranking_System
             }
         }
 
+        static async Task InitializeDatabaseAsync(IServiceProvider serviceProvider)
+        {
+            using var scope = serviceProvider.CreateScope();
+            var dbInitializer = scope.ServiceProvider.GetRequiredService<DatabaseInitializer>();
+            await dbInitializer.InitializeDatabaseAsync();
+
+            // Load team data from JSON after database initialization
+            var jsonTeamDataService = scope.ServiceProvider.GetRequiredService<JsonTeamDataService>();
+            await jsonTeamDataService.LoadTeamDataAsync();
+        }
+
         private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
         {
             services.AddLogging(loggingBuilder =>
@@ -156,6 +171,8 @@ namespace Pubg_Ranking_System
             services.AddSingleton<Form1>();
             services.AddScoped<ApiCallProcessor>();
             services.AddScoped<Reset>();
+            services.AddTransient<DatabaseInitializer>();
+            services.AddTransient<JsonTeamDataService>();
 
             services.AddSingleton<IHostApplicationLifetime>(provider => provider.GetRequiredService<IHostApplicationLifetime>());
         }
@@ -266,6 +283,133 @@ namespace Pubg_Ranking_System
             {
                 Console.WriteLine($"Error clearing Hangfire jobs: {ex.Message}");
             }
+        }
+    }
+
+    //Add DatabaseInitializer class
+    public class DatabaseInitializer
+    {
+        private readonly vmix_graphicsContext _context;
+        private readonly ILogger<DatabaseInitializer> _logger;
+
+        public DatabaseInitializer(vmix_graphicsContext context, ILogger<DatabaseInitializer> logger)
+        {
+            _context = context;
+            _logger = logger;
+        }
+
+        public async Task InitializeDatabaseAsync()
+        {
+            try
+            {
+                await _context.Database.EnsureCreatedAsync();
+                _logger.LogInformation("Database created/initialized successfully.");
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while creating/initializing the database.");
+                throw; // Re-throw the exception to prevent the application from running with a potentially uninitialized database.
+            }
+        }
+    }
+
+    public class JsonTeamDataService
+    {
+        private readonly vmix_graphicsContext _context;
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<JsonTeamDataService> _logger;
+
+        public JsonTeamDataService(vmix_graphicsContext context, IConfiguration configuration, ILogger<JsonTeamDataService> logger)
+        {
+            _context = context;
+            _configuration = configuration;
+            _logger = logger;
+        }
+
+        public async Task LoadTeamDataAsync()
+        {
+            try
+            {
+                var jsonFilePath = _configuration["JsonTeamDataPath"];  // Make sure to define 'JsonTeamDataPath' in appsettings.json
+                if (string.IsNullOrEmpty(jsonFilePath))
+                {
+                    _logger.LogWarning("JsonTeamDataPath is not configured in appsettings.json. Skipping data loading.");
+                    return;
+                }
+
+                if (!File.Exists(jsonFilePath))
+                {
+                    _logger.LogError($"JSON data file not found at {jsonFilePath}.");
+                    return;
+                }
+
+                var jsonData = await File.ReadAllTextAsync(jsonFilePath);
+                var tournamentData = JsonConvert.DeserializeObject<TournamentData>(jsonData);
+
+                if (tournamentData == null)
+                {
+                    _logger.LogError("Failed to deserialize tournament data from JSON.");
+                    return;
+                }
+
+                // Process tournament data
+                foreach (var stage in tournamentData.Stages)
+                {
+                    foreach (var teamData in stage.Teams)
+                    {
+                        // Check if the team already exists in the database
+                        var existingTeam = await _context.Teams.FirstOrDefaultAsync(t => t.TeamId == teamData.TeamId);
+
+                        if (existingTeam == null)
+                        {
+                            // Add the team to the database
+                            var newTeam = new Team
+                            {
+                                TeamId = teamData.TeamId,
+                                TeamName = teamData.TeamName,
+                                // Set other team properties as needed
+                            };
+
+                            _context.Teams.Add(newTeam);
+                            _logger.LogInformation($"Added team {newTeam.TeamName} with ID {newTeam.TeamId} to the database.");
+                        }
+                        else
+                        {
+                            // Optionally, update existing team data
+                            existingTeam.TeamName = teamData.TeamName;
+                            // Update other team properties as needed
+                            _logger.LogInformation($"Team {existingTeam.TeamName} with ID {existingTeam.TeamId} already exists. Updating data.");
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Team data loaded and synchronized with the database successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while loading team data from JSON.");
+            }
+        }
+    }
+
+    // Define data structures for JSON deserialization
+    public class TournamentData
+    {
+        public string TournamentName { get; set; }
+        public List<StageData> Stages { get; set; }
+    }
+
+    public class StageData
+    {
+        public string StageName { get; set; }
+        public List<TeamData> Teams { get; set; }
+    }
+
+    public class TeamData
+    {
+        public int TeamId { get; set; }
+        public string TeamName { get; set; }
+        // Add other team properties as needed
     }
 }

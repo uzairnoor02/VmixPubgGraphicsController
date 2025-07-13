@@ -1,4 +1,4 @@
-﻿namespace Pubg_Ranking_System
+namespace Pubg_Ranking_System
 {
     partial class Form1
     {
@@ -84,6 +84,16 @@
             stop_btn.Text = "Stop";
             stop_btn.UseVisualStyleBackColor = true;
             stop_btn.Click += stop_Click;
+            // 
+            // reload_teams_btn
+            // 
+            reload_teams_btn.Location = new Point(18, 309);
+            reload_teams_btn.Name = "reload_teams_btn";
+            reload_teams_btn.Size = new Size(99, 42);
+            reload_teams_btn.TabIndex = 0;
+            reload_teams_btn.Text = "Reload Teams";
+            reload_teams_btn.UseVisualStyleBackColor = true;
+            reload_teams_btn.Click += reload_teams_btn_Click;
             // 
             // TournamentName_cmb
             // 
