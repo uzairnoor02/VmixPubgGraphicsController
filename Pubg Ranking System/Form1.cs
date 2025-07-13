@@ -56,15 +56,15 @@ namespace Pubg_Ranking_System
             var tournamentnames = _tournamentBusiness.getAll().Select(x => x.Name).ToList();
             Stage_cmb.DataSource = _tournamentBusiness.getAllStages().Select(x => x.Name).ToList();
             TournamentName_cmb.DataSource = tournamentnames;
-            
+
             var days = new List<string> { "1", "2", "3", "4", "5", "6", "7", "8" };
             var matches = new List<string> { "1", "2", "3", "4", "5", "6", "7", "8" };
             var mapNames = new List<string> { "Erangel", "Miramar", "Sanhok" };
-            
+
             MapName_cmb.DataSource = mapNames;
             Day_cmb.DataSource = days;
             Match_cmb.DataSource = matches;
-            
+
             _serviceProvider = serviceProvider;
             _vmix_GraphicsContext = vmix_GraphicsContext;
             _postMatch = postMatch;
@@ -103,7 +103,7 @@ namespace Pubg_Ranking_System
             {
                 _animationStep++;
                 this.Invalidate();
-                
+
                 if (_animationStep >= 100)
                 {
                     _animationStep = 0;
@@ -146,7 +146,7 @@ namespace Pubg_Ranking_System
             {
                 var titleText = "PUBG Ranking System Dashboard";
                 var titleSize = g.MeasureString(titleText, titleFont);
-                g.DrawString(titleText, titleFont, titleBrush, 
+                g.DrawString(titleText, titleFont, titleBrush,
                     (Width - titleSize.Width) / 2, 25);
             }
 
@@ -188,9 +188,9 @@ namespace Pubg_Ranking_System
             _logger.LogInformation("Form is closing.");
 
             // Show modern confirmation dialog
-            var result = ShowModernMessageBox("Are you sure you want to close the application?", 
+            var result = ShowModernMessageBox("Are you sure you want to close the application?",
                 "Confirm Exit", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-            
+
             if (result == DialogResult.No)
             {
                 e.Cancel = true;
@@ -243,7 +243,7 @@ namespace Pubg_Ranking_System
 
             var btnYes = CreateModernButton("Yes", new Point(100, 120));
             btnYes.DialogResult = DialogResult.Yes;
-            
+
             var btnNo = CreateModernButton("No", new Point(220, 120));
             btnNo.DialogResult = DialogResult.No;
 
@@ -280,6 +280,13 @@ namespace Pubg_Ranking_System
             // Start animations
             _isAnimating = true;
             _animationTimer.Start();
+
+            // Show authentication form first
+            //if (!await ShowAuthenticationAsync())
+            //{
+            //    Application.Exit();
+            //    return;
+            //}
 
             // Define the output folder path
             string outputFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "resources");
@@ -357,7 +364,7 @@ namespace Pubg_Ranking_System
         private async void start_btn_Click(object sender, EventArgs e)
         {
             await AnimateButtonClick((Button)sender);
-            
+
             var result = await _tournamentBusiness.add_match(TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text);
             if (result.Item2 == 0)
             {
@@ -380,7 +387,7 @@ namespace Pubg_Ranking_System
         private async void reload_teams_btn_Click(object sender, EventArgs e)
         {
             await AnimateButtonClick((Button)sender);
-            
+
             try
             {
                 var jsonTeamService = _serviceProvider.GetRequiredService<JsonTeamDataService>();
@@ -398,7 +405,7 @@ namespace Pubg_Ranking_System
         private async void stop_Click(object sender, EventArgs e)
         {
             await AnimateButtonClick((Button)sender);
-            
+
             _backgroundJobManager.Delete(HangfireJobNames.FetchAndPostDataJob);
             ShowSuccessNotification("Match stopped successfully!");
             _logger.LogInformation("Recurring job stopped.");
@@ -514,7 +521,7 @@ namespace Pubg_Ranking_System
             {
                 var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
                 var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
-                
+
                 if (tournament == null || stage == null)
                 {
                     ShowErrorNotification("Please select valid tournament and stage!");
@@ -522,9 +529,9 @@ namespace Pubg_Ranking_System
                 }
 
                 var match = await _vmix_GraphicsContext.Matches
-                    .Where(x => x.TournamentId == tournament.TournamentId && 
-                               x.StageId == stage.StageId && 
-                               x.MatchDayId == int.Parse(Day_cmb.Text) && 
+                    .Where(x => x.TournamentId == tournament.TournamentId &&
+                               x.StageId == stage.StageId &&
+                               x.MatchDayId == int.Parse(Day_cmb.Text) &&
                                x.MatchId == int.Parse(Match_cmb.Text))
                     .FirstOrDefaultAsync();
 
