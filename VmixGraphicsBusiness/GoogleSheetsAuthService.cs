@@ -22,7 +22,6 @@ namespace VmixGraphicsBusiness
             _configuration = configuration;
             _logger = logger;
             _spreadsheetId = _configuration["GoogleSheets:SpreadsheetId"];
-            _credentialsPath = _configuration["GoogleSheets:CredentialsPath"];
             InitializeService();
         }
 
@@ -30,7 +29,9 @@ namespace VmixGraphicsBusiness
         {
             try
             {
-                var credential = GoogleCredential.FromFile(_credentialsPath)
+                var path = Path.Combine(AppContext.BaseDirectory, "pubg-vmix-app.json");
+
+                var credential = GoogleCredential.FromFile(path)
                     .CreateScoped(new[] { SheetsService.Scope.Spreadsheets });
 
                 _sheetsService = new SheetsService(new BaseClientService.Initializer()
@@ -50,7 +51,7 @@ namespace VmixGraphicsBusiness
         {
             try
             {
-                var range = "AuthKeys!A:A"; // Sheet named "AuthKeys", column A
+                var range = "Sheet1!A:A";
                 var request = _sheetsService.Spreadsheets.Values.Get(_spreadsheetId, range);
                 var response = await request.ExecuteAsync();
 

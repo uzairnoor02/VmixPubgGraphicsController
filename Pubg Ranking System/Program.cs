@@ -126,7 +126,7 @@ namespace Pubg_Ranking_System
                 var mainForm = serviceProvider.GetRequiredService<Form1>();
 
                 // Before running the application, show the authentication form
-                var authForm = serviceProvider.GetRequiredService<AuthForm>();
+                var authForm = serviceProvider.GetRequiredService<AuthenticationForm>();
                 if (authForm.ShowDialog() != DialogResult.OK)
                 {
                     // Authentication failed, exit the application
@@ -188,7 +188,7 @@ namespace Pubg_Ranking_System
             services.AddSingleton<IHostApplicationLifetime>(provider => provider.GetRequiredService<IHostApplicationLifetime>());
 
             // Register authentication form and related services
-            services.AddScoped<AuthForm>();
+            services.AddScoped<AuthenticationForm>();
             services.AddScoped<GoogleSheetsAuthService>();
             services.AddScoped<AuthKeyService>();
         }

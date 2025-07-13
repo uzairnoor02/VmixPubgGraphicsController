@@ -300,7 +300,6 @@ namespace Pubg_Ranking_System
             reload_teams_btn.TabIndex = 0;
             reload_teams_btn.Text = "Reload Teams";
             reload_teams_btn.UseVisualStyleBackColor = true;
-            reload_teams_btn.Click += Add_Tournament_btn_Click;
             // 
             // Form1
             // 
