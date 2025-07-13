@@ -18,7 +18,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             try
             {
                 var topGrenadiers = _vmix_GraphicsContext.PlayerStats
-                    .Where(x => x.StageId == matches.StageId)
+                    .Where(x => x.StageId == matches.StageId && x.DayId==matches.MatchDayId)
                     .GroupBy(x => x.PlayerUId)
                     .Select(g => new
                     {

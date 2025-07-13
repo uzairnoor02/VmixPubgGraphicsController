@@ -224,6 +224,14 @@ namespace Pubg_Ranking_System
             var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
             var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
             _postMatch.WWCDStatsAsync(match);
+            _postMatch.WWCDStatsAsync(match);
+            _postMatch.MatchMvp(match);
+            _postMatch.MatchRankings(match);
+            _postMatch.OverallRankings(match);
+            _postMatch.MatchSummary(match);
+            _postMatch.Top5MatchMVP(match);
+            _postMatch.Top5StageMVP(match);
+            _postMatch.TopGrenadiers(match);
 
         }
 
@@ -237,8 +245,10 @@ namespace Pubg_Ranking_System
             _postMatch.MatchMvp(match);
             _postMatch.MatchRankings(match);
             _postMatch.OverallRankings(match);
+            _postMatch.MatchSummary(match);
             _postMatch.Top5MatchMVP(match);
             _postMatch.Top5StageMVP(match);
+            _postMatch.TopGrenadiers(match);
 
         }
 

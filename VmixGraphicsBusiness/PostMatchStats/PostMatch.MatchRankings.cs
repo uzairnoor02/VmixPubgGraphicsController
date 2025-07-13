@@ -39,10 +39,13 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TOTALT{rankNum}", team.TotalPoints.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"LOGOT{rankNum}", $"{ConfigGlobal.LogosImages}\\{team.TeamId}.png"));
                     if (wwcd)
-                    {foreach (var player in wwcddata)
+                    {
+
+                        var plN = 1; 
+                        foreach (var player in wwcddata)
                         {
-                            var plN = 1;
-                            apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"PICP{plN}", player.PlayerUId.ToString()));
+                            apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"PICP{plN}", $"{ConfigGlobal.PlayerImages}\\0.png"));
+                            apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"PICP{plN}", $"{ConfigGlobal.PlayerImages}\\{player.PlayerUId}.png"));
                             plN++;
                         }
                         apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"WWCDT{rankNum}", $"{ConfigGlobal.LogosImages}\\WWCD.gif"));

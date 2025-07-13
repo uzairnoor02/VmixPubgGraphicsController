@@ -52,23 +52,23 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
                     var survivalTime = TimeSpan.FromSeconds(player.SurvivalTime);
                     var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"THROWABLESP{playernum}", $"{survivalTimeString}")); 
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"IMAGEP{playernum}", $"{playerimges}//0.png"));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"IMAGEP{playernum}", $"{playerimges}//{player.PlayerUId.ToString()}.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TIMEP{playernum}", $"{survivalTimeString}")); 
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"PICP{playernum}", $"{playerimges}//0.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"PICP{playernum}", $"{playerimges}//{player.PlayerUId.ToString()}.png"));
                     #region wwcd team overlay
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDoverlay, $"IMAGEP{playernum}", $"{playerimges}//0.png"));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDoverlay, $"IMAGEP{playernum}", $"{playerimges}//{player.PlayerUId.ToString()}.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"PICP{playernum}", $"{playerimges}//0.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"PICP{playernum}", $"{playerimges}//{player.PlayerUId.ToString()}.png"));
                     playernum++;
                 }
 
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDoverlay, $"TAGT1", winneerteam.TeamName));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDoverlay, $"LOGOT1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDoverlay, $"LOGOT1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDoverlay, $"ELIMST1", totalTeamKills.ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDoverlay, $"DAMAGET1", totalTeamDamage.ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDoverlay, $"TOTALT1", (10 + totalTeamKills).ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDoverlay, $"RANKT1", "#01"));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDoverlay, $"/16 OR TEAMS1", "/16"));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TAGT1", winneerteam.TeamName));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TLOGO", $"{ConfigGlobal.LogosImages}//0.png"));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TLOGO", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"ELIMST1", totalTeamKills.ToString()));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"DAMAGET1", totalTeamDamage.ToString()));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TOTALT1", (10 + totalTeamKills).ToString()));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"RANKT1", "#01"));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"/16 OR TEAMS1", "/16"));
                 #endregion
                 SetTexts setTexts = new SetTexts();
                 await setTexts.CallMultipleApiAsync(apiCalls);
