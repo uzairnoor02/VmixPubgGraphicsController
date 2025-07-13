@@ -124,6 +124,15 @@ namespace Pubg_Ranking_System
                 dashboardThread.Start();
 
                 var mainForm = serviceProvider.GetRequiredService<Form1>();
+
+                // Before running the application, show the authentication form
+                var authForm = serviceProvider.GetRequiredService<AuthForm>();
+                if (authForm.ShowDialog() != DialogResult.OK)
+                {
+                    // Authentication failed, exit the application
+                    return;
+                }
+
                 Application.Run(mainForm);
             }
             catch (Exception ex)
@@ -177,6 +186,11 @@ namespace Pubg_Ranking_System
             services.AddTransient<JsonTeamDataService>();
 
             services.AddSingleton<IHostApplicationLifetime>(provider => provider.GetRequiredService<IHostApplicationLifetime>());
+
+            // Register authentication form and related services
+            services.AddScoped<AuthForm>();
+            services.AddScoped<GoogleSheetsAuthService>();
+            services.AddScoped<AuthKeyService>();
         }
 
         public static void ConfigureHangfire(this IServiceCollection services, IConfiguration configuration)

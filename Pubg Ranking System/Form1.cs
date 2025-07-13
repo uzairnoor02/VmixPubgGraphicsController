@@ -123,7 +123,7 @@ namespace Pubg_Ranking_System
                 var jsonTeamService = _serviceProvider.GetRequiredService<JsonTeamDataService>();
                 await jsonTeamService.LoadTeamDataAsync();
                 MessageBox.Show("Teams data reloaded successfully from JSON file.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                
+
                 // Refresh the tournament dropdown
                 await LoadTournamentsAsync();
             }
@@ -141,7 +141,7 @@ namespace Pubg_Ranking_System
                 using var scope = _serviceProvider.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<vmix_graphicsContext>();
                 var tournaments = await context.Tournaments.Select(t => t.Name).ToListAsync();
-                
+
                 TournamentName_cmb.DataSource = tournaments;
             }
             catch (Exception ex)
@@ -150,11 +150,18 @@ namespace Pubg_Ranking_System
             }
         }
 
-        private void Form1_Load(object sender, EventArgs e)
+        private async void Form1_Load(object sender, EventArgs e)
         {
+            // Show authentication form first
+            if (!await ShowAuthenticationAsync())
+            {
+                Application.Exit();
+                return;
+            }
+
             // Define the output folder path
             string outputFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "resources");
-            
+
             // Load tournaments on form load
             LoadTournamentsAsync().ConfigureAwait(false);
 
@@ -170,6 +177,47 @@ namespace Pubg_Ranking_System
             {
                 // Log or handle exceptions
                 _logger.LogInformation($"Error deleting folder: {ex.Message}");
+            }
+
+            // Sync keys with cloud on startup
+            await SyncKeysWithCloudAsync();
+        }
+
+        private async Task<bool> ShowAuthenticationAsync()
+        {
+            try
+            {
+                using var authForm = new AuthenticationForm(_serviceProvider);
+                var result = authForm.ShowDialog();
+
+                if (result == DialogResult.OK && authForm.IsAuthenticated)
+                {
+                    var authKeyService = _serviceProvider.GetRequiredService<AuthKeyService>();
+                    await authKeyService.SaveKeyToDbAsync(authForm.ValidatedKey);
+                    _logger.LogInformation($"User authenticated successfully with key: {authForm.ValidatedKey}");
+                    return true;
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during authentication process");
+                MessageBox.Show("Authentication error occurred. Application will close.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+        }
+
+        private async Task SyncKeysWithCloudAsync()
+        {
+            try
+            {
+                var authKeyService = _serviceProvider.GetRequiredService<AuthKeyService>();
+                await authKeyService.SyncKeysWithCloudAsync();
+                _logger.LogInformation("Keys synced with cloud successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing keys with cloud");
             }
         }
         private async void stop_Click(object sender, EventArgs e)
@@ -294,7 +342,7 @@ namespace Pubg_Ranking_System
             var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
             var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
             var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
-            
+
             _preMatch.MapTopPerformers(match,MapName_cmb.Text);
         }
 
