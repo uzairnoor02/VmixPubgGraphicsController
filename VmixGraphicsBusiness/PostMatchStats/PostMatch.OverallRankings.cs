@@ -33,7 +33,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
     .ThenByDescending(x => x.KillPoints)
     .ToList();
                 var teamsdata = _vmix_GraphicsContext.Teams.Where(x => x.StageId == matches.StageId).ToList();
-
+                
                 var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
                 int rankNum = 1;
                 var rankingGuids = new List<string>
@@ -43,8 +43,16 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     vmixdata.OverAllRankingGUID2,
                     vmixdata.OverAllRankingGUID3
                 };
+                var matchCountsPerTeam = _vmix_GraphicsContext.TeamPoints
+    .Where(x => x.StageId == matches.StageId)
+    .GroupBy(x => x.TeamId)
+    .ToDictionary(g => g.Key.ToString(), g => g
+        .Select(tp => tp.MatchId)
+        .Distinct()
+        .Count());
                 foreach (var team in teamRankings)
                 {
+                    
                     var chicken = _vmix_GraphicsContext.TeamPoints
                         .Where(x => x.TeamId == team.TeamId)
                         .Select(x => x.WWCD)
@@ -53,12 +61,13 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     var teamData = teamsdata.FirstOrDefault(x => x.TeamId == team.TeamId.ToString());
                     if (teamData == null)
                         continue;
+                    int matchCount = matchCountsPerTeam.TryGetValue(teamData.TeamId, out var count) ? count : 0;
 
                     foreach (var guid in rankingGuids)
                     {
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"TAGT{rankNum}", teamData.TeamName));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"WWCD{rankNum}", chicken == 0 ? "" : chicken.ToString()));
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"MATCHT", matches.MatchId.ToString()));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"MATCHT{rankNum}", matchCount.ToString()));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"ELIMST{rankNum}", team.KillPoints.ToString()));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"PLACET{rankNum}", team.PlacementPoints.ToString()));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"TOTALT{rankNum}", team.TotalPoints.ToString()));

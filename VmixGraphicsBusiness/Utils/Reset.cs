@@ -51,6 +51,7 @@ namespace VmixGraphicsBusiness.Utils
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TOTALT{i}", " "));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TAGT{i}", " "));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{i}", $"{ConfigGlobal.LogosImages}\\0.png"));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"RANKT{i}", $"{i}"));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{i}", $"{ConfigGlobal.Images}\\EliminatedBG\\Team Dead.png"));
 
                 await apiCallProcessor.ProcessApiCalls(apiCalls);

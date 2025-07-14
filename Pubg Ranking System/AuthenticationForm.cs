@@ -48,7 +48,7 @@ namespace Pubg_Ranking_System
                     string ipAddress = GetLocalIPAddress();
                     await _googleSheetsService.LogUserAccessAsync(_validatedKey, ipAddress);
 
-                    MessageBox.Show("Authentication successful!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    //MessageBox.Show("Authentication successful!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     this.DialogResult = DialogResult.OK;
                     this.Close();
                 }
