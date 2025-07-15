@@ -1,25 +1,104 @@
-
 {
-  "tournament_name": "PUBG Summerclash 2024",
+  "tournament_name": "2025 PMSC",
   "stages": [
     {
       "stage_name": "Group Stage",
       "teams": [
         {
-          "team_id": "56",
-          "team_name": "Team Alpha"
-        },
-		{
-          "team_id": "87",
-          "team_name": "Team Beta"
+          "team_id": "2",
+          "team_name": "ASI8"
         },
         {
-          "team_id": "398",
-          "team_name": "Team Gamma"
+          "team_id": "3",
+          "team_name": "S6"
         },
         {
-          "team_id": "45",
-          "team_name": "Team Delta"
+          "team_id": "4",
+          "team_name": "Gh"
+        },
+        {
+          "team_id": "5",
+          "team_name": "VLR"
+        },
+        {
+          "team_id": "6",
+          "team_name": "DMN"
+        },
+        {
+          "team_id": "7",
+          "team_name": "VT"
+        },
+        {
+          "team_id": "8",
+          "team_name": "Trs"
+        },
+        {
+          "team_id": "9",
+          "team_name": "nm"
+        },
+        {
+          "team_id": "10",
+          "team_name": "VEko"
+        },
+        {
+          "team_id": "11",
+          "team_name": "404"
+        },
+        {
+          "team_id": "12",
+          "team_name": "7soul"
+        },
+        {
+          "team_id": "13",
+          "team_name": "Ls"
+        },
+        {
+          "team_id": "14",
+          "team_name": "d8"
+        },
+        {
+          "team_id": "15",
+          "team_name": "F2D"
+        },
+        {
+          "team_id": "16",
+          "team_name": "OXY"
+        },
+        {
+          "team_id": "17",
+          "team_name": "Ops"
+        },
+        {
+          "team_id": "18",
+          "team_name": "AMZ"
+        },
+        {
+          "team_id": "19",
+          "team_name": "141"
+        },
+        {
+          "team_id": "20",
+          "team_name": "90x"
+        },
+        {
+          "team_id": "21",
+          "team_name": "DES"
+        },
+        {
+          "team_id": "22",
+          "team_name": "ONE"
+        },
+        {
+          "team_id": "23",
+          "team_name": "RAGE"
+        },
+        {
+          "team_id": "24",
+          "team_name": "FYME"
+        },
+        {
+          "team_id": "25",
+          "team_name": "UNB"
         }
       ]
     }

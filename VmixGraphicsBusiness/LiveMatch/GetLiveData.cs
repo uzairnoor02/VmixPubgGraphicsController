@@ -190,7 +190,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                         var circleInfo = circleInfoDaTA.CircleInfo;
                         vmixguidsclass vmixguids = await VmixDataUtils.SetVMIXDataoperations();
                         string circleClosingGtzip = vmixguids.CircleClosing;
-                        if (circleInfo.CircleStatus=="2" && zonemoving == 0 && int.Parse(circleInfo.CircleIndex) < 6 && (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter)) <= 32)
+                        if (circleInfo.CircleStatus=="2" && zonemoving == 0 && int.Parse(circleInfo.CircleIndex) < 6 && (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter)) <= 17)
                         {
                             Console.WriteLine("maxtime:" + circleInfo.MaxTime + "shrinkprogress=" + circleInfo.Counter);
                             zonemoving = 1;

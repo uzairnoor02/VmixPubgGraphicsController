@@ -82,7 +82,6 @@ public class LiveStatsBusiness(
 
             // Get overall rankings for all teams from database
             using var scope2 = serviceProvider.CreateScope();
-            //var context = scope2.ServiceProvider.GetRequiredService<vmix_graphicsContext>();
 
             // Get all teams with their total points and WWCD from database
             var allTeamRanks = await vmix_GraphicsContext.TeamPoints
@@ -102,41 +101,47 @@ public class LiveStatsBusiness(
                 .Select((team, index) => new { TeamId = team.TeamId, OverallRank = index + 1 })
                 .ToDictionary(x => x.TeamId, x => x.OverallRank);
 
-            // Get currently playing teams and sort them by their overall ranking
+            // Get ALL teams that are playing today (from liveTeamInfos)
             var playingTeams = liveTeamInfos.teamInfoList
-                .Where(x => teamToOverallRank.ContainsKey(x.teamId))
-                .Select(x => new { TeamInfo = x, OverallRank = teamToOverallRank[x.teamId] })
-                .OrderBy(x => x.OverallRank)
+                .Select(x => new {
+                    TeamInfo = x,
+                    OverallRank = teamToOverallRank.ContainsKey(x.teamId) ? teamToOverallRank[x.teamId] : int.MaxValue // Assign max value if not found in rankings
+                })
+                .OrderBy(x => x.OverallRank) // Sort by overall rank
+                .ThenBy(x => x.TeamInfo.teamId) // Secondary sort by team ID for consistency
                 .ToList();
 
-            // Create a dictionary for UI positioning (1st playing team gets position 1, 2nd gets position 2, etc.)
+            // Create a dictionary for UI positioning (1st team gets position 1, 2nd gets position 2, etc.)
+            // This ensures NO GAPS in UI positioning for display order
             var teamToUIPosition = playingTeams
                 .Select((team, index) => new { TeamId = team.TeamInfo.teamId, UIPosition = index + 1 })
                 .ToDictionary(x => x.TeamId, x => x.UIPosition);
 
             var groupedByTeam = playerInfo.PlayerInfoList.ToLookup(info => info.TeamId);
 
-            foreach (var teamGroup in groupedByTeam)
+            // Process ALL teams that are playing today
+            foreach (var teamData in playingTeams)
             {
                 try
                 {
-                    int teamId = teamGroup.Key;
-                    var currentTeamInfo = pastMatchStats.FirstOrDefault(x => x.teamid == teamGroup.Key);
+                    int teamId = teamData.TeamInfo.teamId;
+                    var teamGroup = groupedByTeam[teamId];
+                    var currentTeamInfo = pastMatchStats.FirstOrDefault(x => x.teamid == teamId);
+
+                    // Skip if no team info found
+                    if (currentTeamInfo == null)
+                    {
+                        _logger.LogWarning($"Team {teamId} not found in pastMatchStats, skipping...");
+                        continue;
+                    }
+
                     var teamStats = new TeamLiveStats();
 
-                    // Get the overall ranking from database
-                    if (!teamToOverallRank.TryGetValue(teamId, out int overallRank))
-                    {
-                        _logger.LogWarning($"Team {teamId} not found in overall rankings, skipping...");
-                        continue;
-                    }
+                    // Get the overall ranking from database (or use a default if not found)
+                    int overallRank = teamToOverallRank.ContainsKey(teamId) ? teamToOverallRank[teamId] : 999;
 
                     // Get the UI position for this team
-                    if (!teamToUIPosition.TryGetValue(teamId, out int uiPosition))
-                    {
-                        _logger.LogWarning($"Team {teamId} not found in UI positions, skipping...");
-                        continue;
-                    }
+                    int uiPosition = teamToUIPosition[teamId];
 
                     teamStats.Logo = "";
                     teamStats.TotalPoints = 0;
@@ -152,8 +157,8 @@ public class LiveStatsBusiness(
                         if (string.IsNullOrEmpty(await redis.StringGetAsync($"{HelperRedis.isEliminated}:{teamId}")))
                         {
                             await redis.StringSetAsync($"{HelperRedis.isEliminated}:{teamId}", "abc");
-                            await IsEliminatedAsync(currentTeamInfo.teamName, teamGroup.Key, true, teamGroup.Sum(x => x.KillNumBeforeDie), teamGroup.FirstOrDefault()!.Rank, liveTeamInfos.teamInfoList.Count());
-                            _logger.LogInformation($"All players in Team {teamGroup.Key} are dead.");
+                            await IsEliminatedAsync(currentTeamInfo.teamName, teamId, true, teamGroup.Sum(x => x.KillNumBeforeDie), teamGroup.FirstOrDefault()!.Rank, liveTeamInfos.teamInfoList.Count());
+                            _logger.LogInformation($"All players in Team {teamId} are dead.");
                         }
                     }
                     else
@@ -162,46 +167,53 @@ public class LiveStatsBusiness(
                     }
 
                     bool isinBlue = false;
-                    foreach (var player in teamGroup)
-                    {
-                        playerCount++;
-                        switch (playerCount)
-                        {
-                            case 1:
-                                teamStats.Player1Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
-                                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P1", teamStats.Player1Health));
-                                if (player.IsOutsideBlueCircle)
-                                    isinBlue = true;
-                                break;
-                            case 2:
-                                teamStats.Player2Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
-                                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P2", teamStats.Player2Health));
-                                if (player.IsOutsideBlueCircle)
-                                    isinBlue = true;
-                                break;
-                            case 3:
-                                teamStats.Player3Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
-                                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P3", teamStats.Player3Health));
-                                if (player.IsOutsideBlueCircle)
-                                    isinBlue = true;
-                                break;
-                            case 4:
-                                teamStats.Player4Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
-                                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P4", teamStats.Player4Health));
-                                if (player.IsOutsideBlueCircle)
-                                    isinBlue = true;
-                                break;
-                        }
 
-                        eliminations += player.KillNum;
-                        teamStats.TotalPoints += player.KillNum;
+                    // Process players if they exist
+                    if (teamGroup.Any())
+                    {
+                        foreach (var player in teamGroup)
+                        {
+                            playerCount++;
+                            switch (playerCount)
+                            {
+                                case 1:
+                                    teamStats.Player1Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
+                                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P1", teamStats.Player1Health));
+                                    if (player.IsOutsideBlueCircle)
+                                        isinBlue = true;
+                                    break;
+                                case 2:
+                                    teamStats.Player2Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
+                                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P2", teamStats.Player2Health));
+                                    if (player.IsOutsideBlueCircle)
+                                        isinBlue = true;
+                                    break;
+                                case 3:
+                                    teamStats.Player3Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
+                                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P3", teamStats.Player3Health));
+                                    if (player.IsOutsideBlueCircle)
+                                        isinBlue = true;
+                                    break;
+                                case 4:
+                                    teamStats.Player4Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
+                                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P4", teamStats.Player4Health));
+                                    if (player.IsOutsideBlueCircle)
+                                        isinBlue = true;
+                                    break;
+                            }
+
+                            eliminations += player.KillNum;
+                            teamStats.TotalPoints += player.KillNum;
+                        }
                     }
 
                     teamStats.Eliminations = eliminations;
                     teamStats.Tag = currentTeamInfo.teamName;
-                    _logger.LogInformation($"Team: {currentTeamInfo.teamName}, Overall Rank: {overallRank}, UI Position: {uiPosition}, Score: {currentTeamInfo.score}");
+                    _logger.LogInformation($"Team: {currentTeamInfo.teamName}, Team ID: {teamId}, Overall Rank: {overallRank}, UI Position: {uiPosition}, Score: {currentTeamInfo.score}");
 
-                    // Use uiPosition for UI elements but display overallRank as the actual rank
+                    // Use uiPosition for UI elements layout but display overallRank as the actual rank
+                    // So if team is 16th in display order but ranked 24th overall, it shows:
+                    // RANKT16 = "24", TAGT16 = "SLAY", etc.
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"ELIMST{uiPosition}", teamStats.Eliminations.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TOTALT{uiPosition}", currentTeamInfo.score.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TAGT{uiPosition}", currentTeamInfo.teamName));
@@ -226,7 +238,7 @@ public class LiveStatsBusiness(
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error processing team {TeamId}: {Message}", teamGroup.Key, ex.Message);
+                    _logger.LogError(ex, "Error processing team {TeamId}: {Message}", teamData.TeamInfo.teamId, ex.Message);
                 }
             }
 
@@ -235,6 +247,8 @@ public class LiveStatsBusiness(
 
             // Enqueue the GetAllAchievements call to Hangfire
             backgroundJobClient.Enqueue<SetPlayerAchievements>(job => job.GetAllAchievements(playerInfo, pastMatchStats));
+
+            return teamLiveStats;
         }
         catch (Exception ex)
         {
@@ -242,7 +256,6 @@ public class LiveStatsBusiness(
         }
         return null;
     }
-
     public static (string HealthImage, string liveStatus) EvaluateLiveStatus(int liveState, int health, int healthMax)
     {
         string liveStatus;
