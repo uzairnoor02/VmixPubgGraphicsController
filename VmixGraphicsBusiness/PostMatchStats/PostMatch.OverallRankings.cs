@@ -65,7 +65,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
                     foreach (var guid in rankingGuids)
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"TAGT{rankNum}", teamData.TeamName));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"TAGT{rankNum}", teamData.TeamName.ToUpper()));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"WWCD{rankNum}", chicken == 0 ? "" : chicken.ToString()));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"MATCHT{rankNum}", matchCount.ToString()));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"ELIMST{rankNum}", team.KillPoints.ToString()));

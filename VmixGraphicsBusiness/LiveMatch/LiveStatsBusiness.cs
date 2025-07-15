@@ -35,7 +35,7 @@ public class LiveStatsBusiness(
     public readonly IConfiguration _config = config;
 
     [AutomaticRetry(Attempts = 0), DisableConcurrentExecution(timeoutInSeconds: 2)]
-    public async Task<List<TeamLiveStats>> CreateLiveStats(LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats)
+    public async Task<List<TeamLiveStats>> CreateLiveStats(Match match, LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats)
     {
         using var scope = serviceProvider.CreateScope();
         IConnectionMultiplexer redisConnection = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
@@ -84,17 +84,17 @@ public class LiveStatsBusiness(
             using var scope2 = serviceProvider.CreateScope();
 
             // Get all teams with their total points and WWCD from database
-            var allTeamRanks = await vmix_GraphicsContext.TeamPoints
-                .GroupBy(tp => tp.TeamId)
+            var allTeamRanks = pastMatchStats
+                .GroupBy(tp => tp.teamid)
                 .Select(g => new
                 {
                     TeamId = g.Key,
-                    TotalPoints = g.Sum(x => x.KillPoints) + g.Sum(x => x.PlacementPoints),
-                    WWCD = g.Sum(x => x.WWCD)
+                    TotalPoints = g.Sum(x => x.score),
+                    //WWCD = g.Sum(x => x.WWCD)
                 })
                 .OrderByDescending(x => x.TotalPoints)
-                .ThenByDescending(x => x.WWCD)
-                .ToListAsync();
+                //.ThenByDescending(x => x.WWCD)
+                .ToList();
 
             // Create a dictionary mapping TeamId to their overall database ranking
             var teamToOverallRank = allTeamRanks
@@ -103,14 +103,14 @@ public class LiveStatsBusiness(
 
             // Get ALL teams that are playing today (from liveTeamInfos)
             var playingTeams = liveTeamInfos.teamInfoList
-                .Select(x => new {
+                .Select(x => new
+                {
                     TeamInfo = x,
-                    OverallRank = teamToOverallRank.ContainsKey(x.teamId) ? teamToOverallRank[x.teamId] : int.MaxValue // Assign max value if not found in rankings
+                    OverallRank = teamToOverallRank.ContainsKey(x.teamId) ? teamToOverallRank[x.teamId] : (allTeamRanks.Count + 1)
                 })
-                .OrderBy(x => x.OverallRank) // Sort by overall rank
-                .ThenBy(x => x.TeamInfo.teamId) // Secondary sort by team ID for consistency
+                .OrderBy(x => x.OverallRank)
+                .ThenBy(x => x.TeamInfo.teamId)
                 .ToList();
-
             // Create a dictionary for UI positioning (1st team gets position 1, 2nd gets position 2, etc.)
             // This ensures NO GAPS in UI positioning for display order
             var teamToUIPosition = playingTeams
@@ -138,10 +138,10 @@ public class LiveStatsBusiness(
                     var teamStats = new TeamLiveStats();
 
                     // Get the overall ranking from database (or use a default if not found)
-                    int overallRank = teamToOverallRank.ContainsKey(teamId) ? teamToOverallRank[teamId] : 999;
 
                     // Get the UI position for this team
                     int uiPosition = teamToUIPosition[teamId];
+                    int overallRank = teamToOverallRank.ContainsKey(teamId) ? teamToOverallRank[teamId] : uiPosition;
 
                     teamStats.Logo = "";
                     teamStats.TotalPoints = 0;
@@ -206,7 +206,7 @@ public class LiveStatsBusiness(
                             teamStats.TotalPoints += player.KillNum;
                         }
                     }
-
+                    var score = allTeamRanks.Where(x => x.TeamId == currentTeamInfo.teamid).Select(x => x.TotalPoints).First().ToString();
                     teamStats.Eliminations = eliminations;
                     teamStats.Tag = currentTeamInfo.teamName;
                     _logger.LogInformation($"Team: {currentTeamInfo.teamName}, Team ID: {teamId}, Overall Rank: {overallRank}, UI Position: {uiPosition}, Score: {currentTeamInfo.score}");
@@ -215,9 +215,11 @@ public class LiveStatsBusiness(
                     // So if team is 16th in display order but ranked 24th overall, it shows:
                     // RANKT16 = "24", TAGT16 = "SLAY", etc.
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"ELIMST{uiPosition}", teamStats.Eliminations.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TOTALT{uiPosition}", currentTeamInfo.score.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TAGT{uiPosition}", currentTeamInfo.teamName));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TOTALT{uiPosition}", score));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TAGT{uiPosition}", currentTeamInfo.teamName.ToUpper()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"RANKT{uiPosition}", overallRank.ToString())); // Display actual database rank
+                    if (match.MatchId == 1 && match.MatchDayId == 1)
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"RANKT{uiPosition}", uiPosition.ToString())); // Display actual database rank
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{uiPosition}", $"{ConfigGlobal.LogosImages}" + $"\\0.png"));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{uiPosition}", $"{ConfigGlobal.LogosImages}" + $"\\{currentTeamInfo.teamid}.png"));
 

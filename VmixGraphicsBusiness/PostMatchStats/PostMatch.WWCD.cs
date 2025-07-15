@@ -27,7 +27,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 var winneerteam = _vmix_GraphicsContext.Teams
                     .Where(x => x.TeamId == winnerPlayers.Select(x => x.TeamId).First().ToString()).First();
 
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TNAME", winneerteam.TeamName));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TNAME", winneerteam.TeamName.ToUpper()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"MATCHNumber", matches.MatchId.ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"Image1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"Image1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));

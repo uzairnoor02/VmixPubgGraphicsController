@@ -58,7 +58,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 //    : 0;
 
                 List<string> apiCalls = new List<string>();
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"TEAMTAGP{1}", teamdata.TeamName));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"TEAMTAGP{1}", teamdata.TeamName.ToUpper()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"MATCHN", matches.MatchId.ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"NAMEP{1}", player.PlayerName));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"ELIMSP{1}", player.KillNum.ToString()));

@@ -118,7 +118,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                                     }).ToList()
                                 };
 
-                                _backgroundJobClient.Enqueue(HangfireQueues.HighPriority, () => _liveStatsBusiness.CreateLiveStats(filteredPlayerInfo, TeamInfoList, teampoints));
+                                _backgroundJobClient.Enqueue(HangfireQueues.HighPriority, () => _liveStatsBusiness.CreateLiveStats(match,filteredPlayerInfo, TeamInfoList, teampoints));
                                 previousData = PlayerData;
                                 var db = _redisConnection.GetDatabase();
                                 await db.StringSetAsync(HelperRedis.PlayerInfolist, PlayerData);

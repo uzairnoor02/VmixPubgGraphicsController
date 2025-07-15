@@ -17,11 +17,11 @@ public class SetTexts
                 }
                 catch (HttpRequestException e)
                 {
-                    Console.WriteLine($"Request error: {e.Message}");
+                    Console.WriteLine($"Request error: {e.Message} :: {apiCall.ToString()}");
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine($"Unexpected error: {e.Message}");
+                    Console.WriteLine($"Unexpected error: {e.Message} :: {apiCall.ToString()}");
                 }
             }
         }

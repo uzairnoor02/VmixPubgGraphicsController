@@ -31,9 +31,9 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     var wwcd = wwcddata.Any(x => x.Rank == 1);
                     var ranks = wwcddata.Select(x => x.Rank);
                     var teamData = teamsdata.Where(x => x.TeamId == team.TeamId.ToString()).FirstOrDefault();
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TAGT{rankNum}", teamData.TeamName));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TAGT{rankNum}", teamData.TeamName.ToUpper()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"MATCHN", matches.MatchId.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TEAMNAME{rankNum}", teamData.TeamName));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TEAMNAME{rankNum}", teamData.TeamName.ToUpper()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"ELIMST{rankNum}", team.KillPoints.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"PLACET{rankNum}", team.PlacementPoints.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TOTALT{rankNum}", team.TotalPoints.ToString()));
