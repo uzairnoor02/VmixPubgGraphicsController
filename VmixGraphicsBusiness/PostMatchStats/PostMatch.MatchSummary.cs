@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -14,6 +15,8 @@ namespace VmixGraphicsBusiness.PostMatchStats
         {
             try
             {
+                var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
+
                 List<string> apiCalls = new List<string>();
                 var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
 
@@ -39,6 +42,8 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 };
 
                 // Set the match summary data to VMIX
+
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchSummaryGUID, $"PMNUM", totalMatches.Count().ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchSummaryGUID, "MATCHN", matches.MatchId.ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchSummaryGUID, "ELIMS", matchSummary.Eliminations.ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchSummaryGUID, "KNOCK", matchSummary.Knocks.ToString()));
@@ -55,7 +60,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in MatchSummary: {ex}");
+                logger.LogError($"Error in MatchSummary: {ex}");
             }
         }
     }

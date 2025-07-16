@@ -175,7 +175,7 @@ namespace Pubg_Ranking_System
             services.AddTransient<LiveStatsBusiness>();
             services.AddScoped<TournamentBusiness>();
             services.AddTransient<Add_tournament>();
-            services.AddScoped<PostMatch>();
+            services.AddTransient<PostMatch>();
             services.AddScoped<PreMatch>();
             services.AddTransient<SetPlayerAchievements>();
             services.AddScoped<GetLiveData>();

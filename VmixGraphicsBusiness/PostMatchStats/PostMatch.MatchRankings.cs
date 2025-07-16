@@ -1,4 +1,5 @@
-﻿using StackExchange.Redis;
+﻿using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -15,6 +16,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
         {
             try
             {
+                var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
                 List<string> apiCalls = new List<string>();
                 var teamRankings = _vmix_GraphicsContext.TeamPoints
                     .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId)
@@ -38,6 +40,8 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"PLACET{rankNum}", team.PlacementPoints.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"TOTALT{rankNum}", team.TotalPoints.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"LOGOT{rankNum}", $"{ConfigGlobal.LogosImages}\\{team.TeamId}.png"));
+
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"PMNUM", totalMatches.Count().ToString()));
                     if (wwcd)
                     {
 
@@ -66,7 +70,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
+                logger.LogError("error in MatchRankings:", e);
             }
         }
     }

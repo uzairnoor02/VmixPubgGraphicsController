@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -17,6 +18,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
         {
             try
             {
+                var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
                 var mvpPlayer = _vmix_GraphicsContext.PlayerStats
                     .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId)
                     .Select(p => new
@@ -58,6 +60,8 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 //    : 0;
 
                 List<string> apiCalls = new List<string>();
+
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"PMNUM", totalMatches.Count().ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"TEAMTAGP{1}", teamdata.TeamName.ToUpper()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"MATCHN", matches.MatchId.ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"NAMEP{1}", player.PlayerName));
@@ -75,7 +79,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 await setTexts.CallMultipleApiAsync(apiCalls);
             }catch(Exception ex)
             {
-                Console.WriteLine(ex);
+                logger.LogError("error in MatchMvp:", ex);
             }
         }
 

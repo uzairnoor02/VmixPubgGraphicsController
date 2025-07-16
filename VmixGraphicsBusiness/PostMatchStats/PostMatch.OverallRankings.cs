@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using System.Linq.Expressions;
 using System.Text.Json;
@@ -15,6 +16,8 @@ namespace VmixGraphicsBusiness.PostMatchStats
         {
             try
             {
+                var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
+
                 List<string> apiCalls = new List<string>();
                 var teamRankings = _vmix_GraphicsContext.TeamPoints
     .Where(x => x.StageId == matches.StageId)
@@ -47,8 +50,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
     .Where(x => x.StageId == matches.StageId)
     .GroupBy(x => x.TeamId)
     .ToDictionary(g => g.Key.ToString(), g => g
-        .Select(tp => tp.MatchId)
-        .Distinct()
+        .Select(tp => tp.MatchId )
         .Count());
                 foreach (var team in teamRankings)
                 {
@@ -66,6 +68,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     foreach (var guid in rankingGuids)
                     {
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"TAGT{rankNum}", teamData.TeamName.ToUpper()));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"PMNUM", totalMatches.Count().ToString()));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"WWCD{rankNum}", chicken == 0 ? "" : chicken.ToString()));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"MATCHT{rankNum}", matchCount.ToString()));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"ELIMST{rankNum}", team.KillPoints.ToString()));
@@ -85,7 +88,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
+                logger.LogError("error in OverAllRankings:", e);
             }
         }
     }

@@ -1,4 +1,5 @@
 ﻿
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,6 +18,8 @@ namespace VmixGraphicsBusiness.PostMatchStats
         {
             try
             {
+                var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
+
                 var topGrenadiers = _vmix_GraphicsContext.PlayerStats
                     .Where(x => x.StageId == matches.StageId && x.DayId==matches.MatchDayId)
                     .GroupBy(x => x.PlayerUId)
@@ -72,13 +75,14 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.Top5Grenadiers, $"IMAGEP{i}", $"{ConfigGlobal.PlayerImages}\\0.png"));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5Grenadiers, $"BUMUSEDP{i}", "0"));
                 }
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5Grenadiers, $"PMNUM", totalMatches.Count().ToString()));
 
                 SetTexts setTexts = new SetTexts();
                 await setTexts.CallMultipleApiAsync(apiCalls);
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                logger.LogError("error in Top5granadiers:", ex);
             }
         }
     }

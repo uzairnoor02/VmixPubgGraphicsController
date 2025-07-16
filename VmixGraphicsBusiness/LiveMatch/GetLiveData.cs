@@ -163,8 +163,6 @@ namespace VmixGraphicsBusiness.LiveMatch
                 TeamInfoList TeamInfoListPost = new();
                 if (responsegetplayerDatapost.IsSuccessStatusCode)
                 {
-
-
                     PlayerDatapost = await responsegetplayerDatapost.Content.ReadAsStringAsync();
                     teamdatapost = await responseTeamInfoListpost.Content.ReadAsStringAsync();
                     LivePlayersList livePlayerInfo = JsonSerializer.Deserialize<LivePlayersList>(PlayerDatapost)!;

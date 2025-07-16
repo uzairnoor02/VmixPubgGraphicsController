@@ -1,4 +1,5 @@
 
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,6 +18,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
         {
             try
             {
+                var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
                 var top5MVPs = _vmix_GraphicsContext.PlayerStats
                     .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId)
                     .Select(p => new
@@ -54,6 +56,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                         ? Math.Round((double)player.KillNum / totalTeamKills * 100, 1)
                         : 0;
 
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"PMNUM", totalMatches.Count().ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"NAMEP{rank}", player.PlayerName));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"ELIMSP{rank}", player.KillNum.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"SURVP{rank}", survivalTimeString));
@@ -74,7 +77,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in Top5MatchMVP: {ex}");
+                logger.LogError($"Error in Top5MatchMVP: {ex}");
             }
         }
 
@@ -144,7 +147,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in Top5StageMVP: {ex}");
+                logger.LogError($"Error in Top5StageMVP: {ex}");
             }
         }
     }

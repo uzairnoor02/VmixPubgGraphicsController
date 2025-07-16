@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
+using System;
 using System.Text.Json;
 using System.Threading.Tasks;
 using VmixData.Models;
@@ -14,6 +16,8 @@ namespace VmixGraphicsBusiness.PostMatchStats
         {
             try
             {
+                var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
+
                 List<string> apiCalls = new List<string>();
                 var teamsPoints = _vmix_GraphicsContext.TeamPoints
                     .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId)
@@ -57,6 +61,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     var survivalTime = TimeSpan.FromSeconds(totalSurvivalTime);
                     var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"TAGT{teamnum}", teamData.TeamName));
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"PMNUM", totalMatches.Count().ToString()));
 
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"MOLIUSEDT{teamnum}", totalBurnGrenades.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"SURVIVALT{teamnum}", survivalTimeString));
@@ -77,7 +82,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             }
             catch(Exception e)
             {
-                Console.WriteLine(e);
+                logger.LogError("error in Team to watch:", e);
             }
         }
     }

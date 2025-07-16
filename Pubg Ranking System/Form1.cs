@@ -52,7 +52,7 @@ namespace Pubg_Ranking_System
             var days = new List<string>();
             days.Add("1"); days.Add("2"); days.Add("3"); days.Add("4"); days.Add("5"); days.Add("6"); days.Add("7"); days.Add("8");
             var matches = new List<string>();
-            matches.Add("1"); matches.Add("2"); matches.Add("3"); matches.Add("4"); matches.Add("5"); matches.Add("6"); matches.Add("7"); matches.Add("8");
+            matches.Add("1"); matches.Add("2"); matches.Add("3"); matches.Add("4"); matches.Add("5"); matches.Add("6"); matches.Add("7"); matches.Add("8"); matches.Add("9"); matches.Add("10"); matches.Add("11"); matches.Add("12"); matches.Add("13"); matches.Add("14"); matches.Add("15"); matches.Add("16"); matches.Add("17");
 
             var MapNames = new List<string>();
             MapNames.Add("Erangel"); MapNames.Add("Miramar"); MapNames.Add("Sanhok");

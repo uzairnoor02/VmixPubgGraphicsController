@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using System.Threading.Tasks;
 using VmixData.Models;
@@ -9,7 +10,7 @@ using VmixGraphicsBusiness.vmixutils;
 
 namespace VmixGraphicsBusiness.PostMatchStats
 {
-    public partial class PostMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration)
+    public partial class PostMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration,ILogger<PostMatch> logger)
     {
         string logos = configuration["LogosImages"];
         public async Task createPostMtachStats(LivePlayersList livePlayersList, Match match, TeamInfoList teamInfoList)
@@ -30,51 +31,99 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 var playerstats = new List<PlayerStat>();
                 foreach (var player in liveplayerslist.PlayerInfoList)
                 {
-                    PlayerStat playerStat = new PlayerStat()
-                    {
-                        Assists = player.Assists,
-                        Character = player.Character,
-                        Damage = player.Damage,
-                        DriveDistance = player.DriveDistance,
-                        GotAirdropNum = player.GotAirDropNum,
-                        HeadshotNum = player.HeadShotNum,
-                        Heal = player.Heal,
-                        HealTeammateNum = player.RescueTimes,
-                        Health = player.Health,
-                        HealthMax = player.HealthMax,
-                        RescueTimes = player.RescueTimes,
-                        InDamage = player.InDamage,
-                        IsFiring = player.IsFiring,
-                        IsOutsideBlueCircle = player.IsOutsideBlueCircle,
-                        KillNum = player.KillNum,
-                        KillNumBeforeDie = player.KillNumBeforeDie,
-                        KillNumByGrenade = player.KillNumByGrenade,
-                        KillNumInVehicle = player.KillNumInVehicle,
-                        Knockouts = player.Knockouts,
-                        LiveState = player.LiveState,
-                        MarchDistance = player.MarchDistance,
-                        MaxKillDistance = player.MaxKillDistance,
-                        PicUrl = player.PicUrl,
-                        PlayerKey = player.PlayerKey,
-                        PlayerName = player.PlayerName,
-                        PlayerOpenId = player.PlayerOpenId,
-                        PosX = player.Location.X,
-                        PosY = player.Location.Y,
-                        PosZ = player.Location.Z,
-                        Rank = player.Rank,
-                        SurvivalTime = player.SurvivalTime,
-                        UseFragGrenadeNum = player.UseFragGrenadeNum,
-                        TeamId = player.TeamId,
-                        PlayerUId = player.UId,
-                        UseSmokeGrenadeNum = player.UseSmokeGrenadeNum,
-                        ShowPicUrl = player.ShowPicUrl,
-                        MatchId = match.MatchId,
-                        StageId = match.StageId,
-                        DayId = match.MatchDayId,
-                        useBurnGrenadeNum = player.UseBurnGrenadeNum,
+                   var dbplayerdata= _vmix_GraphicsContext.PlayerStats.Where(x => x.PlayerUId == player.UId & x.MatchId == match.MatchId & x.DayId == match.MatchDayId & x.StageId == match.StageId).FirstOrDefault();
 
-                    };
-                    playerstats.Add(playerStat);
+                    if (dbplayerdata == null)
+                    {
+                        PlayerStat playerStat = new PlayerStat()
+                        {
+                            Assists = player.Assists,
+                            Character = player.Character,
+                            Damage = player.Damage,
+                            DriveDistance = player.DriveDistance,
+                            GotAirdropNum = player.GotAirDropNum,
+                            HeadshotNum = player.HeadShotNum,
+                            Heal = player.Heal,
+                            HealTeammateNum = player.RescueTimes,
+                            Health = player.Health,
+                            HealthMax = player.HealthMax,
+                            RescueTimes = player.RescueTimes,
+                            InDamage = player.InDamage,
+                            IsFiring = player.IsFiring,
+                            IsOutsideBlueCircle = player.IsOutsideBlueCircle,
+                            KillNum = player.KillNum,
+                            KillNumBeforeDie = player.KillNumBeforeDie,
+                            KillNumByGrenade = player.KillNumByGrenade,
+                            KillNumInVehicle = player.KillNumInVehicle,
+                            Knockouts = player.Knockouts,
+                            LiveState = player.LiveState,
+                            MarchDistance = player.MarchDistance,
+                            MaxKillDistance = player.MaxKillDistance,
+                            PicUrl = player.PicUrl,
+                            PlayerKey = player.PlayerKey,
+                            PlayerName = player.PlayerName,
+                            PlayerOpenId = player.PlayerOpenId,
+                            PosX = player.Location.X,
+                            PosY = player.Location.Y,
+                            PosZ = player.Location.Z,
+                            Rank = player.Rank,
+                            SurvivalTime = player.SurvivalTime,
+                            UseFragGrenadeNum = player.UseFragGrenadeNum,
+                            TeamId = player.TeamId,
+                            PlayerUId = player.UId,
+                            UseSmokeGrenadeNum = player.UseSmokeGrenadeNum,
+                            ShowPicUrl = player.ShowPicUrl,
+                            MatchId = match.MatchId,
+                            StageId = match.StageId,
+                            DayId = match.MatchDayId,
+                            useBurnGrenadeNum = player.UseBurnGrenadeNum,
+
+                        };
+                        playerstats.Add(playerStat);
+                    }
+                    else
+                    {
+                        dbplayerdata.Assists = player.Assists;
+                            dbplayerdata.Character = player.Character;
+                            dbplayerdata.Damage = player.Damage;
+                            dbplayerdata.DriveDistance = player.DriveDistance;
+                            dbplayerdata.GotAirdropNum = player.GotAirDropNum;
+                            dbplayerdata.HeadshotNum = player.HeadShotNum;
+                            dbplayerdata.Heal = player.Heal;
+                            dbplayerdata.HealTeammateNum = player.RescueTimes;
+                            dbplayerdata.Health = player.Health;
+                            dbplayerdata.HealthMax = player.HealthMax;
+                            dbplayerdata.RescueTimes = player.RescueTimes;
+                            dbplayerdata.InDamage = player.InDamage;
+                            dbplayerdata.IsFiring = player.IsFiring;
+                            dbplayerdata.IsOutsideBlueCircle = player.IsOutsideBlueCircle;
+                            dbplayerdata.KillNum = player.KillNum;
+                            dbplayerdata.KillNumBeforeDie = player.KillNumBeforeDie;
+                            dbplayerdata.KillNumByGrenade = player.KillNumByGrenade;
+                            dbplayerdata.KillNumInVehicle = player.KillNumInVehicle;
+                            dbplayerdata.Knockouts = player.Knockouts;
+                            dbplayerdata.LiveState = player.LiveState;
+                            dbplayerdata.MarchDistance = player.MarchDistance;
+                            dbplayerdata.MaxKillDistance = player.MaxKillDistance;
+                            dbplayerdata.PicUrl = player.PicUrl;
+                            dbplayerdata.PlayerKey = player.PlayerKey;
+                            dbplayerdata.PlayerName = player.PlayerName;
+                            dbplayerdata.PlayerOpenId = player.PlayerOpenId;
+                            dbplayerdata.PosX = player.Location.X;
+                            dbplayerdata.PosY = player.Location.Y;
+                            dbplayerdata.PosZ = player.Location.Z;
+                            dbplayerdata.Rank = player.Rank;
+                            dbplayerdata.SurvivalTime = player.SurvivalTime;
+                            dbplayerdata.UseFragGrenadeNum = player.UseFragGrenadeNum;
+                            dbplayerdata.TeamId = player.TeamId;
+                            dbplayerdata.PlayerUId = player.UId;
+                            dbplayerdata.UseSmokeGrenadeNum = player.UseSmokeGrenadeNum;
+                            dbplayerdata.ShowPicUrl = player.ShowPicUrl;
+                            dbplayerdata.MatchId = match.MatchId;
+                            dbplayerdata.StageId = match.StageId;
+                            dbplayerdata.DayId = match.MatchDayId;
+                            dbplayerdata.useBurnGrenadeNum = player.UseBurnGrenadeNum;
+                    }
                 }
                 _vmix_GraphicsContext.PlayerStats.AddRange(playerstats);
 
@@ -83,29 +132,30 @@ namespace VmixGraphicsBusiness.PostMatchStats
             catch (Exception ex)
             {
 
-                Console.WriteLine("error in getting player stats.", ex);
+                logger.LogError("error in getting player stats.", ex);
             }
         }
 
         public void saveTeamsinfo(TeamInfoList TeamsinfoList, Match match, LivePlayersList liveplayerslist)
         {
-            string Map="Erangel";
+            string Map = "Erangel";
             try
             {
-                var teamPoints = new List<TeamPoint>();
+                var teamPointsToAdd = new List<TeamPoint>();
+                var teamPointsToUpdate = new List<TeamPoint>();
+
                 foreach (var team in TeamsinfoList.teamInfoList)
                 {
+                    var dbteamdata = _vmix_GraphicsContext.TeamPoints
+                        .Where(x => x.TeamId == team.teamId &&
+                                   x.MatchId == match.MatchId &&
+                                   x.DayId == match.MatchDayId &&
+                                   x.StageId == match.StageId)
+                        .FirstOrDefault();
+
                     var wwcd = liveplayerslist.PlayerInfoList.Where(x => x.TeamId == team.teamId).Any(x => x.Rank == 1);
                     int placementpoints = 0;
-                    TeamPoint teamPoint = new TeamPoint()
-                    {
-                        DayId = match.MatchDayId,
-                        KillPoints = team.killNum,
-                        MatchId = match.MatchId,
-                        StageId = match.StageId,
-                        TeamId = team.teamId,
-                        WWCD = wwcd ? 1 : 0
-                    };
+
                     var rank = liveplayerslist.PlayerInfoList.Where(x => x.TeamId == team.teamId).Select(x => x.Rank).FirstOrDefault();
                     switch (rank)
                     {
@@ -135,7 +185,8 @@ namespace VmixGraphicsBusiness.PostMatchStats
                             placementpoints = 0;
                             break;
                     }
-                    switch(match.MatchId)
+
+                    switch (match.MatchId)
                     {
                         case 1:
                         case 5:
@@ -149,24 +200,54 @@ namespace VmixGraphicsBusiness.PostMatchStats
                             Map = "Sanhok";
                             break;
                     }
-                    teamPoint.Map = Map;
 
-                    teamPoint.PlacementPoints = placementpoints;
-                    teamPoint.TotalPoints = placementpoints + teamPoint.KillPoints;
+                    if (dbteamdata != null)
+                    {
+                        // Update existing record
+                        dbteamdata.KillPoints = team.killNum;
+                        dbteamdata.WWCD = wwcd ? 1 : 0;
+                        dbteamdata.PlacementPoints = placementpoints;
+                        dbteamdata.TotalPoints = placementpoints + team.killNum;
+                        dbteamdata.Map = Map;
 
-                    teamPoints.Add(teamPoint);
+                        teamPointsToUpdate.Add(dbteamdata);
+                    }
+                    else
+                    {
+                        // Create new record
+                        TeamPoint teamPoint = new TeamPoint()
+                        {
+                            DayId = match.MatchDayId,
+                            KillPoints = team.killNum,
+                            MatchId = match.MatchId,
+                            StageId = match.StageId,
+                            TeamId = team.teamId,
+                            WWCD = wwcd ? 1 : 0,
+                            Map = Map,
+                            PlacementPoints = placementpoints,
+                            TotalPoints = placementpoints + team.killNum
+                        };
 
+                        teamPointsToAdd.Add(teamPoint);
+                    }
                 }
-                _vmix_GraphicsContext.AddRangeAsync(teamPoints);
 
+                // Add new records if any
+                if (teamPointsToAdd.Any())
+                {
+                    _vmix_GraphicsContext.TeamPoints.AddRange(teamPointsToAdd);
+                }
+
+                // Save all changes (both updates and new records)
                 _vmix_GraphicsContext.SaveChanges();
+
+                logger.LogInformation($"Successfully processed {teamPointsToAdd.Count} new team records and {teamPointsToUpdate.Count} updated team records for Match {match.MatchId}, Day {match.MatchDayId}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                logger.LogError(ex, "Error in saveTeamsinfo: {Message}", ex.Message);
             }
         }
-
         public async Task<List<LiveTeamPointStats>> fetchTeamPointsAsync(Match match)
         {
             var teampoints = await _vmix_GraphicsContext.TeamPoints.Where(x => x.StageId == match.StageId).GroupBy(x => x.TeamId).AsNoTracking().ToListAsync();

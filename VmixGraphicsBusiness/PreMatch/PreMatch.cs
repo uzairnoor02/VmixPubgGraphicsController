@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +9,7 @@ using VmixData.Models;
 
 namespace VmixGraphicsBusiness.PreMatch
 {
-    public partial class PreMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration)
+    public partial class PreMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration,ILogger<PreMatch> logger)
     {
         string logos = configuration["LogosImages"];
     }

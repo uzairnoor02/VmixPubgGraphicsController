@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -98,7 +99,7 @@ namespace VmixGraphicsBusiness.PreMatch
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
+                logger.LogError("error in Mapperfromers",e);
             }
 
 
