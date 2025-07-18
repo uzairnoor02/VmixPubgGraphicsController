@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -29,9 +29,13 @@ namespace VmixGraphicsBusiness.PostMatchStats
             try
             {
                 var playerstats = new List<PlayerStat>();
+                var playerstatsToUpdate = new List<PlayerStat>();
+
                 foreach (var player in liveplayerslist.PlayerInfoList)
                 {
-                   var dbplayerdata= _vmix_GraphicsContext.PlayerStats.Where(x => x.PlayerUId == player.UId & x.MatchId == match.MatchId & x.DayId == match.MatchDayId & x.StageId == match.StageId).FirstOrDefault();
+                    var dbplayerdata = _vmix_GraphicsContext.PlayerStats
+                        .Where(x => x.PlayerUId == player.UId && x.MatchId == match.MatchId && x.DayId == match.MatchDayId && x.StageId == match.StageId)
+                        .FirstOrDefault();
 
                     if (dbplayerdata == null)
                     {
@@ -77,62 +81,70 @@ namespace VmixGraphicsBusiness.PostMatchStats
                             StageId = match.StageId,
                             DayId = match.MatchDayId,
                             useBurnGrenadeNum = player.UseBurnGrenadeNum,
-
                         };
                         playerstats.Add(playerStat);
                     }
                     else
                     {
+                        // Update existing entity
                         dbplayerdata.Assists = player.Assists;
-                            dbplayerdata.Character = player.Character;
-                            dbplayerdata.Damage = player.Damage;
-                            dbplayerdata.DriveDistance = player.DriveDistance;
-                            dbplayerdata.GotAirdropNum = player.GotAirDropNum;
-                            dbplayerdata.HeadshotNum = player.HeadShotNum;
-                            dbplayerdata.Heal = player.Heal;
-                            dbplayerdata.HealTeammateNum = player.RescueTimes;
-                            dbplayerdata.Health = player.Health;
-                            dbplayerdata.HealthMax = player.HealthMax;
-                            dbplayerdata.RescueTimes = player.RescueTimes;
-                            dbplayerdata.InDamage = player.InDamage;
-                            dbplayerdata.IsFiring = player.IsFiring;
-                            dbplayerdata.IsOutsideBlueCircle = player.IsOutsideBlueCircle;
-                            dbplayerdata.KillNum = player.KillNum;
-                            dbplayerdata.KillNumBeforeDie = player.KillNumBeforeDie;
-                            dbplayerdata.KillNumByGrenade = player.KillNumByGrenade;
-                            dbplayerdata.KillNumInVehicle = player.KillNumInVehicle;
-                            dbplayerdata.Knockouts = player.Knockouts;
-                            dbplayerdata.LiveState = player.LiveState;
-                            dbplayerdata.MarchDistance = player.MarchDistance;
-                            dbplayerdata.MaxKillDistance = player.MaxKillDistance;
-                            dbplayerdata.PicUrl = player.PicUrl;
-                            dbplayerdata.PlayerKey = player.PlayerKey;
-                            dbplayerdata.PlayerName = player.PlayerName;
-                            dbplayerdata.PlayerOpenId = player.PlayerOpenId;
-                            dbplayerdata.PosX = player.Location.X;
-                            dbplayerdata.PosY = player.Location.Y;
-                            dbplayerdata.PosZ = player.Location.Z;
-                            dbplayerdata.Rank = player.Rank;
-                            dbplayerdata.SurvivalTime = player.SurvivalTime;
-                            dbplayerdata.UseFragGrenadeNum = player.UseFragGrenadeNum;
-                            dbplayerdata.TeamId = player.TeamId;
-                            dbplayerdata.PlayerUId = player.UId;
-                            dbplayerdata.UseSmokeGrenadeNum = player.UseSmokeGrenadeNum;
-                            dbplayerdata.ShowPicUrl = player.ShowPicUrl;
-                            dbplayerdata.MatchId = match.MatchId;
-                            dbplayerdata.StageId = match.StageId;
-                            dbplayerdata.DayId = match.MatchDayId;
-                            dbplayerdata.useBurnGrenadeNum = player.UseBurnGrenadeNum;
+                        dbplayerdata.Character = player.Character;
+                        dbplayerdata.Damage = player.Damage;
+                        dbplayerdata.DriveDistance = player.DriveDistance;
+                        dbplayerdata.GotAirdropNum = player.GotAirDropNum;
+                        dbplayerdata.HeadshotNum = player.HeadShotNum;
+                        dbplayerdata.Heal = player.Heal;
+                        dbplayerdata.HealTeammateNum = player.RescueTimes;
+                        dbplayerdata.Health = player.Health;
+                        dbplayerdata.HealthMax = player.HealthMax;
+                        dbplayerdata.RescueTimes = player.RescueTimes;
+                        dbplayerdata.InDamage = player.InDamage;
+                        dbplayerdata.IsFiring = player.IsFiring;
+                        dbplayerdata.IsOutsideBlueCircle = player.IsOutsideBlueCircle;
+                        dbplayerdata.KillNum = player.KillNum;
+                        dbplayerdata.KillNumBeforeDie = player.KillNumBeforeDie;
+                        dbplayerdata.KillNumByGrenade = player.KillNumByGrenade;
+                        dbplayerdata.KillNumInVehicle = player.KillNumInVehicle;
+                        dbplayerdata.Knockouts = player.Knockouts;
+                        dbplayerdata.LiveState = player.LiveState;
+                        dbplayerdata.MarchDistance = player.MarchDistance;
+                        dbplayerdata.MaxKillDistance = player.MaxKillDistance;
+                        dbplayerdata.PicUrl = player.PicUrl;
+                        dbplayerdata.PlayerKey = player.PlayerKey;
+                        dbplayerdata.PlayerName = player.PlayerName;
+                        dbplayerdata.PlayerOpenId = player.PlayerOpenId;
+                        dbplayerdata.PosX = player.Location.X;
+                        dbplayerdata.PosY = player.Location.Y;
+                        dbplayerdata.PosZ = player.Location.Z;
+                        dbplayerdata.Rank = player.Rank;
+                        dbplayerdata.SurvivalTime = player.SurvivalTime;
+                        dbplayerdata.UseFragGrenadeNum = player.UseFragGrenadeNum;
+                        dbplayerdata.TeamId = player.TeamId;
+                        dbplayerdata.PlayerUId = player.UId;
+                        dbplayerdata.UseSmokeGrenadeNum = player.UseSmokeGrenadeNum;
+                        dbplayerdata.ShowPicUrl = player.ShowPicUrl;
+                        dbplayerdata.MatchId = match.MatchId;
+                        dbplayerdata.StageId = match.StageId;
+                        dbplayerdata.DayId = match.MatchDayId;
+                        dbplayerdata.useBurnGrenadeNum = player.UseBurnGrenadeNum;
+                        
+                        playerstatsToUpdate.Add(dbplayerdata);
                     }
                 }
-                _vmix_GraphicsContext.PlayerStats.AddRange(playerstats);
+
+                // Add new records if any
+                if (playerstats.Any())
+                {
+                    _vmix_GraphicsContext.PlayerStats.AddRange(playerstats);
+                }
 
                 _vmix_GraphicsContext.SaveChanges();
+                
+                logger.LogInformation($"Successfully processed {playerstats.Count} new player records and {playerstatsToUpdate.Count} updated player records for Match {match.MatchId}, Day {match.MatchDayId}");
             }
             catch (Exception ex)
             {
-
-                logger.LogError("error in getting player stats.", ex);
+                logger.LogError(ex, "Error in savePlayersinfo: {Message}", ex.Message);
             }
         }
 
