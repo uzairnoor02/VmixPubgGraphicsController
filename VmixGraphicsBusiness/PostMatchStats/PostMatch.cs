@@ -29,7 +29,6 @@ namespace VmixGraphicsBusiness.PostMatchStats
             try
             {
                 var playerstats = new List<PlayerStat>();
-                var playerstatsToUpdate = new List<PlayerStat>();
 
                 foreach (var player in liveplayerslist.PlayerInfoList)
                 {
@@ -86,7 +85,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     }
                     else
                     {
-                        // Update existing entity
+                        // Update existing entity directly - no need to add to separate collection
                         dbplayerdata.Assists = player.Assists;
                         dbplayerdata.Character = player.Character;
                         dbplayerdata.Damage = player.Damage;
@@ -128,7 +127,8 @@ namespace VmixGraphicsBusiness.PostMatchStats
                         dbplayerdata.DayId = match.MatchDayId;
                         dbplayerdata.useBurnGrenadeNum = player.UseBurnGrenadeNum;
                         
-                        playerstatsToUpdate.Add(dbplayerdata);
+                        // Mark entity as modified
+                        _vmix_GraphicsContext.Entry(dbplayerdata).State = EntityState.Modified;
                     }
                 }
 
@@ -140,7 +140,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
                 _vmix_GraphicsContext.SaveChanges();
                 
-                logger.LogInformation($"Successfully processed {playerstats.Count} new player records and {playerstatsToUpdate.Count} updated player records for Match {match.MatchId}, Day {match.MatchDayId}");
+                logger.LogInformation($"Successfully processed {playerstats.Count} new player records for Match {match.MatchId}, Day {match.MatchDayId}");
             }
             catch (Exception ex)
             {
