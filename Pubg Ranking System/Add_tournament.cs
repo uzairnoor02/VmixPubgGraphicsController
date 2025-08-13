@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Text;
@@ -84,6 +85,33 @@ namespace Pubg_Ranking_System
 
         private void Add_tournament_Load(object sender, EventArgs e)
         {
+
+        }
+
+        private void Add_tournament_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            base.OnFormClosing(e);
+
+
+            if (MessageBox.Show("Are you sure you want to close the application?", "Confirm Exit", MessageBoxButtons.YesNo) == DialogResult.No)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            string processName = "Pubg Ranking System";
+
+            try
+            {
+                foreach (var process in Process.GetProcessesByName(processName))
+                {
+                    process.Kill();
+                    process.WaitForExit();
+                }
+            }
+            catch (Exception ex)
+            {
+            }
 
         }
     }

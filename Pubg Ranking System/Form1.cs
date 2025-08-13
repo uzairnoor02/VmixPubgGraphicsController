@@ -73,6 +73,7 @@ namespace Pubg_Ranking_System
 
             if (MessageBox.Show("Are you sure you want to close the application?", "Confirm Exit", MessageBoxButtons.YesNo) == DialogResult.No)
             {
+                e.Cancel = true;
                 return;
             }
 
@@ -109,6 +110,7 @@ namespace Pubg_Ranking_System
             {
                 if (MessageBox.Show(result.Item1, "", MessageBoxButtons.YesNo) == DialogResult.Yes)
                 {
+                   await _tournamentBusiness.DeleteMatchHistory(result.Item3);
                     _getLiveData.FetchAndPostData(result.Item3);
                     // MessageBox.Show("Recurring job started.");
                     _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
@@ -316,7 +318,9 @@ namespace Pubg_Ranking_System
             _postMatch.MatchSummary(match);
             _postMatch.Top5MatchMVP(match);
             _postMatch.Top5StageMVP(match);
+            _postMatch.StageMVP(match);
             _postMatch.TopGrenadiers(match);
+            _postMatch.TeamsToWatch(match);
 
         }
 
@@ -333,7 +337,10 @@ namespace Pubg_Ranking_System
             _postMatch.MatchSummary(match);
             _postMatch.Top5MatchMVP(match);
             _postMatch.Top5StageMVP(match);
+            _postMatch.StageMVP(match);
             _postMatch.TopGrenadiers(match);
+            _postMatch.TeamsToWatch(match);
+
 
         }
 
@@ -343,7 +350,7 @@ namespace Pubg_Ranking_System
             var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
             var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
 
-            _preMatch.MapTopPerformers(match,MapName_cmb.Text);
+            _preMatch.MapTopPerformers(match, MapName_cmb.Text);
         }
 
     }

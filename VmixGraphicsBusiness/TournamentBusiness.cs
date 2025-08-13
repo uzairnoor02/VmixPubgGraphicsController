@@ -96,5 +96,21 @@ namespace VmixGraphicsBusiness
                 return ("", 0,match!);
             }
         }
+        public async Task DeleteMatchHistory(Match match)
+        {
+            var matchinfo = _vmix_GraphicsContext.TeamPoints.Where(x => x.DayId == match.MatchDayId & x.MatchId == match.MatchId & x.StageId == match.StageId);
+            var playerstatsinfo = _vmix_GraphicsContext.PlayerStats.Where(x => x.DayId == match.MatchDayId & x.MatchId == match.MatchId & x.StageId == match.StageId);
+            if (matchinfo != null)
+            {
+                _vmix_GraphicsContext.TeamPoints.RemoveRange(matchinfo);
+            }
+            if (playerstatsinfo != null)
+            {
+                _vmix_GraphicsContext.PlayerStats.RemoveRange(playerstatsinfo);
+            }
+            await _vmix_GraphicsContext.SaveChangesAsync();
+
+
+        }
     }
 }

@@ -21,7 +21,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
 
                 var topGrenadiers = _vmix_GraphicsContext.PlayerStats
-                    .Where(x => x.StageId == matches.StageId && x.DayId==matches.MatchDayId)
+                    .Where(x => x.StageId == matches.StageId)
                     .GroupBy(x => x.PlayerUId)
                     .Select(g => new
                     {
@@ -41,7 +41,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 List<string> apiCalls = new List<string>();
 
                 // Set title
-             //   apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5Grenadiers, "TITLE", "TOP 5 GRENADIERS"));
+                //   apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5Grenadiers, "TITLE", "TOP 5 GRENADIERS"));
 
                 int playerNum = 1;
                 foreach (var player in topGrenadiers)

@@ -3,6 +3,7 @@ using VmixGraphicsBusiness;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Net;
+using System.Diagnostics;
 
 namespace Pubg_Ranking_System
 {
@@ -38,7 +39,7 @@ namespace Pubg_Ranking_System
             try
             {
                 bool isValid = await _googleSheetsService.ValidateKeyAsync(txtKey.Text.Trim());
-                
+
                 if (isValid)
                 {
                     _validatedKey = txtKey.Text.Trim();
@@ -76,7 +77,23 @@ namespace Pubg_Ranking_System
         private void btnCancel_Click(object sender, EventArgs e)
         {
             this.DialogResult = DialogResult.Cancel;
-            this.Close();
+
+
+            string processName = "Pubg Ranking System";
+
+            try
+            {
+                foreach (var process in Process.GetProcessesByName(processName))
+                {
+                    process.Kill();
+                    process.WaitForExit();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error terminating process {processName}: {ex.Message}");
+            }
+
         }
 
         private string GetLocalIPAddress()

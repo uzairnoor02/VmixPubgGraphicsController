@@ -90,9 +90,10 @@ public class LiveStatsBusiness(
                 {
                     TeamId = g.Key,
                     TotalPoints = g.Sum(x => x.score),
+                    totalpoints2=g.Sum(x=>x.totalScore)
                     //WWCD = g.Sum(x => x.WWCD)
                 })
-                .OrderByDescending(x => x.TotalPoints)
+                .OrderByDescending(x => x.totalpoints2)
                 //.ThenByDescending(x => x.WWCD)
                 .ToList();
 
@@ -216,10 +217,12 @@ public class LiveStatsBusiness(
                     // RANKT16 = "24", TAGT16 = "SLAY", etc.
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"ELIMST{uiPosition}", teamStats.Eliminations.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TOTALT{uiPosition}", score));
+                    //apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TOTALT{uiPosition}", "-"));//score));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TAGT{uiPosition}", currentTeamInfo.teamName.ToUpper()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"RANKT{uiPosition}", overallRank.ToString())); // Display actual database rank
                     if (match.MatchId == 1 && match.MatchDayId == 1)
                         apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"RANKT{uiPosition}", uiPosition.ToString())); // Display actual database rank
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{uiPosition}", $"{ConfigGlobal.LogosImages}" + $"\\{currentTeamInfo.teamid}.png"));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{uiPosition}", $"{ConfigGlobal.LogosImages}" + $"\\0.png"));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{uiPosition}", $"{ConfigGlobal.LogosImages}" + $"\\{currentTeamInfo.teamid}.png"));
 

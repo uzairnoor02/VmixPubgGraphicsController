@@ -360,9 +360,9 @@ namespace Pubg_Ranking_System
                 }
 
                 var jsonData = await File.ReadAllTextAsync(jsonFilePath);
-                var tournamentData = JsonConvert.DeserializeObject<TournamentData>(jsonData);
+                var tournamentjsonData = JsonConvert.DeserializeObject<TournamentData>(jsonData);
 
-                if (tournamentData == null)
+                if (tournamentjsonData == null)
                 {
                     _logger.LogError("Failed to deserialize tournament data.");
                     return;
@@ -371,12 +371,12 @@ namespace Pubg_Ranking_System
                 var tournament = await _context.Tournaments
                     .Include(t => t.Stages)
                     .ThenInclude(s => s.TeamsStages)
-                    .FirstOrDefaultAsync(x => x.Name.ToLower() == tournamentData.TournamentName.ToLower());
+                    .FirstOrDefaultAsync(x => x.Name.ToLower() == tournamentjsonData.TournamentName.ToLower());
 
                 if (tournament == null)
                 {
                     var result = MessageBox.Show(
-                        $"Tournament '{tournamentData.TournamentName}' does not exist.\nDo you want to create it?",
+                        $"Tournament '{tournamentjsonData.TournamentName}' does not exist.\nDo you want to create it?",
                         "Create Tournament",
                         MessageBoxButtons.YesNo,
                         MessageBoxIcon.Question);
@@ -385,7 +385,7 @@ namespace Pubg_Ranking_System
                     {
                         tournament = new Tournament
                         {
-                            Name = tournamentData.TournamentName,
+                            Name = tournamentjsonData.TournamentName,
                             Stages = new List<Stage>()
                         };
 
@@ -401,7 +401,7 @@ namespace Pubg_Ranking_System
                     }
                 }
 
-                foreach (var stageData in tournamentData.Stages)
+                foreach (var stageData in tournamentjsonData.Stages)
                 {
                     // Check if stage exists
                     var stage = tournament.Stages.FirstOrDefault(s => s.Name.ToLower() == stageData.StageName.ToLower());

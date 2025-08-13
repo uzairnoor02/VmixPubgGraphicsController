@@ -44,14 +44,6 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchRankingsGUID, $"PMNUM", totalMatches.Count().ToString()));
                     if (wwcd)
                     {
-
-                        var plN = 1; 
-                        foreach (var player in wwcddata)
-                        {
-                            apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"PICP{plN}", $"{ConfigGlobal.PlayerImages}\\0.png"));
-                            apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"PICP{plN}", $"{ConfigGlobal.PlayerImages}\\{player.PlayerUId}.png"));
-                            plN++;
-                        }
                         apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"WWCDT{rankNum}", $"{ConfigGlobal.LogosImages}\\WWCD.gif"));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"WWCDT{rankNum}", $"{ConfigGlobal.LogosImages}\\WWCD.png"));
                         apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"WWCDT{rankNum}", $"{ConfigGlobal.LogosImages}\\WWCD.PNG"));
@@ -59,6 +51,16 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     else
                     {
                         apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"WWCDT{rankNum}", $"{ConfigGlobal.LogosImages}\\0.png"));
+                    }
+                    if (rankNum==1)
+                    {
+                        var plN = 1; 
+                        foreach (var player in wwcddata)
+                        {
+                            apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"PICP{plN}", $"{ConfigGlobal.PlayerImages}\\0.png"));
+                            apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MatchRankingsGUID, $"PICP{plN}", $"{ConfigGlobal.PlayerImages}\\{player.PlayerUId}.png"));
+                            plN++;
+                        }
                     }
 
                     rankNum++;

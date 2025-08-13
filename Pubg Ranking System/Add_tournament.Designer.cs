@@ -134,6 +134,7 @@
             Controls.Add(label1);
             Name = "Add_tournament";
             Text = "Add_tournament";
+            FormClosing += Add_tournament_FormClosing;
             Load += Add_tournament_Load;
             ResumeLayout(false);
             PerformLayout();
