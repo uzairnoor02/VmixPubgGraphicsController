@@ -18,7 +18,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 
 namespace VmixGraphicsBusiness.LiveMatch;
-public class LiveStatsBusiness(
+public partial class LiveStatsBusiness(
         IConfiguration config,
         IBackgroundJobClient backgroundJobClient,
         IServiceProvider serviceProvider,

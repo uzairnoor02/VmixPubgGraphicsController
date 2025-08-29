@@ -1,72 +1,104 @@
 {
-  "tournament_name": "2025 PMSC",
+  "tournament_name": "PMNC PK Fall",
   "stages": [
     {
-      "stage_name": "Grand Finals",
+      "stage_name": "Semi Finals Group A",
       "teams": [
         {
           "team_id": "2",
-          "team_name": "ASI8"
+          "team_name": "T2"
         },
         {
           "team_id": "3",
-          "team_name": "GH"
+          "team_name": "T3"
         },
         {
           "team_id": "4",
-          "team_name": "DMN"
+          "team_name": "T4"
         },
         {
           "team_id": "5",
-          "team_name": "VT"
+          "team_name": "ASi8"
         },
         {
           "team_id": "6",
-          "team_name": "NM"
+          "team_name": "MAX"
         },
         {
           "team_id": "7",
-          "team_name": "VEKO"
+          "team_name": "ALPHA"
         },
         {
           "team_id": "8",
-          "team_name": "7SOUL"
+          "team_name": "FRSN"
         },
         {
           "team_id": "9",
-          "team_name": "LOST"
+          "team_name": "TMB"
         },
         {
           "team_id": "10",
-          "team_name": "D8"
+          "team_name": "JV"
         },
         {
           "team_id": "11",
-          "team_name": "F2D"
+          "team_name": "RD"
         },
         {
           "team_id": "12",
-          "team_name": "OXY"
+          "team_name": "XG"
         },
         {
           "team_id": "13",
-          "team_name": "AMZ"
-        },
-        {
-          "team_id": "14",
           "team_name": "141"
         },
         {
+          "team_id": "14",
+          "team_name": "FMA"
+        },
+        {
           "team_id": "15",
-          "team_name": "DES"
+          "team_name": "VE"
         },
         {
           "team_id": "16",
-          "team_name": "ONE"
+          "team_name": "RE"
         },
         {
           "team_id": "17",
-          "team_name": "RAGE"
+          "team_name": "VSx"
+        },
+        {
+          "team_id": "18",
+          "team_name": "7BT"
+        },
+        {
+          "team_id": "19",
+          "team_name": "247"
+        },
+        {
+          "team_id": "20",
+          "team_name": "KOG"
+        },
+        {
+          "team_id": "21",
+          "team_name": "UNIX"
+        },
+        {
+          "team_id": "22",
+          "team_name": "T22"
+        },
+        {
+          "team_id": "23",
+          "team_name": "T23"
+        },
+        {
+          "team_id": "24",
+          "team_name": "T24"
+        },
+        {
+          "team_id": "25",
+          "team_name": "T25"
         }
       ]
     }
