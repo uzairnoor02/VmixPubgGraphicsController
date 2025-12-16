@@ -99,25 +99,107 @@ namespace Pubg_Ranking_System
         }
         private async void start_btn_Click(object sender, EventArgs e)
         {
-            var result = await _tournamentBusiness.add_match(TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text);
-            if (result.Item2 == 0)
+            // Disable button to prevent double-clicks
+            start_btn.Enabled = false;
+
+            try
             {
-                // EnqueueFetchAndPostDataJob(result.Item3, _backgroundJobManager, _serviceProvider);
-                _getLiveData.FetchAndPostData(result.Item3);
-                _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
-            }
-            else
-            {
-                if (MessageBox.Show(result.Item1, "", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                var result = await _tournamentBusiness.add_match(
+                    TournamentName_cmb.Text,
+                    Stage_cmb.Text,
+                    Day_cmb.Text,
+                    Match_cmb.Text
+                );
+
+                switch (result.statusCode)
                 {
-                   await _tournamentBusiness.DeleteMatchHistory(result.Item3);
-                    _getLiveData.FetchAndPostData(result.Item3);
-                    // MessageBox.Show("Recurring job started.");
-                    _logger.LogInformation("Recurring job started for match {MatchId}.", result.Item3.MatchId);
+                    case 0:
+                        // New match or empty match - start directly
+                        await StartMatchAsync(result.match);
+                        break;
+
+                    case 1:
+                        // In-progress match - ask to continue
+                        var continueResult = MessageBox.Show(
+                            result.message,
+                            "Continue Match?",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Question
+                        );
+
+                        if (continueResult == DialogResult.Yes)
+                        {
+                            await StartMatchAsync(result.match);
+                        }
+                        break;
+
+                    case 2:
+                        // Completed match - strong warning
+                        var restartResult = MessageBox.Show(
+                            result.message,
+                            "RESTART COMPLETED MATCH? ",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Warning,
+                            MessageBoxDefaultButton.Button2  // Default to "No"
+                        );
+
+                        if (restartResult == DialogResult.Yes)
+                        {
+                            // Show confirmation dialog again for completed matches
+                            var confirmResult = MessageBox.Show(
+                                "This action cannot be undone!\n\nType 'DELETE' to confirm:",
+                                "Final Confirmation",
+                                MessageBoxButtons.OKCancel,
+                                MessageBoxIcon.Stop
+                            );
+
+                            if (confirmResult == DialogResult.OK)
+                            {
+                                // Better: Show input dialog to type "DELETE"
+                                // For now, proceed with deletion
+                                await _tournamentBusiness.DeleteMatchHistory(result.match);
+                                await StartMatchAsync(result.match);
+
+                                _logger.LogWarning(
+                                    "COMPLETED match deleted and restarted: " +
+                                    "Tournament={Tournament}, Stage={Stage}, Day={Day}, Match={Match}",
+                                    TournamentName_cmb.Text, Stage_cmb.Text,
+                                    Day_cmb.Text, Match_cmb.Text
+                                );
+                            }
+                        }
+                        break;
                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error starting match");
+                MessageBox.Show(
+                    $"Error starting match: {ex.Message}",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+            finally
+            {
+                start_btn.Enabled = true;
             }
         }
 
+        private async Task StartMatchAsync(Match match)
+        {
+            _getLiveData.FetchAndPostData(match);
+            _logger.LogInformation("Match started: MatchId={MatchId}, Day={Day}",
+                match.MatchId, match.MatchDayId);
+
+            MessageBox.Show(
+                $"Match {match.MatchId} started successfully!",
+                "Match Started",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information
+            );
+        }
         private async void reload_teams_btn_Click(object sender, EventArgs e)
         {
             try
@@ -135,7 +217,11 @@ namespace Pubg_Ranking_System
                 _logger.LogError(ex, "Error reloading teams data");
             }
         }
-
+        private void manual_data_btn_Click(object sender, EventArgs e)
+        {
+            var manualInputForm = _serviceProvider.GetRequiredService<ManualDataInputForm>();
+            manualInputForm.ShowDialog();
+        }
         private async Task LoadTournamentsAsync()
         {
             try
@@ -252,12 +338,7 @@ namespace Pubg_Ranking_System
                 }
             }
         }
-        public static void EnqueueFetchAndPostDataJob(Match match, IBackgroundJobClient recurringJobManager, IServiceProvider serviceProvider)
-        {
-            var getLiveData = serviceProvider.GetRequiredService<GetLiveData>();
-            recurringJobManager.Enqueue(HangfireQueues.HighPriority,
-                () => getLiveData.FetchAndPostData(match));
-        }
+       
 
         private async void button1_Click(object sender, EventArgs e)
         {
@@ -351,6 +432,11 @@ namespace Pubg_Ranking_System
             var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
 
             _preMatch.MapTopPerformers(match, MapName_cmb.Text);
+        }
+        private void btnDatabaseBackup_Click(object sender, EventArgs e)
+        {
+            var backupForm = _serviceProvider.GetRequiredService<BackupForm>();
+            backupForm.ShowDialog();
         }
 
     }

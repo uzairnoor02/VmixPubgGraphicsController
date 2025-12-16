@@ -22,6 +22,7 @@ using VmixGraphicsBusiness.PreMatch;
 using Newtonsoft.Json;
 using System.Collections.ObjectModel;
 using System.Collections;
+using VmixGraphicsBusiness.Auth;
 
 namespace Pubg_Ranking_System
 {
@@ -35,57 +36,70 @@ namespace Pubg_Ranking_System
         {
             try
             {
+
+                //string encrypted = GoogleCredentialsEncryption.EncryptFile(@"D:\vmix files\VmixPubgGraphicsController-20240609T202836Z-001\VmixPubgGraphicsController\Pubg Ranking System\pubg-vmix-app.json");
+                //File.WriteAllText("encrypted_output.txt", encrypted);
+                //MessageBox.Show("Encrypted! Check encrypted_output.txt");
                 var builder = new ConfigurationBuilder()
                     .SetBasePath(Directory.GetCurrentDirectory())
                     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 
                 Configuration = builder.Build();
 
+
                 var redisConnectionString = Configuration.GetConnectionString("RedisConnection");
                 if (string.IsNullOrEmpty(redisConnectionString))
                 {
-                    MessageBox.Show("Redis connection string is missing in appsettings.json.");
                     return;
                 }
 
-                // Configure Redis
+
                 ConfigGlobal.Initialize(Configuration);
 
                 var services = new ServiceCollection();
 
-                // ✅ Register Redis as a singleton
+                // Register Redis
                 services.AddSingleton<IConnectionMultiplexer>(provider =>
                     ConnectionMultiplexer.Connect(redisConnectionString));
 
-                // ✅ Configure EF Core with MySQL
+
+                // Configure EF Core with MySQL
                 services.AddDbContextPool<vmix_graphicsContext>(options =>
                 {
                     var connectionString = Configuration.GetConnectionString("DefaultConnection");
                     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
                 });
 
-                // ✅ Configure Hangfire
+
+                // Configure Hangfire
                 services.ConfigureHangfire(Configuration);
                 services.AddSingleton<IBackgroundJobClient, BackgroundJobClient>();
+
 
                 ApplicationConfiguration.Initialize();
                 services.AddSingleton<IConfiguration>(Configuration);
                 ConfigureServices(services, Configuration);
 
+
+                // BUILD SERVICE PROVIDER
                 using var serviceProvider = services.BuildServiceProvider();
+
 
                 // Initialize database
                 await InitializeDatabaseAsync(serviceProvider);
 
-                // ✅ Ensure Hangfire storage is initialized
+
+                // Ensure Hangfire storage is initialized
                 var redis = serviceProvider.GetRequiredService<IConnectionMultiplexer>();
                 GlobalConfiguration.Configuration.UseStorage(new RedisStorage(redis));
 
                 var activator = new DependencyJobActivator(serviceProvider);
                 GlobalConfiguration.Configuration.UseActivator(activator);
 
-                // ✅ Remove all Hangfire jobs before starting
+
+                // Remove all Hangfire jobs before starting
                 ClearAllHangfireJobs();
+
 
                 var serverOptions = new BackgroundJobServerOptions
                 {
@@ -94,12 +108,13 @@ namespace Pubg_Ranking_System
                     Activator = activator
                 };
 
-                // ✅ Start multiple Hangfire servers
+                // Start multiple Hangfire servers
                 _hangfireServers = new List<BackgroundJobServer>();
                 for (int i = 0; i < 5; i++)
                 {
                     _hangfireServers.Add(new BackgroundJobServer(serverOptions));
                 }
+
 
                 var dashboardThread = new System.Threading.Thread(() =>
                 {
@@ -123,13 +138,16 @@ namespace Pubg_Ranking_System
                 });
                 dashboardThread.Start();
 
+
                 var mainForm = serviceProvider.GetRequiredService<Form1>();
+
 
                 // Before running the application, show the authentication form
                 var authForm = serviceProvider.GetRequiredService<AuthenticationForm>();
+
+
                 if (authForm.ShowDialog() != DialogResult.OK)
                 {
-                    // Authentication failed, exit the application
                     return;
                 }
 
@@ -137,7 +155,10 @@ namespace Pubg_Ranking_System
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"An error occurred: {ex.Message}");
+                MessageBox.Show($"ERROR at some step:\n\n{ex.Message}\n\nStack Trace:\n{ex.StackTrace}",
+                    "Application Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
             finally
             {
@@ -150,18 +171,6 @@ namespace Pubg_Ranking_System
                 }
             }
         }
-
-        static async Task InitializeDatabaseAsync(IServiceProvider serviceProvider)
-        {
-            using var scope = serviceProvider.CreateScope();
-            var dbInitializer = scope.ServiceProvider.GetRequiredService<DatabaseInitializer>();
-            await dbInitializer.InitializeDatabaseAsync();
-
-            // Load team data from JSON after database initialization
-            var jsonTeamDataService = scope.ServiceProvider.GetRequiredService<JsonTeamDataService>();
-            await jsonTeamDataService.LoadTeamDataAsync();
-        }
-
         private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
         {
             services.AddLogging(loggingBuilder =>
@@ -182,16 +191,64 @@ namespace Pubg_Ranking_System
             services.AddSingleton<Form1>();
             services.AddScoped<ApiCallProcessor>();
             services.AddScoped<Reset>();
-            services.AddTransient<DatabaseInitializer>();
+            services.AddTransient<DatabaseInitializer>(); 
+            services.AddScoped<TournamentDataBackupService>();
+            services.AddTransient<BackupForm>();
             services.AddTransient<JsonTeamDataService>();
 
-            services.AddSingleton<IHostApplicationLifetime>(provider => provider.GetRequiredService<IHostApplicationLifetime>());
+            // ✅ ADD THESE HERE - BEFORE BuildServiceProvider()
+            services.AddTransient<ManualDataInputForm>();
+            services.AddScoped<ManualDataBackupService>();
+
+            services.AddSingleton<IHostApplicationLifetime>(provider =>
+                provider.GetRequiredService<IHostApplicationLifetime>());
 
             // Register authentication form and related services
             services.AddScoped<AuthenticationForm>();
             services.AddScoped<GoogleSheetsAuthService>();
             services.AddScoped<AuthKeyService>();
         }
+        static async Task InitializeDatabaseAsync(IServiceProvider serviceProvider)
+        {
+            using var scope = serviceProvider.CreateScope();
+            var dbInitializer = scope.ServiceProvider.GetRequiredService<DatabaseInitializer>();
+            await dbInitializer.InitializeDatabaseAsync();
+
+            // Load team data from JSON after database initialization
+            var jsonTeamDataService = scope.ServiceProvider.GetRequiredService<JsonTeamDataService>();
+            await jsonTeamDataService.LoadTeamDataAsync();
+        }
+
+        //private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
+        //{
+        //    services.AddLogging(loggingBuilder =>
+        //    {
+        //        loggingBuilder.ClearProviders();
+        //        loggingBuilder.AddProvider(new FileLoggerProvider("resources/logs"));
+        //        loggingBuilder.SetMinimumLevel(LogLevel.Information);
+        //    });
+
+        //    services.AddScoped<VMIXDataoperations>();
+        //    services.AddTransient<LiveStatsBusiness>();
+        //    services.AddScoped<TournamentBusiness>();
+        //    services.AddTransient<Add_tournament>();
+        //    services.AddTransient<PostMatch>();
+        //    services.AddScoped<PreMatch>();
+        //    services.AddTransient<SetPlayerAchievements>();
+        //    services.AddScoped<GetLiveData>();
+        //    services.AddSingleton<Form1>();
+        //    services.AddScoped<ApiCallProcessor>();
+        //    services.AddScoped<Reset>();
+        //    services.AddTransient<DatabaseInitializer>();
+        //    services.AddTransient<JsonTeamDataService>();
+
+        //    services.AddSingleton<IHostApplicationLifetime>(provider => provider.GetRequiredService<IHostApplicationLifetime>());
+
+        //    // Register authentication form and related services
+        //    services.AddScoped<AuthenticationForm>();
+        //    services.AddScoped<GoogleSheetsAuthService>();
+        //    services.AddScoped<AuthKeyService>();
+        //}
 
         public static void ConfigureHangfire(this IServiceCollection services, IConfiguration configuration)
         {
@@ -433,7 +490,7 @@ namespace Pubg_Ranking_System
                                 TeamId = teamData.TeamId.ToString(),
                                 TeamName = teamData.TeamName,
                                 StageId = stage.StageId,
-                                TournamentId=stage.TournamentId
+                                TournamentId = stage.TournamentId
                             };
 
                             _context.Teams.Add(newTeam);
@@ -460,31 +517,31 @@ namespace Pubg_Ranking_System
 
     // Define data structures for JSON deserializationusing System.Text.Json.Serialization;
     public class TournamentData
-{
-    [JsonProperty("tournament_name")]
-    public string TournamentName { get; set; }
+    {
+        [JsonProperty("tournament_name")]
+        public string TournamentName { get; set; }
 
-    [JsonProperty("stages")]
-    public List<StageData> Stages { get; set; }
-}
+        [JsonProperty("stages")]
+        public List<StageData> Stages { get; set; }
+    }
 
-public class StageData
-{
-    [JsonProperty("stage_name")]
-    public string StageName { get; set; }
+    public class StageData
+    {
+        [JsonProperty("stage_name")]
+        public string StageName { get; set; }
 
-    [JsonProperty("teams")]
-    public List<TeamData> Teams { get; set; }
-}
+        [JsonProperty("teams")]
+        public List<TeamData> Teams { get; set; }
+    }
 
-public class TeamData
-{
-    [JsonProperty("team_id")]
-    public int TeamId { get; set; }
+    public class TeamData
+    {
+        [JsonProperty("team_id")]
+        public int TeamId { get; set; }
 
-    [JsonProperty("team_name")]
-    public string TeamName { get; set; }
-}
+        [JsonProperty("team_name")]
+        public string TeamName { get; set; }
+    }
 
 
 }

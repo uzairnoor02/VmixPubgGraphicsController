@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using VmixData.Models;
+using VmixGraphicsBusiness.Auth;
 
 namespace VmixGraphicsBusiness
 {

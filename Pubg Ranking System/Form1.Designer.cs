@@ -52,6 +52,7 @@ namespace Pubg_Ranking_System
             button8 = new Button();
             MapName_cmb = new ComboBox();
             reload_teams_btn = new Button();
+
             groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
             SuspendLayout();
@@ -293,6 +294,25 @@ namespace Pubg_Ranking_System
             reload_teams_btn.Text = "Reload Teams";
             reload_teams_btn.UseVisualStyleBackColor = true;
             reload_teams_btn.Click += reload_teams_btn_Click;
+
+            manual_data_btn = new Button();
+            manual_data_btn.Location = new Point(222, 12);
+            manual_data_btn.Name = "manual_data_btn";
+            manual_data_btn.Size = new Size(99, 42);
+            manual_data_btn.TabIndex = 0;
+            manual_data_btn.Text = "Manual Data Input";
+            manual_data_btn.UseVisualStyleBackColor = true;
+            manual_data_btn.Click += manual_data_btn_Click;
+
+            btnDatabaseBackup = new System.Windows.Forms.Button();
+            btnDatabaseBackup.Location = new System.Drawing.Point(432, 12);
+            btnDatabaseBackup.Name = "btnDatabaseBackup";
+            btnDatabaseBackup.Size = new System.Drawing.Size(99, 42);
+            btnDatabaseBackup.TabIndex = 15;
+            btnDatabaseBackup.Text = "Database Backup";
+            btnDatabaseBackup.UseVisualStyleBackColor = true;
+            btnDatabaseBackup.Click += btnDatabaseBackup_Click;
+
             // 
             // Form1
             // 
@@ -305,6 +325,8 @@ namespace Pubg_Ranking_System
             Controls.Add(groupBox1);
             Controls.Add(reload_teams_btn);
             Controls.Add(Add_Tournamen_btn);
+            Controls.Add(manual_data_btn);
+            Controls.Add(btnDatabaseBackup);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "Form1";
             Text = "Dashboard";
@@ -316,7 +338,8 @@ namespace Pubg_Ranking_System
         }
 
         #endregion
-
+        private Button btnDatabaseBackup;
+        private Button manual_data_btn;
         private Button Add_Tournamen_btn;
         private Button start_btn;
         private Button stop_btn;
