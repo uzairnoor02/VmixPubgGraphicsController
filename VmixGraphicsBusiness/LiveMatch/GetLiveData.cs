@@ -154,7 +154,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                 _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid20, 4, false, 789));
                 _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid18, 4, false, 7897));
 
-                await Task.Delay(10000);
+                await Task.Delay(5000);
                 var responsegetplayerDatapost = await client.GetAsync(_pcobUrl + "gettotalplayerlist");
                 var responseTeamInfoListpost = await client.GetAsync(_pcobUrl + "getteaminfolist");
                 string PlayerDatapost, teamdatapost;

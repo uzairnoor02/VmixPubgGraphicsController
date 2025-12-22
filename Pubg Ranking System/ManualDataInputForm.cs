@@ -365,7 +365,7 @@ namespace Pubg_Ranking_System
                 // Apply player data using PostMatch method
                 _logger.LogInformation("Saving player info for Match {MatchId}, Day {Day}",
                     match.MatchId, match.MatchDayId);
-                await _postMatch.savePlayersinfo(playerData, match);
+                await _postMatch.savePlayersinfo(playerData, match,teamData);
 
                 // Small delay to ensure player data is committed
                 await Task.Delay(1000);

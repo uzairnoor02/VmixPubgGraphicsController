@@ -47,7 +47,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchSummaryGUID, "MATCHN", matches.MatchId.ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchSummaryGUID, "ELIMS", matchSummary.Eliminations.ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchSummaryGUID, "KNOCK", matchSummary.Knocks.ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchSummaryGUID, "LELIM", matchSummary.LongestElim.ToString() + "m"));
+                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchSummaryGUID, "LELIM", matchSummary.LongestElim.ToString() ));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchSummaryGUID, "HEALING", matchSummary.TotalHealings.ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchSummaryGUID, "THROWSUSED", matchSummary.Throwsused.ToString()));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MatchSummaryGUID, "DROP", matchSummary.AirDropsLooted.ToString()));

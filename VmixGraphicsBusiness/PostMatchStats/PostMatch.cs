@@ -13,7 +13,7 @@ using VmixGraphicsBusiness.vmixutils;
 
 namespace VmixGraphicsBusiness.PostMatchStats
 {
-    public partial class PostMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration,ILogger<PostMatch> logger,IServiceProvider _serviceProvider)
+    public partial class PostMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration, ILogger<PostMatch> logger, IServiceProvider _serviceProvider)
     {
         string logos = configuration["LogosImages"];
         private readonly string _sqlBackupPath = configuration["SqlBackupPath"] ?? "sql_backup";
@@ -26,7 +26,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
             //backgroundJobClient.Enqueue(() =>savePlayersinfo(livePlayersList, match));
             //backgroundJobClient.Enqueue(() =>saveTeamsinfo(teamInfoList, match, livePlayersList));
-            await savePlayersinfo(livePlayersList, match);
+            await savePlayersinfo(livePlayersList, match, teamInfoList);
             await Task.Delay(1000);
             await saveTeamsinfo(teamInfoList, match, livePlayersList);
 
@@ -38,7 +38,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             await TeamsToWatch(match);
         }
 
-        public async Task savePlayersinfo(LivePlayersList liveplayerslist, Match match)
+        public async Task savePlayersinfo(LivePlayersList liveplayerslist, Match match, TeamInfoList teamInfoList)
         {
             try
             {
@@ -56,6 +56,8 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
                 foreach (var player in liveplayerslist.PlayerInfoList)
                 {
+                    var team = teamInfoList.teamInfoList.Where(x => x.teamId == player.TeamId).First();
+                    var wwcd = team.liveMemberNum > 0;
                     if (!existingPlayerUIDs.Contains(player.UId))
                     {
                         // Create new player stat
@@ -90,7 +92,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                             PosX = player.Location.X,
                             PosY = player.Location.Y,
                             PosZ = player.Location.Z,
-                            Rank = player.Rank,
+                            Rank = wwcd ? 1 : player.Rank == 0 ? 2 : player.Rank,
                             SurvivalTime = player.SurvivalTime,
                             UseFragGrenadeNum = player.UseFragGrenadeNum,
                             TeamId = player.TeamId,
@@ -176,11 +178,11 @@ namespace VmixGraphicsBusiness.PostMatchStats
                         {
                             logger.LogError(ex, "Failed to update player stats for PlayerUID: {PlayerUID}", player.UId);
                             // Create backup SQL for update statement
-                            await CreatePlayerStatsUpdateBackupSql(player, match, $"PlayerStats_Update_{player.UId}_{DateTime.Now:yyyyMMdd_HHmmss}.sql");
+                            //await CreatePlayerStatsUpdateBackupSql(player, match, $"PlayerStats_Update_{player.UId}_{DateTime.Now:yyyyMMdd_HHmmss}.sql");
                         }
                         finally
                         {
-                            await CreatePlayerStatsUpdateBackupSql(player, match, $"PlayerStats_Update_{player.UId}_{DateTime.Now:yyyyMMdd_HHmmss}.sql");
+                            //await CreatePlayerStatsUpdateBackupSql(player, match, $"PlayerStats_Update_{player.UId}_{DateTime.Now:yyyyMMdd_HHmmss}.sql");
 
                         }
                     }
@@ -208,13 +210,19 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     .ToListAsync();
 
                 var teamPointsToAdd = new List<TeamPoint>();
-
+                var winner = liveplayerslist.PlayerInfoList
+                        .Where(c => c.Rank == 1);
                 foreach (var team in TeamsinfoList.teamInfoList)
                 {
                     var wwcd = liveplayerslist.PlayerInfoList
                         .Where(x => x.TeamId == team.teamId)
                         .Any(x => x.Rank == 1);
 
+
+                    if (!wwcd)
+                    {
+                        wwcd = team.liveMemberNum > 0;
+                    }
                     int placementpoints = 0;
                     var rank = liveplayerslist.PlayerInfoList
                         .Where(x => x.TeamId == team.teamId)
@@ -295,11 +303,11 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     catch (Exception ex)
                     {
                         logger.LogError(ex, "Failed to save new team points to database, creating SQL backup");
-                        await CreateTeamPointsBackupSql(teamPointsToAdd, $"TeamPoints_Insert_Match_{match.MatchId}_Day{match.MatchDayId}.sql");
+                        //await CreateTeamPointsBackupSql(teamPointsToAdd, $"TeamPoints_Insert_Match_{match.MatchId}_Day{match.MatchDayId}.sql");
                     }
                     finally
                     {
-                        await CreateTeamPointsBackupSql(teamPointsToAdd, $"TeamPoints_Insert_Match_{match.MatchId}_Day{match.MatchDayId}.sql");
+                        //await CreateTeamPointsBackupSql(teamPointsToAdd, $"TeamPoints_Insert_Match_{match.MatchId}_Day{match.MatchDayId}.sql");
 
                     }
                 }

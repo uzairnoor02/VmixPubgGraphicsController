@@ -56,6 +56,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                         ? Math.Round((double)player.KillNum / totalTeamKills * 100, 1)
                         : 0;
 
+
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"PMNUM", totalMatches.Count().ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"NAMEP{rank}", player.PlayerName));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"ELIMSP{rank}", player.KillNum.ToString()));
@@ -63,8 +64,8 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"DAMAGEP{rank}", player.Damage.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"ASSISTSP{rank}", player.Assists.ToString()));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"KNOCKP{rank}", player.Knockouts.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"CONTP{rank}", playerContribution.ToString("F1") + "%"));
-
+                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.Top5MVPMatchGUID, $"CONTP{rank}",
+                        (playerContribution % 1 == 0 ? playerContribution.ToString("F0") : playerContribution.ToString("F1")) + "%"));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.Top5MVPMatchGUID, $"TEAMLOGOP{rank}", $"{ConfigGlobal.LogosImages}\\{teamdata?.TeamId ?? "0"}.png"));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.Top5MVPMatchGUID, $"IMAGEP{rank}", $"{ConfigGlobal.PlayerImages}\\0.png"));
                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.Top5MVPMatchGUID, $"IMAGEP{rank}", $"{ConfigGlobal.PlayerImages}\\{player.PlayerUId}.png"));
