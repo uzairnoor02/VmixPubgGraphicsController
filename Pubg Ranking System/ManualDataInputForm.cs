@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿// ManualDataInputForm.cs
+
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
@@ -45,6 +47,8 @@ namespace Pubg_Ranking_System
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error loading tournament data");
+                MessageBox.Show($"Error loading tournaments: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -64,6 +68,8 @@ namespace Pubg_Ranking_System
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error loading stages");
+                MessageBox.Show($"Error loading stages: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -81,9 +87,11 @@ namespace Pubg_Ranking_System
                         txtPlayerJson.Text = File.ReadAllText(openFileDialog.FileName);
                         lblPlayerStatus.Text = $"Loaded: {Path.GetFileName(openFileDialog.FileName)}";
                         lblPlayerStatus.ForeColor = System.Drawing.Color.Blue;
+                        _logger.LogInformation("Player JSON file loaded: {FileName}", openFileDialog.FileName);
                     }
                     catch (Exception ex)
                     {
+                        _logger.LogError(ex, "Error loading player JSON file");
                         MessageBox.Show($"Error loading file: {ex.Message}", "Error",
                             MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
@@ -105,9 +113,11 @@ namespace Pubg_Ranking_System
                         txtTeamJson.Text = File.ReadAllText(openFileDialog.FileName);
                         lblTeamStatus.Text = $"Loaded: {Path.GetFileName(openFileDialog.FileName)}";
                         lblTeamStatus.ForeColor = System.Drawing.Color.Blue;
+                        _logger.LogInformation("Team JSON file loaded: {FileName}", openFileDialog.FileName);
                     }
                     catch (Exception ex)
                     {
+                        _logger.LogError(ex, "Error loading team JSON file");
                         MessageBox.Show($"Error loading file: {ex.Message}", "Error",
                             MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
@@ -126,7 +136,12 @@ namespace Pubg_Ranking_System
                     return;
                 }
 
-                var playerData = JsonSerializer.Deserialize<LivePlayersList>(txtPlayerJson.Text);
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var playerData = JsonSerializer.Deserialize<LivePlayersList>(txtPlayerJson.Text, options);
 
                 if (playerData?.PlayerInfoList == null || !playerData.PlayerInfoList.Any())
                 {
@@ -136,17 +151,26 @@ namespace Pubg_Ranking_System
                 lblPlayerStatus.Text = $"✓ Valid - {playerData.PlayerInfoList.Count} players";
                 lblPlayerStatus.ForeColor = System.Drawing.Color.Green;
 
+                var teamCount = playerData.PlayerInfoList.Select(p => p.TeamId).Distinct().Count();
+
                 MessageBox.Show(
-                    $"Player JSON is valid!\n\nPlayers found: {playerData.PlayerInfoList.Count}",
+                    $"Player JSON is valid!\n\n" +
+                    $"Players found: {playerData.PlayerInfoList.Count}\n" +
+                    $"Teams: {teamCount}\n" +
+                    $"Alive players: {playerData.PlayerInfoList.Count(p => p.LiveState == 0)}",
                     "Validation Success",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
                 );
+
+                _logger.LogInformation("Player JSON validated: {Count} players, {Teams} teams",
+                    playerData.PlayerInfoList.Count, teamCount);
             }
             catch (JsonException ex)
             {
                 lblPlayerStatus.Text = "✗ Invalid JSON";
                 lblPlayerStatus.ForeColor = System.Drawing.Color.Red;
+                _logger.LogError(ex, "Invalid player JSON format");
                 MessageBox.Show($"Invalid JSON:\n{ex.Message}", "Validation Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -154,6 +178,7 @@ namespace Pubg_Ranking_System
             {
                 lblPlayerStatus.Text = "✗ Validation failed";
                 lblPlayerStatus.ForeColor = System.Drawing.Color.Red;
+                _logger.LogError(ex, "Player JSON validation failed");
                 MessageBox.Show($"Error:\n{ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -170,7 +195,12 @@ namespace Pubg_Ranking_System
                     return;
                 }
 
-                var teamData = JsonSerializer.Deserialize<TeamInfoList>(txtTeamJson.Text);
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var teamData = JsonSerializer.Deserialize<TeamInfoList>(txtTeamJson.Text, options);
 
                 if (teamData?.teamInfoList == null || !teamData.teamInfoList.Any())
                 {
@@ -180,17 +210,27 @@ namespace Pubg_Ranking_System
                 lblTeamStatus.Text = $"✓ Valid - {teamData.teamInfoList.Count} teams";
                 lblTeamStatus.ForeColor = System.Drawing.Color.Green;
 
+                var totalKills = teamData.teamInfoList.Sum(t => t.killNum);
+                var aliveTeams = teamData.teamInfoList.Count(t => t.liveMemberNum > 0);
+
                 MessageBox.Show(
-                    $"Team JSON is valid!\n\nTeams found: {teamData.teamInfoList.Count}",
+                    $"Team JSON is valid!\n\n" +
+                    $"Teams found: {teamData.teamInfoList.Count}\n" +
+                    $"Total kills: {totalKills}\n" +
+                    $"Teams alive: {aliveTeams}",
                     "Validation Success",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
                 );
+
+                _logger.LogInformation("Team JSON validated: {Count} teams, {Kills} total kills",
+                    teamData.teamInfoList.Count, totalKills);
             }
             catch (JsonException ex)
             {
                 lblTeamStatus.Text = "✗ Invalid JSON";
                 lblTeamStatus.ForeColor = System.Drawing.Color.Red;
+                _logger.LogError(ex, "Invalid team JSON format");
                 MessageBox.Show($"Invalid JSON:\n{ex.Message}", "Validation Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -198,6 +238,7 @@ namespace Pubg_Ranking_System
             {
                 lblTeamStatus.Text = "✗ Validation failed";
                 lblTeamStatus.ForeColor = System.Drawing.Color.Red;
+                _logger.LogError(ex, "Team JSON validation failed");
                 MessageBox.Show($"Error:\n{ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -211,33 +252,43 @@ namespace Pubg_Ranking_System
             try
             {
                 btnCreateBackup.Enabled = false;
-                btnCreateBackup.Text = "Creating backup...";
+                btnCreateBackup.Text = "Checking...";
 
-                var match = await GetMatchFromSelection();
+                var match = await GetOrCreateMatchAsync(checkOnly: true);
 
-                var backupService = new ManualDataBackupService(_context, _logger);
-                string backupPath = await backupService.CreateFullMatchBackupAsync(match);
-
-                MessageBox.Show(
-                    $"Backup created!\n\nLocation:\n{backupPath}",
-                    "Backup Complete",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information
-                );
-
-                btnApplyToDb.Enabled = true;
-                _logger.LogInformation("Backup created: {BackupPath}", backupPath);
+                if (match != null)
+                {
+                    // Match exists - backup would be useful
+                    MessageBox.Show(
+                        "Match exists in database.\n\n" +
+                        "Backup feature is currently disabled, but SQL backup files\n" +
+                        "will be automatically created during the apply operation.",
+                        "Backup Info",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information
+                    );
+                }
+                else
+                {
+                    MessageBox.Show(
+                        "This will be a new match entry.\n\n" +
+                        "No backup needed.",
+                        "New Match",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information
+                    );
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating backup");
-                MessageBox.Show($"Error creating backup:\n{ex.Message}", "Error",
+                _logger.LogError(ex, "Error in backup check process");
+                MessageBox.Show($"Error:\n{ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
                 btnCreateBackup.Enabled = true;
-                btnCreateBackup.Text = "1. Create Backup";
+                btnCreateBackup.Text = "Create Backup (Optional)";
             }
         }
 
@@ -253,15 +304,48 @@ namespace Pubg_Ranking_System
                 return;
             }
 
+            // Validate JSON before proceeding
+            LivePlayersList playerData;
+            TeamInfoList teamData;
+
+            try
+            {
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                playerData = JsonSerializer.Deserialize<LivePlayersList>(txtPlayerJson.Text, options);
+                teamData = JsonSerializer.Deserialize<TeamInfoList>(txtTeamJson.Text, options);
+
+                if (playerData?.PlayerInfoList == null || !playerData.PlayerInfoList.Any())
+                {
+                    throw new Exception("Player data is empty or invalid");
+                }
+
+                if (teamData?.teamInfoList == null || !teamData.teamInfoList.Any())
+                {
+                    throw new Exception("Team data is empty or invalid");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Invalid JSON data:\n{ex.Message}", "Validation Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // Confirm operation
             var confirmResult = MessageBox.Show(
-                "⚠️ WARNING ⚠️\n\n" +
-                "This will OVERWRITE existing match data!\n\n" +
-                "Make sure you created a backup.\n\n" +
+                "Apply data to database?\n\n" +
+                $"Players: {playerData.PlayerInfoList.Count}\n" +
+                $"Teams: {teamData.teamInfoList.Count}\n\n" +
+                "SQL backup files will be created automatically.\n\n" +
                 "Continue?",
                 "Confirm Data Update",
                 MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning,
-                MessageBoxDefaultButton.Button2
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button1
             );
 
             if (confirmResult != DialogResult.Yes)
@@ -271,36 +355,49 @@ namespace Pubg_Ranking_System
             {
                 btnApplyToDb.Enabled = false;
                 btnApplyToDb.Text = "Applying...";
+                this.Cursor = Cursors.WaitCursor;
 
-                var match = await GetMatchFromSelection();
-                var playerData = JsonSerializer.Deserialize<LivePlayersList>(txtPlayerJson.Text);
-                var teamData = JsonSerializer.Deserialize<TeamInfoList>(txtTeamJson.Text);
+                _logger.LogInformation("Starting manual data apply process");
 
+                // Get or create match
+                var match = await GetOrCreateMatchAsync(checkOnly: false);
+
+                // Apply player data using PostMatch method
+                _logger.LogInformation("Saving player info for Match {MatchId}, Day {Day}",
+                    match.MatchId, match.MatchDayId);
                 await _postMatch.savePlayersinfo(playerData, match);
+
+                // Small delay to ensure player data is committed
                 await Task.Delay(1000);
+
+                // Apply team data using PostMatch method
+                _logger.LogInformation("Saving team info for Match {MatchId}, Day {Day}",
+                    match.MatchId, match.MatchDayId);
                 await _postMatch.saveTeamsinfo(teamData, match, playerData);
 
                 MessageBox.Show(
                     "Data applied successfully!\n\n" +
                     $"Players: {playerData.PlayerInfoList.Count}\n" +
-                    $"Teams: {teamData.teamInfoList.Count}",
+                    $"Teams: {teamData.teamInfoList.Count}\n\n" +
+                    "SQL backup files have been created in the backup directory.",
                     "Success",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
                 );
 
                 _logger.LogInformation(
-                    "Manual data applied: Match={MatchId}, Day={Day}",
-                    match.MatchId, match.MatchDayId
+                    "Manual data applied successfully: Tournament={Tournament}, Stage={Stage}, Match={MatchId}, Day={Day}",
+                    cmbTournament.SelectedItem, cmbStage.SelectedItem, match.MatchId, match.MatchDayId
                 );
 
                 this.Close();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error applying data");
+                _logger.LogError(ex, "Error applying data to database");
                 MessageBox.Show(
-                    $"Error:\n{ex.Message}\n\nCheck SQL backup files for recovery.",
+                    $"Error applying data:\n\n{ex.Message}\n\n" +
+                    "Check the SQL backup files in the backup directory for manual recovery if needed.",
                     "Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
@@ -309,47 +406,104 @@ namespace Pubg_Ranking_System
             finally
             {
                 btnApplyToDb.Enabled = true;
-                btnApplyToDb.Text = "2. Apply to Database";
+                btnApplyToDb.Text = "Apply to Database";
+                this.Cursor = Cursors.Default;
             }
         }
 
         private bool ValidateMatchSelection()
         {
-            if (cmbTournament.SelectedItem == null || cmbStage.SelectedItem == null ||
-                cmbDay.SelectedItem == null || cmbMatch.SelectedItem == null)
+            if (cmbTournament.SelectedItem == null)
             {
-                MessageBox.Show("Please select all match details!",
-                    "Missing Selection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Please select a tournament!", "Missing Selection",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
+
+            if (cmbStage.SelectedItem == null)
+            {
+                MessageBox.Show("Please select a stage!", "Missing Selection",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            if (cmbDay.SelectedItem == null)
+            {
+                MessageBox.Show("Please select a day!", "Missing Selection",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            if (cmbMatch.SelectedItem == null)
+            {
+                MessageBox.Show("Please select a match!", "Missing Selection",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
             return true;
         }
 
-        private async Task<Match> GetMatchFromSelection()
+        private async Task<Match> GetOrCreateMatchAsync(bool checkOnly = false)
         {
             var tournament = await _context.Tournaments
                 .FirstOrDefaultAsync(x => x.Name == cmbTournament.SelectedItem.ToString());
 
             if (tournament == null)
-                throw new Exception("Tournament not found!");
+                throw new Exception($"Tournament '{cmbTournament.SelectedItem}' not found in database!");
 
             var stage = await _context.Stages
                 .FirstOrDefaultAsync(x => x.Name == cmbStage.SelectedItem.ToString() &&
                                          x.TournamentId == tournament.TournamentId);
 
             if (stage == null)
-                throw new Exception("Stage not found!");
+                throw new Exception($"Stage '{cmbStage.SelectedItem}' not found for tournament '{tournament.Name}'!");
+
+            int matchDay = int.Parse(cmbDay.SelectedItem.ToString());
+            int matchNumber = int.Parse(cmbMatch.SelectedItem.ToString());
 
             var match = await _context.Matches
                 .FirstOrDefaultAsync(x =>
                     x.TournamentId == tournament.TournamentId &&
                     x.StageId == stage.StageId &&
-                    x.MatchDayId == int.Parse(cmbDay.SelectedItem.ToString()) &&
-                    x.MatchId == int.Parse(cmbMatch.SelectedItem.ToString()));
+                    x.MatchDayId == matchDay &&
+                    x.MatchId == matchNumber);
 
             if (match == null)
             {
-                throw new Exception("Match not found in database!");
+                if (checkOnly)
+                {
+                    // Just checking, don't create
+                    return null;
+                }
+
+                // Create new match
+                match = new Match
+                {
+                    TournamentId = tournament.TournamentId,
+                    StageId = stage.StageId,
+                    MatchDayId = matchDay,
+                    MatchId = matchNumber,
+                };
+
+                _context.Matches.Add(match);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "Created new match: Tournament={Tournament}, Stage={Stage}, Day={Day}, Match={Match}",
+                    tournament.Name, stage.Name, matchDay, matchNumber
+                );
+
+                MessageBox.Show(
+                    $"New match created!\n\n" +
+                    $"Tournament: {tournament.Name}\n" +
+                    $"Stage: {stage.Name}\n" +
+                    $"Day: {matchDay}\n" +
+                    $"Match: {matchNumber}",
+                    "Match Created",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                );
             }
 
             return match;

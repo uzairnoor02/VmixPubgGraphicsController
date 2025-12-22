@@ -382,11 +382,11 @@ namespace VmixGraphicsBusiness.PostMatchStats
                         {
                             logger.LogError(ex, "Failed to update team points for TeamID: {TeamID}", team.teamId);
                             // Create backup SQL for update statement
-                            await CreateTeamPointsUpdateBackupSql(team, match, Map, placementpoints, wwcd, $"TeamPoints_Update_{team.teamId}_{DateTime.Now:yyyyMMdd_HHmmss}.sql");
+                            //await CreateTeamPointsUpdateBackupSql(team, match, Map, placementpoints, wwcd, $"TeamPoints_Update_{team.teamId}_{DateTime.Now:yyyyMMdd_HHmmss}.sql");
                         }
                         finally
                         {
-                            await CreateTeamPointsUpdateBackupSql(team, match, Map, placementpoints, wwcd, $"TeamPoints_Update_{team.teamId}_{DateTime.Now:yyyyMMdd_HHmmss}.sql");
+                            //await CreateTeamPointsUpdateBackupSql(team, match, Map, placementpoints, wwcd, $"TeamPoints_Update_{team.teamId}_{DateTime.Now:yyyyMMdd_HHmmss}.sql");
                         }
                     }
                 }

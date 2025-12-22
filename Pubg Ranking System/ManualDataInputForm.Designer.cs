@@ -1,4 +1,6 @@
-﻿using System.Drawing;
+﻿// ManualDataInputForm.Designer.cs (Updated)
+
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace Pubg_Ranking_System
@@ -11,8 +13,8 @@ namespace Pubg_Ranking_System
         private ComboBox cmbStage;
         private ComboBox cmbDay;
         private ComboBox cmbMatch;
-        private TextBox txtPlayerJson;
-        private TextBox txtTeamJson;
+        private RichTextBox txtPlayerJson;  // Changed to RichTextBox
+        private RichTextBox txtTeamJson;    // Changed to RichTextBox
         private Button btnLoadPlayerFile;
         private Button btnLoadTeamFile;
         private Button btnValidatePlayer;
@@ -42,8 +44,8 @@ namespace Pubg_Ranking_System
             this.cmbStage = new ComboBox();
             this.cmbDay = new ComboBox();
             this.cmbMatch = new ComboBox();
-            this.txtPlayerJson = new TextBox();
-            this.txtTeamJson = new TextBox();
+            this.txtPlayerJson = new RichTextBox();  // Changed
+            this.txtTeamJson = new RichTextBox();    // Changed
             this.btnLoadPlayerFile = new Button();
             this.btnLoadTeamFile = new Button();
             this.btnValidatePlayer = new Button();
@@ -121,9 +123,9 @@ namespace Pubg_Ranking_System
 
             this.txtPlayerJson.Location = new Point(10, 20);
             this.txtPlayerJson.Size = new Size(840, 180);
-            this.txtPlayerJson.Multiline = true;
-            this.txtPlayerJson.ScrollBars = ScrollBars.Both;
+            this.txtPlayerJson.ScrollBars = RichTextBoxScrollBars.Both;
             this.txtPlayerJson.Font = new Font("Consolas", 9F);
+            this.txtPlayerJson.WordWrap = true;
 
             this.btnLoadPlayerFile.Text = "Load File";
             this.btnLoadPlayerFile.Location = new Point(10, 210);
@@ -152,9 +154,9 @@ namespace Pubg_Ranking_System
 
             this.txtTeamJson.Location = new Point(10, 20);
             this.txtTeamJson.Size = new Size(840, 180);
-            this.txtTeamJson.Multiline = true;
-            this.txtTeamJson.ScrollBars = ScrollBars.Both;
+            this.txtTeamJson.ScrollBars = RichTextBoxScrollBars.Both;
             this.txtTeamJson.Font = new Font("Consolas", 9F);
+            this.txtTeamJson.WordWrap = true;
 
             this.btnLoadTeamFile.Text = "Load File";
             this.btnLoadTeamFile.Location = new Point(10, 210);
@@ -177,17 +179,16 @@ namespace Pubg_Ranking_System
             });
 
             // Action Buttons
-            this.btnCreateBackup.Text = "1. Create Backup";
+            this.btnCreateBackup.Text = "Create Backup (Optional)";
             this.btnCreateBackup.Location = new Point(10, 620);
             this.btnCreateBackup.Size = new Size(200, 35);
             this.btnCreateBackup.BackColor = Color.LightBlue;
             this.btnCreateBackup.Click += BtnCreateBackup_Click;
 
-            this.btnApplyToDb.Text = "2. Apply to Database";
+            this.btnApplyToDb.Text = "Apply to Database";
             this.btnApplyToDb.Location = new Point(220, 620);
             this.btnApplyToDb.Size = new Size(200, 35);
             this.btnApplyToDb.BackColor = Color.LightGreen;
-            this.btnApplyToDb.Enabled = false;
             this.btnApplyToDb.Click += BtnApplyToDb_Click;
 
             // Add controls to form
