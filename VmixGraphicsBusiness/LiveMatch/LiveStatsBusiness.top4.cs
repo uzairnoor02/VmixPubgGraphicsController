@@ -44,7 +44,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             return liveTeamsCount <= 4 && liveTeamsCount > 0;
         }
 
-        // Method to integrate with your existing CreateLiveStats method
+        [AutomaticRetry(Attempts = 0), DisableConcurrentExecution(timeoutInSeconds: 3)]
         public async Task<object> CreateDynamicLiveStats(Match match, LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats)
         {
             // Check if we should show Top 4 ranking
@@ -102,6 +102,44 @@ namespace VmixGraphicsBusiness.LiveMatch
 
                 string HeatlhImages = ConfigGlobal.Images!;
 
+                // ✅ RETRIEVE OR INITIALIZE FIXED TEAM POSITIONS WITH 15 MINUTE EXPIRATION
+                string top4PositionsKey = "Top4TeamPositions";
+                var storedPositions = await redis.StringGetAsync(top4PositionsKey);
+                Dictionary<int, int> teamPositions; // TeamId -> Position mapping
+
+                if (storedPositions.IsNullOrEmpty)
+                {
+                    // First time entering Top 4 - assign positions based on current ranking
+                    _logger.LogInformation("Initializing Top 4 team positions for the first time");
+                    teamPositions = new Dictionary<int, int>();
+
+                    var initialRanking = allRelevantTeams
+                        .OrderByDescending(x => x.liveMemberNum)
+                        .ThenByDescending(x => x.killNum)
+                        .ToList();
+
+                    for (int i = 0; i < initialRanking.Count && i < 4; i++)
+                    {
+                        teamPositions[initialRanking[i].teamId] = i + 1;
+                    }
+
+                    // Store in Redis with 15 minute expiration
+                    var serializedPositions = JsonSerializer.Serialize(teamPositions);
+                    await redis.StringSetAsync(top4PositionsKey, serializedPositions, TimeSpan.FromMinutes(15));
+
+                    _logger.LogInformation($"Stored initial positions with 15min expiration: {string.Join(", ", teamPositions.Select(kv => $"Team{kv.Key}=T{kv.Value}"))}");
+                }
+                else
+                {
+                    // Use existing positions and refresh the 15-minute expiration
+                    teamPositions = JsonSerializer.Deserialize<Dictionary<int, int>>(storedPositions.ToString());
+
+                    // Refresh expiration to 15 minutes from now
+                    await redis.KeyExpireAsync(top4PositionsKey, TimeSpan.FromMinutes(15));
+
+                    _logger.LogInformation($"Using existing positions (expiration refreshed): {string.Join(", ", teamPositions.Select(kv => $"Team{kv.Key}=T{kv.Value}"))}");
+                }
+
                 // Calculate total alive members across all live teams (only for probability calculation)
                 int totalAliveMembersAcrossAllTeams = liveTeams.Sum(x => x.liveMemberNum);
 
@@ -115,13 +153,20 @@ namespace VmixGraphicsBusiness.LiveMatch
                 var groupedByTeam = playerInfo.PlayerInfoList.ToLookup(info => info.TeamId);
 
                 // Temporary list to hold teams with their raw scores
-                List<(Top4TeamStats team, double rawScore)> teamScoresTemp = new List<(Top4TeamStats, double)>();
+                List<(Top4TeamStats team, double rawScore, int position)> teamScoresTemp = new List<(Top4TeamStats, double, int)>();
 
                 // Process each relevant team (including eliminated ones)
                 foreach (var teamInfo in allRelevantTeams)
                 {
                     try
                     {
+                        // Skip teams not in our fixed positions
+                        if (!teamPositions.ContainsKey(teamInfo.teamId))
+                        {
+                            _logger.LogWarning($"Team {teamInfo.teamId} not in fixed positions, skipping...");
+                            continue;
+                        }
+
                         var teamPlayers = groupedByTeam[teamInfo.teamId].Where(p => p.LiveState != 5).ToList(); // Exclude dead
                         var teamData = pastMatchStats.FirstOrDefault(x => x.teamid == teamInfo.teamId);
 
@@ -196,7 +241,9 @@ namespace VmixGraphicsBusiness.LiveMatch
                             ) * positionPenalty;
                         }
 
-                        teamScoresTemp.Add((top4Team, rawScore));
+                        // Get the fixed position for this team
+                        int fixedPosition = teamPositions[teamInfo.teamId];
+                        teamScoresTemp.Add((top4Team, rawScore, fixedPosition));
                     }
                     catch (Exception ex)
                     {
@@ -213,7 +260,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                 }
 
                 // Calculate normalized percentages
-                foreach (var (team, rawScore) in teamScoresTemp)
+                foreach (var (team, rawScore, position) in teamScoresTemp)
                 {
                     if (rawScore > 0)
                     {
@@ -225,12 +272,11 @@ namespace VmixGraphicsBusiness.LiveMatch
                     }
                 }
 
-                // Sort teams by win probability (descending)
-                var sortedTeams = teamScoresTemp.OrderByDescending(t => t.team.WinProbability).ToList();
+                // ✅ SORT BY FIXED POSITION (NOT by win probability)
+                var sortedTeams = teamScoresTemp.OrderBy(t => t.position).ToList();
 
-                // ✅ UPDATE VMIX FOR EACH TEAM
-                int position = 1;
-                foreach (var (team, rawScore) in sortedTeams)
+                // ✅ UPDATE VMIX FOR EACH TEAM IN THEIR FIXED POSITIONS
+                foreach (var (team, rawScore, position) in sortedTeams)
                 {
                     var teamData = pastMatchStats.FirstOrDefault(x => x.teamid == team.TeamId);
                     var teamInfo = allRelevantTeams.FirstOrDefault(x => x.teamId == team.TeamId);
@@ -239,7 +285,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                     bool isEliminated = teamInfo.liveMemberNum == 0;
                     bool isInBlue = teamPlayers.Any(p => p.IsOutsideBlueCircle);
 
-                    // Set vMix elements
+                    // Set vMix elements using FIXED position
                     apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(top4RankingGuid, $"TAGT{position}", teamData.teamName.ToUpper()));
 
                     // Show percentage even if 0.00% for eliminated teams
@@ -261,15 +307,15 @@ namespace VmixGraphicsBusiness.LiveMatch
                     // Zone status background
                     if (isEliminated)
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"EliminatedBGT{position}", HeatlhImages + "\\EliminatedBG\\Team Dead 4.png"));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"EliminatedBGT{position}", HeatlhImages + "\\EliminatedBG\\Team Dead4.png"));
                     }
-                    else if (!isInBlue)
+                    else if (isInBlue)
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"EliminatedBGT{position}", HeatlhImages + "\\EliminatedBG\\Team In Zone 4.png"));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"EliminatedBGT{position}", HeatlhImages + "\\EliminatedBG\\Team In Zone4.png"));
                     }
                     else
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"EliminatedBGT{position}", HeatlhImages + "\\EliminatedBG\\Team Out Zone 4.png"));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"EliminatedBGT{position}", HeatlhImages + "\\EliminatedBG\\Team Out Zone.png"));
                     }
 
                     // Set player health images
@@ -284,28 +330,29 @@ namespace VmixGraphicsBusiness.LiveMatch
                             apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"T{position}P{playerIndex + 1}", HeatlhImages + "\\Dead\\0.png"));
                         }
                     }
-
-                    position++;
-                    if (position > 4) break;
                 }
 
-                // Hide unused team slots
-                for (int i = position; i <= 4; i++)
+                // Hide unused team slots (if less than 4 teams)
+                var usedPositions = sortedTeams.Select(t => t.position).ToList();
+                for (int i = 1; i <= 4; i++)
                 {
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(top4RankingGuid, $"TEAMNAME{i}", ""));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(top4RankingGuid, $"PERCENTAGE{i}", ""));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"LOGO{i}", ""));
-
-                    for (int playerIndex = 1; playerIndex <= 4; playerIndex++)
+                    if (!usedPositions.Contains(i))
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"T{i}P{playerIndex}", ""));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(top4RankingGuid, $"TEAMNAME{i}", ""));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(top4RankingGuid, $"PERCENTAGE{i}", ""));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"LOGO{i}", ""));
+
+                        for (int playerIndex = 1; playerIndex <= 4; playerIndex++)
+                        {
+                            apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"T{i}P{playerIndex}", ""));
+                        }
                     }
                 }
 
                 // Enqueue API calls
                 backgroundJobClient.Enqueue<ApiCallProcessor>(HangfireQueues.Default, processor => processor.ProcessApiCalls(apiCalls));
 
-                _logger.LogInformation($"Top 4 live ranking created. Probabilities: {string.Join(", ", sortedTeams.Select(t => $"{t.team.TeamName}={t.team.WinProbability:F1}%"))}");
+                _logger.LogInformation($"Top 4 live ranking updated. Positions: {string.Join(", ", sortedTeams.Select(t => $"T{t.position}={t.team.TeamName}({t.team.WinProbability:F1}%)"))}");
 
                 return sortedTeams.Select(t => t.team).ToList();
             }

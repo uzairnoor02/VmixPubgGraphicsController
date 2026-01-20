@@ -29,7 +29,7 @@ namespace VmixGraphicsBusiness.LiveMatch
         {
 
             // Enqueue Hangfire Jobs (Runs one after another)
-            // var jobId1 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => FirstBloodAsync(playerInfo, liveTeamPointStats));
+            //var jobId1 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => FirstBloodAsync(playerInfo, liveTeamPointStats));
             var jobId1 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => FirstBloodAsync(playerInfo, liveTeamPointStats));
             var jobId2 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => GrenadeEliminationsAsync(playerInfo, liveTeamPointStats));
             var jobId3 = _backgroundJobClient.Enqueue(HangfireQueues.LowPriority, () => AirDropLootedAsync(playerInfo, liveTeamPointStats));
@@ -39,6 +39,7 @@ namespace VmixGraphicsBusiness.LiveMatch
         }
 
         [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
+        [DisableConcurrentExecution(timeoutInSeconds: 1)]
         public async Task VehicleEliminationsAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             using var scope = _serviceProvider.CreateScope();
@@ -86,6 +87,7 @@ namespace VmixGraphicsBusiness.LiveMatch
         }
 
         [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
+        [DisableConcurrentExecution(timeoutInSeconds: 1)]
         public async Task GrenadeEliminationsAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             using var scope = _serviceProvider.CreateScope();
@@ -124,7 +126,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                     var apiCalls = new List<string>
                     {
                         vmi_layerSetOnOff.GetSetTextApiCall(vmixData.GrenadePlayerAcheivmentGuid, "PNAME", player.PlayerName ?? "Unknown Player"),
-                        vmi_layerSetOnOff.GetSetImageApiCall(vmixData.GrenadePlayerAcheivmentGuid, "LOGO", $"{ConfigGlobal.LogosImages}\\{currentTeam.teamid}.png"),
+                        vmi_layerSetOnOff.GetSetImageApiCall(vmixData.GrenadePlayerAcheivmentGuid, "TLOGO", $"{ConfigGlobal.LogosImages}\\{currentTeam.teamid}.png"),
                          vmi_layerSetOnOff.GetSetImageApiCall(vmixData.GrenadePlayerAcheivmentGuid, $"PICP1", $"{ConfigGlobal.PlayerImages}\\0.png"),
                          vmi_layerSetOnOff.GetSetImageApiCall(vmixData.GrenadePlayerAcheivmentGuid, $"PICP1", $"{ConfigGlobal.PlayerImages}\\{player.UId}.png")
                     };
@@ -135,6 +137,7 @@ namespace VmixGraphicsBusiness.LiveMatch
         }
 
         [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
+        [DisableConcurrentExecution(timeoutInSeconds: 1)]
         public async Task AirDropLootedAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             using var scope = _serviceProvider.CreateScope();
@@ -185,6 +188,7 @@ namespace VmixGraphicsBusiness.LiveMatch
         }
 
         [AutomaticRetry(Attempts = 0, DelaysInSeconds = new[] { 1, 1 })]
+        [DisableConcurrentExecution(timeoutInSeconds: 1)]
         public async Task<bool> FirstBloodAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             using var scope = _serviceProvider.CreateScope();
@@ -238,6 +242,7 @@ namespace VmixGraphicsBusiness.LiveMatch
 
 
         [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
+        [DisableConcurrentExecution(timeoutInSeconds: 1)]
         public async Task KillDominationAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             List<int> killsindexes = new List<int>() { 3, 5, 7, 10, 13, 15 };
@@ -294,6 +299,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             }
         }
         [AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 1, 1 })]
+        [DisableConcurrentExecution(timeoutInSeconds: 1)]
         public async Task DamageDominationAsync(LivePlayersList playerInfo, List<LiveTeamPointStats> liveTeamPointStats)
         {
             List<int> damageIndexes = new List<int>() { 500, 800, 1000, 1200, 1400, 1500, 1600, 2000 };

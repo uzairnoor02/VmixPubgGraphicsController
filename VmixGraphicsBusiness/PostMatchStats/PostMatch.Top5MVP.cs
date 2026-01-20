@@ -96,7 +96,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                         TeamId = g.First().TeamId,
                         TotalKills = g.Sum(x => x.KillNum ?? 0),
                         TotalDamage = g.Sum(x => x.Damage ?? 0),
-                        TotalSurvivalTime = g.Sum(x => x.SurvivalTime),
+                        TotalSurvivalTime = g.Average(x => x.SurvivalTime),
                         TotalAssists = g.Sum(x => x.Assists ?? 0),
                         TotalKnockouts = g.Sum(x => x.Knockouts ?? 0),
                         MatchesPlayed = g.Count()
@@ -180,7 +180,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
                 TeamId = g.First().TeamId,
                 TotalKills = g.Sum(x => x.KillNum ?? 0),
                 TotalDamage = g.Sum(x => x.Damage ?? 0),
-                TotalSurvivalTime = g.Sum(x => x.SurvivalTime),
+                TotalSurvivalTime = g.Average(x => x.SurvivalTime),
                 TotalAssists = g.Sum(x => x.Assists ?? 0),
                 TotalKnockouts = g.Sum(x => x.Knockouts ?? 0),
                 MatchesPlayed = g.Count()

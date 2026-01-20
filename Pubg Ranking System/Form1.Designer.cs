@@ -127,7 +127,6 @@ namespace Pubg_Ranking_System
             // Day_cmb
             // 
             Day_cmb.DropDownStyle = ComboBoxStyle.DropDownList;
-            Day_cmb.Enabled = false;
             Day_cmb.FormattingEnabled = true;
             Day_cmb.Location = new Point(18, 125);
             Day_cmb.Name = "Day_cmb";

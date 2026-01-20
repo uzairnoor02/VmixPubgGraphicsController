@@ -1,20 +1,22 @@
 using Hangfire;
-using Microsoft.Extensions.Logging;
-using VmixGraphicsBusiness.Utils;
-using System.Collections.Generic;
-using VmixGraphicsBusiness;
-using StackExchange.Redis;
-using Microsoft.Extensions.Configuration;
-using VmixGraphicsBusiness.vmixutils;
-using Microsoft.Extensions.DependencyInjection;
-using VmixData.Models;
-using VmixGraphicsBusiness.LiveMatch;
-using System.Security.Cryptography.X509Certificates;
-using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
-using VmixGraphicsBusiness.PostMatchStats;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using VmixData.Models;
+using VmixGraphicsBusiness;
+using VmixGraphicsBusiness.LiveMatch;
+using VmixGraphicsBusiness.PostMatchStats;
 using VmixGraphicsBusiness.PreMatch;
+using VmixGraphicsBusiness.Utils;
+using VmixGraphicsBusiness.vmixutils;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace Pubg_Ranking_System
 {
@@ -33,8 +35,12 @@ namespace Pubg_Ranking_System
         private readonly PostMatch _postMatch;
         private readonly PreMatch _preMatch;
         private readonly Reset _reset;
+        private ISubscriber _subscriber;
+        private ApiCallProcessor ApiCallProcessor;
 
-        public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness, TournamentBusiness tournamentBusiness, IBackgroundJobClient backgroundJobManager, ILogger<Form1> logger, IConnectionMultiplexer redisConnection, IServiceProvider serviceProvider, vmix_graphicsContext vmix_GraphicsContext, PostMatch postMatch, Reset reset, PreMatch preMatch)
+        public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness, TournamentBusiness tournamentBusiness,
+     IBackgroundJobClient backgroundJobManager, ILogger<Form1> logger, IConnectionMultiplexer redisConnection, IServiceProvider serviceProvider,
+     vmix_graphicsContext vmix_GraphicsContext, PostMatch postMatch, Reset reset, PreMatch preMatch, ApiCallProcessor apiCallProcessor)
         {
             _liveStatsBusiness = liveStatsBusiness;
             _Add_tournament = add_Tournament;
@@ -44,31 +50,87 @@ namespace Pubg_Ranking_System
             _logger = logger;
             _tournamentBusiness = tournamentBusiness;
             _redisConnection = redisConnection;
-            _redisDb = _redisConnection.GetDatabase(); // Initialize Redis database
+            _redisDb = _redisConnection.GetDatabase();
+            SubscribeToMatchStatus();
 
             var tournamentnames = _tournamentBusiness.getAll().Select(x => x.Name).ToList();
             Stage_cmb.DataSource = _tournamentBusiness.getAllStages().Select(x => x.Name).ToList();
             TournamentName_cmb.DataSource = tournamentnames;
+
             var days = new List<string>();
             days.Add("1"); days.Add("2"); days.Add("3"); days.Add("4"); days.Add("5"); days.Add("6"); days.Add("7"); days.Add("8");
+
             var matches = new List<string>();
             matches.Add("1"); matches.Add("2"); matches.Add("3"); matches.Add("4"); matches.Add("5"); matches.Add("6"); matches.Add("7"); matches.Add("8"); matches.Add("9"); matches.Add("10"); matches.Add("11"); matches.Add("12"); matches.Add("13"); matches.Add("14"); matches.Add("15"); matches.Add("16"); matches.Add("17");
             matches.Add("18"); matches.Add("19"); matches.Add("20"); matches.Add("21"); matches.Add("22"); matches.Add("23"); matches.Add("24"); matches.Add("25");
+
             var MapNames = new List<string>();
             MapNames.Add("Erangel"); MapNames.Add("Miramar"); MapNames.Add("Sanhok");
             MapName_cmb.DataSource = MapNames;
             Day_cmb.DataSource = days;
             Match_cmb.DataSource = matches;
+
             _serviceProvider = serviceProvider;
             _vmix_GraphicsContext = vmix_GraphicsContext;
             _postMatch = postMatch;
             _preMatch = preMatch;
             _reset = reset;
+
+            // Load last match state from Redis
+            LoadLastMatchState();
         }
+
+        private void LoadLastMatchState()
+        {
+            try
+            {
+                var lastTournament = _redisDb.StringGet("LastMatch:Tournament");
+                var lastStage = _redisDb.StringGet("LastMatch:Stage");
+                var lastDay = _redisDb.StringGet("LastMatch:Day");
+                var lastMatch = _redisDb.StringGet("LastMatch:Match");
+                var lastMap = _redisDb.StringGet("LastMatch:Map");
+
+                if (!lastTournament.IsNullOrEmpty)
+                {
+                    TournamentName_cmb.SelectedItem = lastTournament.ToString();
+                    _logger.LogInformation($"Restored tournament: {lastTournament}");
+                }
+
+                if (!lastStage.IsNullOrEmpty)
+                {
+                    Stage_cmb.SelectedItem = lastStage.ToString();
+                    _logger.LogInformation($"Restored stage: {lastStage}");
+                }
+
+                if (!lastDay.IsNullOrEmpty)
+                {
+                    Day_cmb.SelectedItem = lastDay.ToString();
+                    _logger.LogInformation($"Restored day: {lastDay}");
+                }
+
+                if (!lastMatch.IsNullOrEmpty)
+                {
+                    Match_cmb.SelectedItem = lastMatch.ToString();
+                    _logger.LogInformation($"Restored match: {lastMatch}");
+                }
+
+                if (!lastMap.IsNullOrEmpty)
+                {
+                    MapName_cmb.SelectedItem = lastMap.ToString();
+                    _logger.LogInformation($"Restored map: {lastMap}");
+                }
+
+                _logger.LogInformation("Last match state loaded successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading last match state from Redis");
+            }
+        }
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             base.OnFormClosing(e);
-
             _logger.LogInformation("Form is closing.");
 
             if (MessageBox.Show("Are you sure you want to close the application?", "Confirm Exit", MessageBoxButtons.YesNo) == DialogResult.No)
@@ -77,8 +139,25 @@ namespace Pubg_Ranking_System
                 return;
             }
 
-            string processName = "Pubg Ranking System";
+            // Save current match state synchronously to avoid hanging
+            try
+            {
+                _redisDb.StringSet("LastMatch:Tournament", TournamentName_cmb.SelectedItem?.ToString() ?? "");
+                _redisDb.StringSet("LastMatch:Stage", Stage_cmb.SelectedItem?.ToString() ?? "");
+                _redisDb.StringSet("LastMatch:Day", Day_cmb.SelectedItem?.ToString() ?? "");
+                _redisDb.StringSet("LastMatch:Match", Match_cmb.SelectedItem?.ToString() ?? "");
+                _redisDb.StringSet("LastMatch:Map", MapName_cmb.SelectedItem?.ToString() ?? "");
 
+                _logger.LogInformation("Match state saved on close");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving match state on close");
+            }
+
+            _subscriber.UnsubscribeAll();
+
+            string processName = "Pubg Ranking System";
             try
             {
                 foreach (var process in Process.GetProcessesByName(processName))
@@ -92,7 +171,6 @@ namespace Pubg_Ranking_System
                 _logger.LogError($"Error terminating process {processName}: {ex.Message}");
             }
         }
-
         private void Add_Tournament_btn_Click(object sender, EventArgs e)
         {
             _Add_tournament.Show();
@@ -189,16 +267,9 @@ namespace Pubg_Ranking_System
 
         private async Task StartMatchAsync(Match match)
         {
-            _getLiveData.FetchAndPostData(match);
+            _backgroundJobManager.Enqueue(HangfireQueues.HighPriority, () => _getLiveData.FetchAndPostData(match));
             _logger.LogInformation("Match started: MatchId={MatchId}, Day={Day}",
                 match.MatchId, match.MatchDayId);
-
-            MessageBox.Show(
-                $"Match {match.MatchId} started successfully!",
-                "Match Started",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information
-            );
         }
         private async void reload_teams_btn_Click(object sender, EventArgs e)
         {
@@ -310,8 +381,11 @@ namespace Pubg_Ranking_System
         }
         private async void stop_Click(object sender, EventArgs e)
         {
-            _backgroundJobManager.Delete(HangfireJobNames.FetchAndPostDataJob);
-            MessageBox.Show("Recurring job stopped.");
+            stop_Click(false);
+        }
+        private async Task stop_Click(bool isautotriggered)
+        {
+            CancelAllHighPriorityJobs();
             _logger.LogInformation("Recurring job stopped.");
 
 
@@ -337,8 +411,62 @@ namespace Pubg_Ranking_System
                     await _redisDb.KeyDeleteAsync(keys);
                 }
             }
+
+            this.start_btn.Enabled = true;
+
+            // Restart the application
+            System.Diagnostics.Process.Start(Application.ExecutablePath);
+            Application.Exit();
+            if (!isautotriggered)
+            {
+                MessageBox.Show("All jobs stopped match will be started fresh.");
+            }
         }
-       
+        public void CancelAllHighPriorityJobs()
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                try
+                {
+                    var monitoringApi = JobStorage.Current.GetMonitoringApi();
+                    int deletedCount = 0;
+
+                    // Get enqueued jobs from the high-priority queue
+                    var enqueuedJobs = monitoringApi.EnqueuedJobs(HangfireQueues.HighPriority, 0, 1000);
+                    enqueuedJobs.AddRange(monitoringApi.EnqueuedJobs(HangfireQueues.LowPriority, 0, 1000));
+                    enqueuedJobs.AddRange(monitoringApi.EnqueuedJobs(HangfireQueues.Default, 0, 1000));
+                    foreach (var job in enqueuedJobs)
+                    {
+                        _backgroundJobManager.Delete(job.Key);
+                        deletedCount++;
+                    }
+
+                    // Get processing jobs
+                    var processingJobs = monitoringApi.ProcessingJobs(0, 1000);
+                    foreach (var job in processingJobs)
+                    {
+                        _backgroundJobManager.Delete(job.Key);
+                        deletedCount++;
+
+                    }
+
+                    // Get scheduled jobs
+                    var scheduledJobs = monitoringApi.ScheduledJobs(0, 1000);
+                    foreach (var job in scheduledJobs)
+                    {
+                        _backgroundJobManager.Delete(job.Key);
+                        deletedCount++;
+
+                    }
+
+                    _logger.LogInformation($"Deleted {deletedCount} jobs from high-priority queue");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error deleting high-priority jobs");
+                }
+            }
+        }
 
         private async void button1_Click(object sender, EventArgs e)
         {
@@ -352,7 +480,7 @@ namespace Pubg_Ranking_System
 
         private void button2_Click(object sender, EventArgs e)
         {
-            _reset.ResetAll();
+            _backgroundJobManager.Enqueue(HangfireQueues.HighPriority, () => _reset.ResetAll(_backgroundJobManager));
         }
 
         private async void button3_Click(object sender, EventArgs e)
@@ -397,6 +525,7 @@ namespace Pubg_Ranking_System
             _postMatch.MatchRankings(match);
             _postMatch.OverallRankings(match);
             _postMatch.MatchSummary(match);
+            _postMatch.DaySummary(match);
             _postMatch.Top5MatchMVP(match);
             _postMatch.Top5StageMVP(match);
             _postMatch.StageMVP(match);
@@ -407,21 +536,27 @@ namespace Pubg_Ranking_System
 
         private async void button6_Click(object sender, EventArgs e)
         {
+            await setall();
+        }
+        private async Task<bool> setall()
+        {
+
             //TournamentName_cmb.Text, Stage_cmb.Text, Day_cmb.Text, Match_cmb.Text
             var tournament = _vmix_GraphicsContext.Tournaments.Where(x => x.Name == TournamentName_cmb.Text).FirstOrDefault();
             var stage = _vmix_GraphicsContext.Stages.Where(x => x.Name == Stage_cmb.Text).FirstOrDefault();
             var match = await _vmix_GraphicsContext.Matches.Where(x => x.TournamentId == tournament.TournamentId && x.StageId == stage.StageId && x.MatchDayId == int.Parse(Day_cmb.Text) && x.MatchId == int.Parse(Match_cmb.Text)).FirstOrDefaultAsync();
-            _postMatch.WWCDStatsAsync(match);
-            _postMatch.MatchMvp(match);
-            _postMatch.MatchRankings(match);
-            _postMatch.OverallRankings(match);
-            _postMatch.MatchSummary(match);
-            _postMatch.Top5MatchMVP(match);
-            _postMatch.Top5StageMVP(match);
-            _postMatch.StageMVP(match);
-            _postMatch.TopGrenadiers(match);
-            _postMatch.TeamsToWatch(match);
-
+            await _postMatch.WWCDStatsAsync(match);
+            await _postMatch.MatchMvp(match);
+            await _postMatch.MatchRankings(match);
+            await _postMatch.OverallRankings(match);
+            await _postMatch.DaySummary(match);
+            await _postMatch.MatchSummary(match);
+            await _postMatch.Top5MatchMVP(match);
+            await _postMatch.Top5StageMVP(match);
+            await _postMatch.StageMVP(match);
+            await _postMatch.TopGrenadiers(match);
+            await _postMatch.TeamsToWatch(match);
+            return true;
 
         }
 
@@ -437,6 +572,56 @@ namespace Pubg_Ranking_System
         {
             var backupForm = _serviceProvider.GetRequiredService<BackupForm>();
             backupForm.ShowDialog();
+        }
+
+        private async Task SubscribeToMatchStatus()
+        {
+            _subscriber = _redisConnection.GetSubscriber();
+
+            var db = _redisConnection.GetDatabase();
+            _subscriber.Subscribe("match-status-channel", (channel, value) =>
+            {
+                // This runs on a background thread, so use Invoke for UI updates
+                this.Invoke(new Action(async () =>
+                {
+                    string status = value.ToString();
+
+                    if (status == "Started")
+                    {
+                        _reset.ResetAll(_backgroundJobManager);
+                        MessageBox.Show(
+                            $"{db.StringGet(HelperRedis.MatchStatus)}",
+                            "Match Started",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information
+                        );
+                    }
+                    else if (status == "Ended")
+                    {
+
+                        _backgroundJobManager.Enqueue(HangfireQueues.HighPriority, () => _reset.ResetAll(_backgroundJobManager));
+                        await stop_Click(true);
+                        await Task.Delay(5000);
+                        await setall();
+                        MessageBox.Show("Match has ended!", "Match Status",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+
+                    }
+                    else if (status == "Exception")
+                    {
+                        _backgroundJobManager.Enqueue(() => _reset.ResetAll(_backgroundJobManager));
+
+                        await stop_Click(true);
+
+                        await setall();
+                        MessageBox.Show($"Match has ended! {db.StringGet(HelperRedis.MatchStatus)}", "Match Status",
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                    }
+                    this.start_btn.Enabled = status == "Ended" || status == "Exception";
+                }));
+            });
         }
 
     }

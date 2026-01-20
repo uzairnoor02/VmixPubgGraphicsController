@@ -15,8 +15,6 @@ public partial class vmix_graphicsContext : DbContext
 
     public virtual DbSet<Match> Matches { get; set; }
 
-    public virtual DbSet<Mvpmodel> Mvpmodels { get; set; }
-
     public virtual DbSet<Player> Players { get; set; }
 
     public virtual DbSet<PlayerStat> PlayerStats { get; set; }
@@ -62,23 +60,7 @@ public partial class vmix_graphicsContext : DbContext
             entity.Property(e => e.TournamentId).HasColumnName("tournament_id");
         });
 
-        modelBuilder.Entity<Mvpmodel>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToTable("mvpmodel");
-
-            entity.Property(e => e.Name)
-                .IsRequired()
-                .HasMaxLength(100)
-                .UseCollation("utf8mb3_general_ci")
-                .HasCharSet("utf8mb3");
-            entity.Property(e => e.PlayerUid)
-                .IsRequired()
-                .HasMaxLength(50)
-                .UseCollation("utf8mb3_general_ci")
-                .HasCharSet("utf8mb3");
-        });
+       
 
         modelBuilder.Entity<Player>(entity =>
         {

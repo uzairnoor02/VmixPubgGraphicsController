@@ -23,7 +23,10 @@ namespace VmixGraphicsBusiness.LiveMatch
         private readonly string _pcobUrl;
         private readonly IServiceProvider serviceProvider1;
         private List<LiveTeamPointStats> teampoints = null;
-        int zonemoving=0;
+
+        private ISubscriber subscriber;
+        private readonly IDatabase db;
+        int zonemoving = 0;
 
         public GetLiveData(LiveStatsBusiness liveStatsBusiness, PostMatch dbBusiness, IBackgroundJobClient backgroundJobClient, IConnectionMultiplexer connectionMultiplexer, IServiceProvider serviceProvider)
         {
@@ -33,7 +36,9 @@ namespace VmixGraphicsBusiness.LiveMatch
             _pcobUrl = ConfigGlobal.PcobUrl;
             _redisConnection = connectionMultiplexer;
             serviceProvider1 = serviceProvider;
+            db = _redisConnection.GetDatabase();
 
+            subscriber = _redisConnection.GetSubscriber();
             using var scope = serviceProvider.CreateScope();
         }
 
@@ -58,6 +63,8 @@ namespace VmixGraphicsBusiness.LiveMatch
                 }
                 catch (Exception e)
                 {
+                    await db.StringSetAsync(HelperRedis.MatchStatus, $"{e.Message}");
+                    await subscriber.PublishAsync("match-status-channel", "Exception");
                     Console.WriteLine($"An error occurred while checking isingame status: {e.Message}");
                     return false;
                 }
@@ -65,6 +72,7 @@ namespace VmixGraphicsBusiness.LiveMatch
         }
 
         [AutomaticRetry(Attempts = 0, DelaysInSeconds = new[] { 2 })]
+        [DisableConcurrentExecution(timeoutInSeconds: 1)]
         public async Task FetchAndPostData(Match match)
         {
             var previousData = "";
@@ -74,6 +82,9 @@ namespace VmixGraphicsBusiness.LiveMatch
             }
             using (var client = new HttpClient())
             {
+
+                await db.StringSetAsync(HelperRedis.MatchStatus, $"Match {match.MatchId} started successfully!");
+                await subscriber.PublishAsync("match-status-channel", "Started");
                 while (await IsInGame())
                 {
                     GetCircleInfo();
@@ -82,12 +93,11 @@ namespace VmixGraphicsBusiness.LiveMatch
                         var responsegetplayerData = await client.GetAsync(_pcobUrl + "gettotalplayerlist");
                         var responseTeamInfoList = await client.GetAsync(_pcobUrl + "getteaminfolist");
 
-
                         if (responsegetplayerData.IsSuccessStatusCode)
                         {
                             var PlayerData = await responsegetplayerData.Content.ReadAsStringAsync();
                             var teamdata = await responseTeamInfoList.Content.ReadAsStringAsync();
-                            if (PlayerData != null && PlayerData != previousData)// PlayerData != previousData &&
+                            if (true||(PlayerData != null && PlayerData != previousData))// PlayerData != previousData &&
                             {
                                 LivePlayersList livePlayerInfo = JsonSerializer.Deserialize<LivePlayersList>(PlayerData)!;
                                 TeamInfoList TeamInfoList = JsonSerializer.Deserialize<TeamInfoList>(teamdata)!;
@@ -118,9 +128,8 @@ namespace VmixGraphicsBusiness.LiveMatch
                                     }).ToList()
                                 };
 
-                                _backgroundJobClient.Enqueue(HangfireQueues.HighPriority, () => _liveStatsBusiness.CreateDynamicLiveStats(match,filteredPlayerInfo, TeamInfoList, teampoints));
+                                _backgroundJobClient.Enqueue(HangfireQueues.HighPriority, () => _liveStatsBusiness.CreateDynamicLiveStats(match, filteredPlayerInfo, TeamInfoList, teampoints));
                                 previousData = PlayerData;
-                                var db = _redisConnection.GetDatabase();
                                 await db.StringSetAsync(HelperRedis.PlayerInfolist, PlayerData);
                                 await db.StringSetAsync(HelperRedis.TeamInfoList, teamdata);
                             }
@@ -138,6 +147,8 @@ namespace VmixGraphicsBusiness.LiveMatch
                     catch (Exception e)
                     {
                         Console.WriteLine($"An error occurred: {e.Message}");
+                        await db.StringSetAsync(HelperRedis.MatchStatus, $"{e.Message}");
+                        await subscriber.PublishAsync("match-status-channel", "Exception");
                     }
                 }
 
@@ -151,8 +162,6 @@ namespace VmixGraphicsBusiness.LiveMatch
 
                 _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid16, 4, false, 3000));
                 _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid4, 4, false, 3400));
-                _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid20, 4, false, 789));
-                _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid18, 4, false, 7897));
 
                 await Task.Delay(5000);
                 var responsegetplayerDatapost = await client.GetAsync(_pcobUrl + "gettotalplayerlist");
@@ -167,8 +176,12 @@ namespace VmixGraphicsBusiness.LiveMatch
                     teamdatapost = await responseTeamInfoListpost.Content.ReadAsStringAsync();
                     LivePlayersList livePlayerInfo = JsonSerializer.Deserialize<LivePlayersList>(PlayerDatapost)!;
                     TeamInfoList TeamInfoList = JsonSerializer.Deserialize<TeamInfoList>(teamdatapost)!;
-                    _dbBusiness.createPostMtachStats(livePlayerInfo!, match, TeamInfoList!);
+                    await _dbBusiness.createPostMtachStats(livePlayerInfo!, match, TeamInfoList!);
+
                 }
+
+                await db.StringSetAsync(HelperRedis.MatchStatus, $"");
+                await subscriber.PublishAsync("match-status-channel", "Ended");
             }
 
         }
@@ -188,14 +201,14 @@ namespace VmixGraphicsBusiness.LiveMatch
                         var circleInfo = circleInfoDaTA.CircleInfo;
                         vmixguidsclass vmixguids = await VmixDataUtils.SetVMIXDataoperations();
                         string circleClosingGtzip = vmixguids.CircleClosing;
-                        if (circleInfo.CircleStatus=="2" && zonemoving == 0 && int.Parse(circleInfo.CircleIndex) < 6 && (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter)) <= 17)
+                        if (circleInfo.CircleStatus == "2" && zonemoving == 0 && int.Parse(circleInfo.CircleIndex) < 6 && (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter)) <= 17)
                         {
                             Console.WriteLine("maxtime:" + circleInfo.MaxTime + "shrinkprogress=" + circleInfo.Counter);
                             zonemoving = 1;
-                            _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushCircleAnimationAsync(circleClosingGtzip, 2, true, (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter)-3)));
+                            _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushCircleAnimationAsync(circleClosingGtzip, 2, true, (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter) - 3)));
                             zonemoving = 1;
                         }
-                        if(circleInfo.CircleStatus == "0" && zonemoving == 1)
+                        if (circleInfo.CircleStatus == "0" && zonemoving == 1)
                         {
                             zonemoving = 0;
                         }

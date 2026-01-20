@@ -1,33 +1,81 @@
 {
-  "tournament_name": "PMCB",
+  "tournament_name": "2025 PMCB",
   "stages": [
     {
-      "stage_name": "Semi Finals",
+      "stage_name": "Semi Finals A",
       "teams": [
-        { "team_id": "2", "team_name": "SRP" },
-        { "team_id": "3", "team_name": "IFC" },
-        { "team_id": "4", "team_name": "NHW" },
-        { "team_id": "5", "team_name": "ASI8" },
-        { "team_id": "6", "team_name": "MAXE" },
-        { "team_id": "7", "team_name": "ALPH" },
-        { "team_id": "8", "team_name": "AFUR" },
-        { "team_id": "9", "team_name": "TMB" },
-        { "team_id": "10", "team_name": "JV" },
-        { "team_id": "11", "team_name": "RDTH" },
-        { "team_id": "12", "team_name": "XGEN" },
-        { "team_id": "13", "team_name": "141E" },
-        { "team_id": "14", "team_name": "FMA" },
-        { "team_id": "15", "team_name": "VIPR" },
-        { "team_id": "16", "team_name": "RFRM" },
-        { "team_id": "17", "team_name": "VSTR" },
-        { "team_id": "18", "team_name": "CSBX" },
-        { "team_id": "19", "team_name": "247E" },
-        { "team_id": "20", "team_name": "KOG" },
-        { "team_id": "21", "team_name": "VXU" },
-        { "team_id": "22", "team_name": "BLZE" },
-        { "team_id": "23", "team_name": "SLNT" },
-        { "team_id": "24", "team_name": "VRTX" },
-        { "team_id": "25", "team_name": "THDR" }
+        {
+          "team_id": "5",
+          "team_name": "MAG"
+        },
+        {
+          "team_id": "6",
+          "team_name": "AE"
+        },
+        {
+          "team_id": "7",
+          "team_name": "GHORA"
+        },
+        {
+          "team_id": "8",
+          "team_name": "NEXTL"
+        },
+        {
+          "team_id": "9",
+          "team_name": "K2R"
+        },
+        {
+          "team_id": "10",
+          "team_name": "WS"
+        },
+        {
+          "team_id": "11",
+          "team_name": "TS"
+        },
+        {
+          "team_id": "12",
+          "team_name": "NFP"
+        },
+        {
+          "team_id": "13",
+          "team_name": "RNG"
+        },
+        {
+          "team_id": "14",
+          "team_name": "BL"
+        },
+        {
+          "team_id": "15",
+          "team_name": "WHOS"
+        },
+        {
+          "team_id": "16",
+          "team_name": "ISEC"
+        },
+        {
+          "team_id": "17",
+          "team_name": "SR"
+        },
+        {
+          "team_id": "18",
+          "team_name": "STARS"
+        },
+        {
+          "team_id": "19",
+          "team_name": "M4D"
+        },
+        {
+          "team_id": "20",
+          "team_name": "H2E"
+        },
+        {
+          "team_id": "21",
+          "team_name": "9T4"
+        },
+        {
+          "team_id": "22",
+          "team_name": "MHA"
+        }
       ]
     }
   ]

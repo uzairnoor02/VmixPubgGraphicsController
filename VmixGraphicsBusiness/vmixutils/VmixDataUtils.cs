@@ -58,6 +58,7 @@ namespace VmixGraphicsBusiness.vmixutils
             vmixguidsclass.MatchSummaryGUID = GetlIVElInputKey(VMIXData, "MATCH SUMMARY.gtzip") ?? "Match Summary.gtzip";
             vmixguidsclass.Top5Grenadiers = GetlIVElInputKey(VMIXData, "TOP 5 GRENADIERS.gtzip") ?? "TOP 5 Grenadiers.gtzip";
             vmixguidsclass.StageMVP = GetlIVElInputKey(VMIXData, "Match MVP STAGE.gtzip") ?? "Match MVP STAGE.gtzip";
+            vmixguidsclass.DaySummaryGUID = GetlIVElInputKey(VMIXData, "Day Summary.gtzip") ?? "DAY SUMMARY.gtzip";
             return vmixguidsclass;
         }
         public static string GetlIVElInputKey(VmixData.Models.MatchModels.VmixData vmixData, string inputTitle)
@@ -103,6 +104,7 @@ namespace VmixGraphicsBusiness.vmixutils
         public string Top5MVPMatchGUID { get; set; }
         public string Top5MVPStageGUID { get; set; }
         public string StageMVP { get; set; }
+        public string DaySummaryGUID { get; set; }
 
 
 

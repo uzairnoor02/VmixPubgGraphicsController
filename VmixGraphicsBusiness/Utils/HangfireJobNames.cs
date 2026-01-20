@@ -24,5 +24,7 @@ namespace VmixGraphicsBusiness.Utils
         public const string LiveRankingGuid = "LiveRankingGuid";
         public const string KillDominationKey = "KillDominationKey";
         public const string DamageDominationKey = "DamageDominationKey";
+        public const string MatchStatus = "MatchStatus";
+        public const string MatchId = "MatchId";
     }
 }

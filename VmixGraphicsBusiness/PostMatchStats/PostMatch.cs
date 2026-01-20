@@ -30,7 +30,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
             await Task.Delay(1000);
             await saveTeamsinfo(teamInfoList, match, livePlayersList);
 
-            await SaveMvpInfo(match);
+            //await SaveMvpInfo(match);
             await WWCDStatsAsync(match);
             await MatchMvp(match);
             await MatchRankings(match);
@@ -878,53 +878,58 @@ WHERE
 
 
         //}
-        public async Task SaveMvpInfo(Match match)
-        {
-            var playerStats = await _vmix_GraphicsContext.PlayerStats
-                .Where(x => x.StageId == match.StageId)
-                .GroupBy(x => x.PlayerUId)
-                .ToListAsync();
+        //public async Task SaveMvpInfo(Match match)
+        //{
+        //    try
+        //    {
+        //        var playerStats = await _vmix_GraphicsContext.PlayerStats
+        //            .Where(x => x.StageId == match.StageId)
+        //            .GroupBy(x => x.PlayerUId)
+        //            .ToListAsync();
 
-            List<Mvpmodel> mvpModels = new List<Mvpmodel>();
+        //        List<Mvpmodel> mvpModels = new List<Mvpmodel>();
 
-            foreach (var model in playerStats)
-            {
-                var playerUid = model.Key.ToString();
+        //        foreach (var model in playerStats)
+        //        {
+        //            var playerUid = model.Key.ToString();
 
-                var mvpModel = new Mvpmodel
-                {
-                    PlayerUid = playerUid,
-                    Damage = model.Sum(x => x.Damage),
-                    Eliminations = model.Sum(x => x.KillNum),
-                    Name = _vmix_GraphicsContext.Players.Where(x => x.PlayerUid == model.Key.ToString()).Select(x => x.PlayerDisplayName).FirstOrDefault() ?? model.Select(x => x.PlayerName).FirstOrDefault(),
-                    StageId = match.StageId == 0 ? _vmix_GraphicsContext.Stages.Where(x => x.TournamentId == match.TournamentId).Select(x => x.StageId).FirstOrDefault() : 0,
-                    SurvivalTime = model.Average(x => x.SurvivalTime),
-                    TeamId = model.Select(x => x.TeamId).FirstOrDefault(),
-                    TournamentId = match.TournamentId
-                };
+        //            var mvpModel = new Mvpmodel
+        //            {
+        //                PlayerUid = playerUid,
+        //                Damage = model.Sum(x => x.Damage),
+        //                Eliminations = model.Sum(x => x.KillNum),
+        //                Name = _vmix_GraphicsContext.Players.Where(x => x.PlayerUid == model.Key.ToString()).Select(x => x.PlayerDisplayName).FirstOrDefault() ?? model.Select(x => x.PlayerName).FirstOrDefault(),
+        //                StageId = match.StageId == 0 ? _vmix_GraphicsContext.Stages.Where(x => x.TournamentId == match.TournamentId).Select(x => x.StageId).FirstOrDefault() : 0,
+        //                SurvivalTime = model.Average(x => x.SurvivalTime),
+        //                TeamId = model.Select(x => x.TeamId).FirstOrDefault(),
+        //                TournamentId = match.TournamentId
+        //            };
 
-                var existingRecord = await _vmix_GraphicsContext.Mvpmodels
-                    .FirstOrDefaultAsync(x => x.PlayerUid == mvpModel.PlayerUid &&
-                                              x.StageId == match.StageId! &&
-                                              x.TournamentId == mvpModel.TournamentId);
+        //            var existingRecord = await _vmix_GraphicsContext.Mvpmodels
+        //                .FirstOrDefaultAsync(x => x.PlayerUid == mvpModel.PlayerUid &&
+        //                                          x.StageId == match.StageId! &&
+        //                                          x.TournamentId == mvpModel.TournamentId);
 
-                if (existingRecord != null)
-                {
-                    existingRecord.Damage = mvpModel.Damage;
-                    existingRecord.Eliminations = mvpModel.Eliminations;
-                    existingRecord.Name = mvpModel.Name;
-                    existingRecord.SurvivalTime = mvpModel.SurvivalTime;
-                    existingRecord.TeamId = mvpModel.TeamId;
-                }
-                else
-                {
-                    await _vmix_GraphicsContext.Mvpmodels.AddAsync(mvpModel);
-                }
-            }
+        //            if (existingRecord != null)
+        //            {
+        //                existingRecord.Damage = mvpModel.Damage;
+        //                existingRecord.Eliminations = mvpModel.Eliminations;
+        //                existingRecord.Name = mvpModel.Name;
+        //                existingRecord.SurvivalTime = mvpModel.SurvivalTime;
+        //                existingRecord.TeamId = mvpModel.TeamId;
+        //            }
+        //            else
+        //            {
+        //                await _vmix_GraphicsContext.Mvpmodels.AddAsync(mvpModel);
+        //            }
+        //        }
 
-            await _vmix_GraphicsContext.SaveChangesAsync();
-        }
-
+        //        await _vmix_GraphicsContext.SaveChangesAsync();
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //    }
+        //}
 
     }
 }

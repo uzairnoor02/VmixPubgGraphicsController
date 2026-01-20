@@ -1,4 +1,5 @@
 ﻿using Hangfire;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,15 +10,21 @@ using VmixGraphicsBusiness.vmixutils;
 
 namespace VmixGraphicsBusiness.Utils
 {
-    public class Reset(ApiCallProcessor apiCallProcessor)
+    public class Reset(IServiceProvider serviceProvider, ApiCallProcessor apiCallProcessor)
     {
-        public async void ResetAll()
+        [AutomaticRetry(Attempts = 0, DelaysInSeconds = new[] { 1 })]
+
+        [DisableConcurrentExecution(timeoutInSeconds: 3)]
+        public async Task ResetAll(IBackgroundJobClient _backgroundJobClient)
+        { _backgroundJobClient.Enqueue(HangfireQueues.HighPriority,() => Resetjob());
+        }
+        public async Task Resetjob()
         {
             List<string> apiCalls = new();
             string LiverankingGuid;
 
             var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
-            string TeamEliminatedGuid=vmixdata.TeamEliminatedGuid;
+            string TeamEliminatedGuid = vmixdata.TeamEliminatedGuid;
             LiverankingGuid = vmixdata.LiverankingGuid16;
             ResetLiverankings(LiverankingGuid);
             LiverankingGuid = vmixdata.LiverankingGuid18;
@@ -27,20 +34,18 @@ namespace VmixGraphicsBusiness.Utils
             LiverankingGuid = vmixdata.LiverankingGuid4;
             ResetLiverankings(LiverankingGuid);
 
-            ResetLiverankings(LiverankingGuid);
 
             apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(TeamEliminatedGuid, $"elims", " "));
             apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(TeamEliminatedGuid, $"teamname", " "));
             apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(TeamEliminatedGuid, $"rank", "#" + " "));
             apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(TeamEliminatedGuid, $"logo", ConfigGlobal.LogosImages + "\\0.png"));
 
-
             await apiCallProcessor.ProcessApiCalls(apiCalls);
         }
 
         private async void ResetLiverankings(string LiverankingGuid)
         {
-            List<string> apiCalls =new();
+            List<string> apiCalls = new();
             for (int i = 1; i < 30; i++)
             {
                 apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{i}P1", $"{ConfigGlobal.Images}/Dead/0.png"));
