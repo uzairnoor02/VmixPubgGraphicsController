@@ -1,4 +1,4 @@
-﻿using OfficeOpenXml;
+using OfficeOpenXml;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Services;
 using Google.Apis.Sheets.v4;
@@ -11,7 +11,6 @@ using VmixGraphicsBusiness.vmixutils;
 using VmixData.Models;
 using Hangfire;
 using Microsoft.Extensions.Logging;
-using StackExchange.Redis;
 using VmixGraphicsBusiness.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using System;
@@ -64,9 +63,8 @@ namespace VmixGraphicsBusiness.LiveMatch
         public async Task<List<Top4TeamStats>> CreateTop4LiveRanking(LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats)
         {
             using var scope = serviceProvider.CreateScope();
-            IConnectionMultiplexer redisConnection = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
+            var redis = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
             List<string> apiCalls = new List<string>();
-            var redis = redisConnection.GetDatabase();
             var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
 
             try
@@ -107,7 +105,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                 var storedPositions = await redis.StringGetAsync(top4PositionsKey);
                 Dictionary<int, int> teamPositions; // TeamId -> Position mapping
 
-                if (storedPositions.IsNullOrEmpty)
+                if (string.IsNullOrEmpty(storedPositions))
                 {
                     // First time entering Top 4 - assign positions based on current ranking
                     _logger.LogInformation("Initializing Top 4 team positions for the first time");
@@ -187,9 +185,17 @@ namespace VmixGraphicsBusiness.LiveMatch
                             LiveMemberCount = teamInfo.liveMemberNum
                         };
 
-                        // Calculate team health
-                        double teamHealthPercentage = 0;
-                        int alivePlayerCount = 0;
+                        // Calculate team health. Every non-dead player contributes to the average
+                        // (dead players are already excluded further up via teamPlayers' LiveState != 5
+                        // filter) - a standing player counts at full weight, a knocked player counts at a
+                        // small fraction of their health rather than being dropped from the average
+                        // entirely. Dropping knocked players used to let a team with 3 of 4 members
+                        // knocked down show the same win% as a team with all 4 standing, as long as the
+                        // one remaining standing player was healthy - understating exactly the teams that
+                        // are most at risk.
+                        const float KnockedCombatWeight = 0.15f;
+                        double teamHealthWeighted = 0;
+                        int countedPlayerCount = 0;
 
                         foreach (var player in teamPlayers.Take(4)) // Max 4 players
                         {
@@ -203,11 +209,15 @@ namespace VmixGraphicsBusiness.LiveMatch
                                 LiveState = player.LiveState
                             });
 
-                            // Only count alive players for health calculation
-                            if (player.LiveState == 0) // Alive
+                            if (player.LiveState >= 0 && player.LiveState <= 3) // standing / alive
                             {
-                                teamHealthPercentage += healthPercent;
-                                alivePlayerCount++;
+                                teamHealthWeighted += healthPercent;
+                                countedPlayerCount++;
+                            }
+                            else if (player.LiveState == 4) // knocked out - can't fight, near-elimination
+                            {
+                                teamHealthWeighted += healthPercent * KnockedCombatWeight;
+                                countedPlayerCount++;
                             }
                         }
 
@@ -216,8 +226,8 @@ namespace VmixGraphicsBusiness.LiveMatch
 
                         if (!isEliminated)
                         {
-                            // Calculate average team health (only for alive players)
-                            double averageTeamHealth = alivePlayerCount > 0 ? teamHealthPercentage / alivePlayerCount : 0;
+                            // Calculate average team health across the whole squad (standing + knocked)
+                            double averageTeamHealth = countedPlayerCount > 0 ? teamHealthWeighted / countedPlayerCount : 0;
 
                             // ✅ WIN PROBABILITY FACTORS
                             // 1. Member advantage (50% weight) - more alive players = better chance

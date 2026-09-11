@@ -3,11 +3,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Hangfire;
-using StackExchange.Redis;
 using VmixData.Models;
 using VmixGraphicsBusiness;
 using VmixGraphicsBusiness.vmixutils;
-using Hangfire.Redis.StackExchange;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using VmixGraphicsBusiness.Utils;
@@ -47,32 +45,36 @@ namespace Pubg_Ranking_System
                 Configuration = builder.Build();
 
 
-                var redisConnectionString = Configuration.GetConnectionString("RedisConnection");
-                if (string.IsNullOrEmpty(redisConnectionString))
-                {
-                    return;
-                }
-
-
                 ConfigGlobal.Initialize(Configuration);
 
                 var services = new ServiceCollection();
 
-                // Register Redis
-                services.AddSingleton<IConnectionMultiplexer>(provider =>
-                    ConnectionMultiplexer.Connect(redisConnectionString));
+                // In-process match state (replaces Redis for the live-match hot path - see
+                // MatchStateStore.cs). Nothing here is shared across machines, so this no longer
+                // needs a separate service that can fail to start (e.g. WSL not booting Redis).
+                var matchState = new MatchStateStore();
+                services.AddSingleton(matchState);
 
+                // Overlay look/feel (chroma-key color, per-element show/hide) now lives here
+                // instead of being hardcoded in the overlay HTML - controllable from the web
+                // dashboard's Overlay Settings page. Singleton + its own small JSON file (see
+                // OverlayConfigStore.cs), same "in-process, survives restart" pattern as matchState.
+                services.AddSingleton<OverlayConfigStore>();
 
-                // Configure EF Core with MySQL
-                services.AddDbContextPool<vmix_graphicsContext>(options =>
-                {
-                    var connectionString = Configuration.GetConnectionString("DefaultConnection");
-                    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
-                });
+                // Hybrid database: try MySQL first, and if it isn't reachable within a few
+                // seconds, fall back to a local SQLite file automatically so the app never fails
+                // to start just because the DB server is down. Once MySQL comes back, restart the
+                // app to pick it back up (this is a startup-time choice, not a live failover).
+                ConfigureDatabase(services, Configuration);
 
-
-                // Configure Hangfire
-                services.ConfigureHangfire(Configuration);
+                // Hangfire now runs entirely in-process (MemoryStorage, no Redis) and is only used
+                // for the small set of non-time-critical fire-and-forget jobs left in this app
+                // (achievement popups, reset/animation pushes). The real-time PUBG polling pipeline
+                // no longer goes through Hangfire at all - see GetLiveData.FetchAndPostData, which
+                // now calls straight into LiveStatsBusiness instead of enqueuing a job per tick.
+                var hangfireStorage = new Hangfire.MemoryStorage.MemoryStorage();
+                GlobalConfiguration.Configuration.UseStorage(hangfireStorage);
+                services.ConfigureHangfire(hangfireStorage);
                 services.AddSingleton<IBackgroundJobClient, BackgroundJobClient>();
 
 
@@ -89,10 +91,6 @@ namespace Pubg_Ranking_System
                 await InitializeDatabaseAsync(serviceProvider);
 
 
-                // Ensure Hangfire storage is initialized
-                var redis = serviceProvider.GetRequiredService<IConnectionMultiplexer>();
-                GlobalConfiguration.Configuration.UseStorage(new RedisStorage(redis));
-
                 var activator = new DependencyJobActivator(serviceProvider);
                 GlobalConfiguration.Configuration.UseActivator(activator);
 
@@ -101,19 +99,19 @@ namespace Pubg_Ranking_System
                 ClearAllHangfireJobs();
 
 
+                // A single server with a modest worker count is plenty for what's left on
+                // Hangfire (lightweight fire-and-forget UI/animation/achievement jobs). The old
+                // code ran 5 of these, each with ProcessorCount*5 workers, all pulling from the
+                // same queues with no ordering guarantee - that over-parallelization was never
+                // needed and made out-of-order job execution more likely, not less.
                 var serverOptions = new BackgroundJobServerOptions
                 {
                     Queues = new[] { HangfireQueues.HighPriority, HangfireQueues.LowPriority, HangfireQueues.Default },
-                    WorkerCount = Environment.ProcessorCount * 5,
+                    WorkerCount = Math.Max(4, Environment.ProcessorCount),
                     Activator = activator
                 };
 
-                // Start multiple Hangfire servers
-                _hangfireServers = new List<BackgroundJobServer>();
-                for (int i = 0; i < 5; i++)
-                {
-                    _hangfireServers.Add(new BackgroundJobServer(serverOptions));
-                }
+                _hangfireServers = new List<BackgroundJobServer> { new BackgroundJobServer(serverOptions) };
 
 
                 var dashboardThread = new System.Threading.Thread(() =>
@@ -125,7 +123,10 @@ namespace Pubg_Ranking_System
                                 .UseUrls("http://localhost:5001")
                                 .ConfigureServices((context, services) =>
                                 {
-                                    services.ConfigureHangfire(Configuration);
+                                    // Reuse the SAME storage instance as the main app so the
+                                    // dashboard shows real, live job data instead of an empty
+                                    // second in-memory store.
+                                    services.ConfigureHangfire(hangfireStorage);
                                 })
                                 .Configure(app =>
                                 {
@@ -138,6 +139,15 @@ namespace Pubg_Ranking_System
                 });
                 dashboardThread.Start();
 
+                // LAN-accessible live dashboard (SignalR hub + read-only REST snapshot) - anyone
+                // on the network can open Chrome and watch live stats without RDP/physical access
+                // to this PC. View-only for now; see LiveDashboardHost.cs for what's in/out of
+                // scope for this first pass.
+                LiveDashboardHost.Start(
+                    serviceProvider,
+                    matchState,
+                    serviceProvider.GetRequiredService<IBackgroundJobClient>(),
+                    serviceProvider.GetRequiredService<Reset>());
 
                 var mainForm = serviceProvider.GetRequiredService<Form1>();
 
@@ -149,6 +159,32 @@ namespace Pubg_Ranking_System
                 if (authForm.ShowDialog() != DialogResult.OK)
                 {
                     return;
+                }
+
+                // Open the web dashboard automatically, the same way the WinForms window itself
+                // opens automatically - removes the manual "go start a browser" step. This is a
+                // pure convenience on top of LiveDashboardHost, which was already started above
+                // and has had the time it took to fill in the auth form to come up, so the page
+                // should be ready the moment the browser opens. Fire-and-forget: if there's no
+                // default browser configured (e.g. running on a bare server) this must never stop
+                // the WinForms app itself from starting, so any failure here is swallowed.
+                var autoOpenSetting = Configuration["WebDashboard:AutoOpenBrowser"];
+                var autoOpenBrowser = string.IsNullOrWhiteSpace(autoOpenSetting) || !autoOpenSetting.Equals("false", StringComparison.OrdinalIgnoreCase);
+                if (autoOpenBrowser)
+                {
+                    try
+                    {
+                        var dashboardUrl = Configuration["WebDashboard:DashboardUrl"];
+                        if (string.IsNullOrWhiteSpace(dashboardUrl))
+                        {
+                            dashboardUrl = "http://localhost:5050";
+                        }
+                        Process.Start(new ProcessStartInfo(dashboardUrl) { UseShellExecute = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Could not auto-open the web dashboard: {ex.Message}");
+                    }
                 }
 
                 Application.Run(mainForm);
@@ -250,28 +286,73 @@ namespace Pubg_Ranking_System
         //    services.AddScoped<AuthKeyService>();
         //}
 
-        public static void ConfigureHangfire(this IServiceCollection services, IConfiguration configuration)
+        /// <summary>Registers Hangfire against a shared, already-created in-process storage
+        /// instance. No AddHangfireServer() here - Main() creates the single real worker server;
+        /// the dashboard host calls this too, but only to read the same storage, never to spin up
+        /// its own competing workers.</summary>
+        public static void ConfigureHangfire(this IServiceCollection services, JobStorage storage)
         {
-            services.AddSingleton<IConnectionMultiplexer>(provider =>
-                ConnectionMultiplexer.Connect(configuration.GetConnectionString("RedisConnection")));
-
-            services.AddHangfire((provider, config) =>
+            services.AddHangfire(config =>
             {
-                var redis = provider.GetRequiredService<IConnectionMultiplexer>();
-
-                config.UseRedisStorage(redis)
+                config.UseStorage(storage)
                     .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
                     .UseSimpleAssemblyNameTypeSerializer()
                     .UseRecommendedSerializerSettings();
-
-                GlobalConfiguration.Configuration.UseStorage(new RedisStorage(redis));
             });
+        }
 
-            services.AddHangfireServer(options =>
+        /// <summary>Tries to reach MySQL within a short timeout. Returns false (never throws) on
+        /// any failure so the caller can fall back to SQLite instead of the app failing to start.</summary>
+        private static bool TryProbeMySql(string connectionString, TimeSpan timeout, out ServerVersion? serverVersion)
+        {
+            serverVersion = null;
+            if (string.IsNullOrWhiteSpace(connectionString)) return false;
+            try
             {
-                options.Queues = new[] { HangfireQueues.Default, HangfireQueues.HighPriority, HangfireQueues.LowPriority };
-                options.WorkerCount = Environment.ProcessorCount * 2;
-            });
+                var detectTask = Task.Run(() => ServerVersion.AutoDetect(connectionString));
+                if (detectTask.Wait(timeout) && detectTask.Status == TaskStatus.RanToCompletion)
+                {
+                    serverVersion = detectTask.Result;
+                    return true;
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>Hybrid DB wiring: use MySQL when it's reachable, otherwise fall back to a
+        /// local SQLite file automatically so a down/unreachable DB server can never stop the app
+        /// from starting. This is a startup-time choice - if MySQL comes back mid-session, restart
+        /// the app to pick it back up.</summary>
+        private static void ConfigureDatabase(IServiceCollection services, IConfiguration configuration)
+        {
+            var mysqlConnectionString = configuration.GetConnectionString("DefaultConnection");
+
+            Action<DbContextOptionsBuilder> configureOptions;
+
+            if (TryProbeMySql(mysqlConnectionString!, TimeSpan.FromSeconds(4), out var serverVersion))
+            {
+                Console.WriteLine("Database: MySQL is reachable, using it.");
+                configureOptions = options => options.UseMySql(mysqlConnectionString, serverVersion!);
+            }
+            else
+            {
+                var stateDir = Path.Combine(AppContext.BaseDirectory, "state");
+                Directory.CreateDirectory(stateDir);
+                var sqlitePath = Path.Combine(stateDir, "vmix_fallback.db");
+                Console.WriteLine($"Database: MySQL unreachable, falling back to local SQLite ({sqlitePath}). This session's data will not sync to MySQL until it's back and the app is restarted.");
+                configureOptions = options => options.UseSqlite($"Data Source={sqlitePath}");
+            }
+
+            services.AddDbContextPool<vmix_graphicsContext>(configureOptions);
+            // A pooled factory too, so code that needs several short-lived contexts (instead of
+            // one held for a long time) can request IDbContextFactory<vmix_graphicsContext> -
+            // e.g. post-match processing, to avoid one DbContext's change tracker growing for an
+            // entire match's duration. See PostMatch.cs.
+            services.AddPooledDbContextFactory<vmix_graphicsContext>(configureOptions);
         }
 
         public class DependencyJobActivator : JobActivator

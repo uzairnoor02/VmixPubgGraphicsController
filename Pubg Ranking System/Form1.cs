@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using StackExchange.Redis;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -28,18 +27,16 @@ namespace Pubg_Ranking_System
         private readonly LiveStatsBusiness _liveStatsBusiness;
         private readonly IBackgroundJobClient _backgroundJobManager;
         private readonly ILogger<Form1> _logger;
-        private readonly IConnectionMultiplexer _redisConnection;
-        private readonly IDatabase _redisDb;
+        private readonly MatchStateStore _matchState;
         private readonly IServiceProvider _serviceProvider;
         private readonly VmixData.Models.vmix_graphicsContext _vmix_GraphicsContext;
         private readonly PostMatch _postMatch;
         private readonly PreMatch _preMatch;
         private readonly Reset _reset;
-        private ISubscriber _subscriber;
         private ApiCallProcessor ApiCallProcessor;
 
         public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness, TournamentBusiness tournamentBusiness,
-     IBackgroundJobClient backgroundJobManager, ILogger<Form1> logger, IConnectionMultiplexer redisConnection, IServiceProvider serviceProvider,
+     IBackgroundJobClient backgroundJobManager, ILogger<Form1> logger, MatchStateStore matchState, IServiceProvider serviceProvider,
      vmix_graphicsContext vmix_GraphicsContext, PostMatch postMatch, Reset reset, PreMatch preMatch, ApiCallProcessor apiCallProcessor)
         {
             _liveStatsBusiness = liveStatsBusiness;
@@ -49,9 +46,8 @@ namespace Pubg_Ranking_System
             _backgroundJobManager = backgroundJobManager;
             _logger = logger;
             _tournamentBusiness = tournamentBusiness;
-            _redisConnection = redisConnection;
-            _redisDb = _redisConnection.GetDatabase();
-            SubscribeToMatchStatus();
+            _matchState = matchState;
+            _matchState.MatchStatusChanged += OnMatchStatusChanged;
 
             var tournamentnames = _tournamentBusiness.getAll().Select(x => x.Name).ToList();
             Stage_cmb.DataSource = _tournamentBusiness.getAllStages().Select(x => x.Name).ToList();
@@ -84,39 +80,39 @@ namespace Pubg_Ranking_System
         {
             try
             {
-                var lastTournament = _redisDb.StringGet("LastMatch:Tournament");
-                var lastStage = _redisDb.StringGet("LastMatch:Stage");
-                var lastDay = _redisDb.StringGet("LastMatch:Day");
-                var lastMatch = _redisDb.StringGet("LastMatch:Match");
-                var lastMap = _redisDb.StringGet("LastMatch:Map");
+                var lastTournament = _matchState.StringGet("LastMatch:Tournament");
+                var lastStage = _matchState.StringGet("LastMatch:Stage");
+                var lastDay = _matchState.StringGet("LastMatch:Day");
+                var lastMatch = _matchState.StringGet("LastMatch:Match");
+                var lastMap = _matchState.StringGet("LastMatch:Map");
 
-                if (!lastTournament.IsNullOrEmpty)
+                if (!string.IsNullOrEmpty(lastTournament))
                 {
-                    TournamentName_cmb.SelectedItem = lastTournament.ToString();
+                    TournamentName_cmb.SelectedItem = lastTournament;
                     _logger.LogInformation($"Restored tournament: {lastTournament}");
                 }
 
-                if (!lastStage.IsNullOrEmpty)
+                if (!string.IsNullOrEmpty(lastStage))
                 {
-                    Stage_cmb.SelectedItem = lastStage.ToString();
+                    Stage_cmb.SelectedItem = lastStage;
                     _logger.LogInformation($"Restored stage: {lastStage}");
                 }
 
-                if (!lastDay.IsNullOrEmpty)
+                if (!string.IsNullOrEmpty(lastDay))
                 {
-                    Day_cmb.SelectedItem = lastDay.ToString();
+                    Day_cmb.SelectedItem = lastDay;
                     _logger.LogInformation($"Restored day: {lastDay}");
                 }
 
-                if (!lastMatch.IsNullOrEmpty)
+                if (!string.IsNullOrEmpty(lastMatch))
                 {
-                    Match_cmb.SelectedItem = lastMatch.ToString();
+                    Match_cmb.SelectedItem = lastMatch;
                     _logger.LogInformation($"Restored match: {lastMatch}");
                 }
 
-                if (!lastMap.IsNullOrEmpty)
+                if (!string.IsNullOrEmpty(lastMap))
                 {
-                    MapName_cmb.SelectedItem = lastMap.ToString();
+                    MapName_cmb.SelectedItem = lastMap;
                     _logger.LogInformation($"Restored map: {lastMap}");
                 }
 
@@ -142,11 +138,11 @@ namespace Pubg_Ranking_System
             // Save current match state synchronously to avoid hanging
             try
             {
-                _redisDb.StringSet("LastMatch:Tournament", TournamentName_cmb.SelectedItem?.ToString() ?? "");
-                _redisDb.StringSet("LastMatch:Stage", Stage_cmb.SelectedItem?.ToString() ?? "");
-                _redisDb.StringSet("LastMatch:Day", Day_cmb.SelectedItem?.ToString() ?? "");
-                _redisDb.StringSet("LastMatch:Match", Match_cmb.SelectedItem?.ToString() ?? "");
-                _redisDb.StringSet("LastMatch:Map", MapName_cmb.SelectedItem?.ToString() ?? "");
+                _matchState.StringSet("LastMatch:Tournament", TournamentName_cmb.SelectedItem?.ToString() ?? "");
+                _matchState.StringSet("LastMatch:Stage", Stage_cmb.SelectedItem?.ToString() ?? "");
+                _matchState.StringSet("LastMatch:Day", Day_cmb.SelectedItem?.ToString() ?? "");
+                _matchState.StringSet("LastMatch:Match", Match_cmb.SelectedItem?.ToString() ?? "");
+                _matchState.StringSet("LastMatch:Map", MapName_cmb.SelectedItem?.ToString() ?? "");
 
                 _logger.LogInformation("Match state saved on close");
             }
@@ -155,7 +151,7 @@ namespace Pubg_Ranking_System
                 _logger.LogError(ex, "Error saving match state on close");
             }
 
-            _subscriber.UnsubscribeAll();
+            _matchState.MatchStatusChanged -= OnMatchStatusChanged;
 
             string processName = "Pubg Ranking System";
             try
@@ -404,12 +400,7 @@ namespace Pubg_Ranking_System
 
             foreach (var keyPattern in redisKeys)
             {
-                var server = _redisConnection.GetServer(_redisConnection.GetEndPoints().First());
-                var keys = server.Keys(pattern: keyPattern).ToArray();
-                if (keys.Any())
-                {
-                    await _redisDb.KeyDeleteAsync(keys);
-                }
+                await _matchState.DeleteByPatternAsync(keyPattern);
             }
 
             this.start_btn.Enabled = true;
@@ -574,54 +565,46 @@ namespace Pubg_Ranking_System
             backupForm.ShowDialog();
         }
 
-        private async Task SubscribeToMatchStatus()
+        // In-process replacement for the old Redis "match-status-channel" pub/sub subscription -
+        // MatchStateStore raises this event directly (same process, no network hop, can't be missed
+        // because a broker was down) whenever GetLiveData/IsEliminatedAsync publish a status change.
+        private void OnMatchStatusChanged(string status)
         {
-            _subscriber = _redisConnection.GetSubscriber();
-
-            var db = _redisConnection.GetDatabase();
-            _subscriber.Subscribe("match-status-channel", (channel, value) =>
+            // This can fire from a background thread, so marshal to the UI thread.
+            if (this.IsDisposed) return;
+            this.BeginInvoke(new Action(async () =>
             {
-                // This runs on a background thread, so use Invoke for UI updates
-                this.Invoke(new Action(async () =>
+                if (status == "Started")
                 {
-                    string status = value.ToString();
+                    _reset.ResetAll(_backgroundJobManager);
+                    MessageBox.Show(
+                        $"{_matchState.StringGet(HelperRedis.MatchStatus)}",
+                        "Match Started",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information
+                    );
+                }
+                else if (status == "Ended")
+                {
+                    _backgroundJobManager.Enqueue(HangfireQueues.HighPriority, () => _reset.ResetAll(_backgroundJobManager));
+                    await stop_Click(true);
+                    await Task.Delay(5000);
+                    await setall();
+                    MessageBox.Show("Match has ended!", "Match Status",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else if (status == "Exception")
+                {
+                    _backgroundJobManager.Enqueue(() => _reset.ResetAll(_backgroundJobManager));
 
-                    if (status == "Started")
-                    {
-                        _reset.ResetAll(_backgroundJobManager);
-                        MessageBox.Show(
-                            $"{db.StringGet(HelperRedis.MatchStatus)}",
-                            "Match Started",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Information
-                        );
-                    }
-                    else if (status == "Ended")
-                    {
+                    await stop_Click(true);
 
-                        _backgroundJobManager.Enqueue(HangfireQueues.HighPriority, () => _reset.ResetAll(_backgroundJobManager));
-                        await stop_Click(true);
-                        await Task.Delay(5000);
-                        await setall();
-                        MessageBox.Show("Match has ended!", "Match Status",
+                    await setall();
+                    MessageBox.Show($"Match has ended! {_matchState.StringGet(HelperRedis.MatchStatus)}", "Match Status",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
-
-
-                    }
-                    else if (status == "Exception")
-                    {
-                        _backgroundJobManager.Enqueue(() => _reset.ResetAll(_backgroundJobManager));
-
-                        await stop_Click(true);
-
-                        await setall();
-                        MessageBox.Show($"Match has ended! {db.StringGet(HelperRedis.MatchStatus)}", "Match Status",
-                            MessageBoxButtons.OK, MessageBoxIcon.Information);
-
-                    }
-                    this.start_btn.Enabled = status == "Ended" || status == "Exception";
-                }));
-            });
+                }
+                this.start_btn.Enabled = status == "Ended" || status == "Exception";
+            }));
         }
 
     }

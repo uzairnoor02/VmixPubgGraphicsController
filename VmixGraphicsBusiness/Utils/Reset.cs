@@ -1,4 +1,4 @@
-﻿using Hangfire;
+using Hangfire;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
@@ -10,7 +10,7 @@ using VmixGraphicsBusiness.vmixutils;
 
 namespace VmixGraphicsBusiness.Utils
 {
-    public class Reset(IServiceProvider serviceProvider, ApiCallProcessor apiCallProcessor)
+    public class Reset(IServiceProvider serviceProvider, ApiCallProcessor apiCallProcessor, MatchStateStore matchState)
     {
         [AutomaticRetry(Attempts = 0, DelaysInSeconds = new[] { 1 })]
 
@@ -20,6 +20,12 @@ namespace VmixGraphicsBusiness.Utils
         }
         public async Task Resetjob()
         {
+            // Clear Top4 position locks / elimination flags / cached match state on every reset,
+            // so a stale mapping from the previous match can never leak into the next one - this
+            // used to be missing entirely, which was the root cause of teams swapping positions
+            // in the last-4-teams overlay across matches.
+            matchState.ResetMatchState();
+
             List<string> apiCalls = new();
             string LiverankingGuid;
 

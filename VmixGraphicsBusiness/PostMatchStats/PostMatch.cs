@@ -1,10 +1,9 @@
-﻿using Hangfire;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using StackExchange.Redis;
 using System.Text;
 using System.Threading.Tasks;
 using VmixData.Models;
@@ -13,7 +12,7 @@ using VmixGraphicsBusiness.vmixutils;
 
 namespace VmixGraphicsBusiness.PostMatchStats
 {
-    public partial class PostMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration, ILogger<PostMatch> logger, IServiceProvider _serviceProvider)
+    public partial class PostMatch(vmix_graphicsContext _vmix_GraphicsContext, IConfiguration configuration, ILogger<PostMatch> logger, IServiceProvider _serviceProvider, IDbContextFactory<vmix_graphicsContext> _dbContextFactory)
     {
         string logos = configuration["LogosImages"];
         private readonly string _sqlBackupPath = configuration["SqlBackupPath"] ?? "sql_backup";
@@ -24,22 +23,37 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
             var backgroundJobClient = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
 
-            //backgroundJobClient.Enqueue(() =>savePlayersinfo(livePlayersList, match));
-            //backgroundJobClient.Enqueue(() =>saveTeamsinfo(teamInfoList, match, livePlayersList));
-            await savePlayersinfo(livePlayersList, match, teamInfoList);
-            await Task.Delay(1000);
-            await saveTeamsinfo(teamInfoList, match, livePlayersList);
+            // Every step is isolated: one step throwing no longer aborts every step after it, and
+            // it no longer takes createPostMtachStats's caller down with it. Post-match results
+            // used to be all-or-nothing - a bad record hit while computing, say, the MVP could
+            // silently wipe out rankings/team-to-watch/etc. that would otherwise have succeeded,
+            // or (with no try/catch at the call site in GetLiveData) crash the app entirely right
+            // as a match finished. Each failure is logged so it's visible, but the rest of the
+            // report still gets produced.
+            await RunPostMatchStepAsync("SavePlayersInfo", () => savePlayersinfo(livePlayersList, match, teamInfoList));
+            await RunPostMatchStepAsync("SaveTeamsInfo", () => saveTeamsinfo(teamInfoList, match, livePlayersList));
+            await RunPostMatchStepAsync("WWCDStats", () => WWCDStatsAsync(match));
+            await RunPostMatchStepAsync("MatchMvp", () => MatchMvp(match));
+            await RunPostMatchStepAsync("MatchRankings", () => MatchRankings(match));
+            await RunPostMatchStepAsync("OverallRankings", () => OverallRankings(match));
+            await RunPostMatchStepAsync("TeamsToWatch", () => TeamsToWatch(match));
+        }
 
-            //await SaveMvpInfo(match);
-            await WWCDStatsAsync(match);
-            await MatchMvp(match);
-            await MatchRankings(match);
-            await OverallRankings(match);
-            await TeamsToWatch(match);
+        private async Task RunPostMatchStepAsync(string stepName, Func<Task> step)
+        {
+            try
+            {
+                await step();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Post-match step '{Step}' failed - continuing with the remaining steps so the rest of the report still gets produced.", stepName);
+            }
         }
 
         public async Task savePlayersinfo(LivePlayersList liveplayerslist, Match match, TeamInfoList teamInfoList)
         {
+            await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
                 // Create separate collections for add and update operations
@@ -198,6 +212,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
 
         public async Task saveTeamsinfo(TeamInfoList TeamsinfoList, Match match, LivePlayersList liveplayerslist)
         {
+            await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             string Map = "Erangel";
             try
             {
@@ -840,6 +855,7 @@ WHERE
 
         public async Task<List<LiveTeamPointStats>> fetchTeamPointsAsync(Match match)
         {
+            await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             var teampoints = await _vmix_GraphicsContext.TeamPoints.Where(x => x.StageId == match.StageId).GroupBy(x => x.TeamId).AsNoTracking().ToListAsync();
             var stage = await _vmix_GraphicsContext.Stages.Where(x => x.StageId == match.StageId).AsNoTracking().FirstOrDefaultAsync();
             var Teams = await _vmix_GraphicsContext.Teams.Where(x => x.StageId == match.StageId).AsNoTracking().ToListAsync();

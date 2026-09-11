@@ -1,4 +1,3 @@
-﻿using StackExchange.Redis;
 using System.Text.Json;
 using System.Threading.Tasks;
 using VmixData.Models;
@@ -12,6 +11,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
     {
         public async Task WWCDStatsAsync(Match matches)
         {
+            await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
                 var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);

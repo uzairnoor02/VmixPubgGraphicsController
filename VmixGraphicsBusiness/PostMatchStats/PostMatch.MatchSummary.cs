@@ -13,6 +13,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
     {
         public async Task MatchSummary(Match matches)
         {
+            await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
                 var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
@@ -65,6 +66,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
         }
         public async Task DaySummary(Match matches)
         {
+            await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
                 // Get all matches for this day in the stage, ordered by match number

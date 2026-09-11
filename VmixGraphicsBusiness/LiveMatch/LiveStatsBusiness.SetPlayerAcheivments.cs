@@ -1,7 +1,6 @@
-﻿using Hangfire;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using StackExchange.Redis;
 using System;
 using System.Text.Json;
 using VmixData.Models;
@@ -44,8 +43,7 @@ namespace VmixGraphicsBusiness.LiveMatch
         {
             using var scope = _serviceProvider.CreateScope();
             var backgroundJobClient = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
-            var connectionMultiplexer = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
-            var _redisDb = connectionMultiplexer.GetDatabase();
+            var _redisDb = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
             var vmixData = await VmixDataUtils.SetVMIXDataoperations();
             // backgroundJobClient.Enqueue(()=> vmi_layerSetOnOff.PushAnimationAsync(vmixData.VehiclePlayerAcheivmentGuid, 3, false, 300));
 
@@ -81,6 +79,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                          vmi_layerSetOnOff.GetSetImageApiCall(vmixData.VehiclePlayerAcheivmentGuid, $"PICP1", $"{ConfigGlobal.PlayerImages}\\{player.UId}.png")
                     };
                     backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.VehiclePlayerAcheivmentGuid, 3, true, 4000, apiCalls));
+                    _redisDb.PublishAchievement(new LiveAchievementEvent("achievement.vehicleKill", player.PlayerName ?? "Unknown Player", currentTeam.teamid.ToString()));
 
                 }
             }
@@ -93,8 +92,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             using var scope = _serviceProvider.CreateScope();
 
             var backgroundJobClient = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
-            var connectionMultiplexer = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
-            var _redisDb = connectionMultiplexer.GetDatabase();
+            var _redisDb = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
                 return;
 
@@ -108,7 +106,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                 var redisKey = $"{Utils.HelperRedis.GrenadeEliminationsKey}:{player.UId}";
                 var existingData = await _redisDb.StringGetAsync(redisKey);
 
-                if (existingData.IsNullOrEmpty || JsonSerializer.Deserialize<GrenadeEliminationInfo>(existingData).GrenadeKills < player.KillNumByGrenade)
+                if (string.IsNullOrEmpty(existingData) || JsonSerializer.Deserialize<GrenadeEliminationInfo>(existingData).GrenadeKills < player.KillNumByGrenade)
                 {
                     var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == player.TeamId);
 
@@ -132,6 +130,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                     };
 
                     backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.GrenadePlayerAcheivmentGuid, 3, true, 4000, apiCalls));
+                    _redisDb.PublishAchievement(new LiveAchievementEvent("achievement.grenadeElim", player.PlayerName ?? "Unknown Player", currentTeam.teamid.ToString()));
                 }
             }
         }
@@ -143,8 +142,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             using var scope = _serviceProvider.CreateScope();
 
             var backgroundJobClient = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
-            var connectionMultiplexer = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
-            var _redisDb = connectionMultiplexer.GetDatabase();
+            var _redisDb = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
                 return;
 
@@ -158,7 +156,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                 var redisKey = $"{Utils.HelperRedis.AirDropLootedKey}:{airdropPlayer.UId}";
                 var existingData = await _redisDb.StringGetAsync(redisKey);
 
-                if (existingData.IsNullOrEmpty)
+                if (string.IsNullOrEmpty(existingData))
                 {
                     var currentTeam = liveTeamPointStats.FirstOrDefault(x => x.teamid == airdropPlayer.TeamId);
                     //var currentPlayer = players.FirstOrDefault(x => x.PlayerUid == airdropPlayer.UId.ToString());
@@ -183,6 +181,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                 };
 
                     backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.AirDropPlayerAcheivmentGuid, 3, true, 4000, apiCalls));
+                    _redisDb.PublishAchievement(new LiveAchievementEvent("achievement.airdropLoot", airdropPlayer.PlayerName ?? "Unknown Player", currentTeam.teamid.ToString()));
                 }
             }
         }
@@ -194,8 +193,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             using var scope = _serviceProvider.CreateScope();
 
             var backgroundJobClient = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
-            var connectionMultiplexer = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
-            var _redisDb = connectionMultiplexer.GetDatabase();
+            var _redisDb = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
             var redisKey = HelperRedis.FirstBloodKey;
             var existingData = (await _redisDb.StringGetAsync(redisKey)).ToString();
 
@@ -232,6 +230,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                 };
 
                     backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.FirstBloodPlayerAcheivmentGuid, 3, true, 4000, apiCalls));
+                    _redisDb.PublishAchievement(new LiveAchievementEvent("achievement.firstKill", FirstBloodplayer.PlayerName ?? "Unknown Player", currentTeam.teamid.ToString()));
                 }
                 return true;
 
@@ -249,8 +248,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             using var scope = _serviceProvider.CreateScope();
 
             var backgroundJobClient = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
-            var connectionMultiplexer = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
-            var _redisDb = connectionMultiplexer.GetDatabase();
+            var _redisDb = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
                 return;
 
@@ -306,8 +304,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             using var scope = _serviceProvider.CreateScope();
 
             var backgroundJobClient = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
-            var connectionMultiplexer = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
-            var _redisDb = connectionMultiplexer.GetDatabase();
+            var _redisDb = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
             if (playerInfo?.PlayerInfoList == null || !playerInfo.PlayerInfoList.Any())
                 return;
 

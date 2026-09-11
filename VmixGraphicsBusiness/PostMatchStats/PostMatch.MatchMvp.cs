@@ -16,6 +16,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
     {
         public async Task MatchMvp(Match matches)
         {
+            await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
                 var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);

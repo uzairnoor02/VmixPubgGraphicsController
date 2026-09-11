@@ -1,4 +1,4 @@
-﻿using OfficeOpenXml;
+using OfficeOpenXml;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Services;
 using Google.Apis.Sheets.v4;
@@ -11,7 +11,6 @@ using VmixGraphicsBusiness.vmixutils;
 using VmixData.Models;
 using Hangfire;
 using Microsoft.Extensions.Logging;
-using StackExchange.Redis;
 using VmixGraphicsBusiness.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using System;
@@ -38,9 +37,8 @@ public partial class LiveStatsBusiness(
     public async Task<List<TeamLiveStats>> CreateLiveStats(Match match, LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats)
     {
         using var scope = serviceProvider.CreateScope();
-        IConnectionMultiplexer redisConnection = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
+        var redis = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
         List<string> apiCalls = new List<string>();
-        var redis = redisConnection.GetDatabase();
         var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
         var liveteams = liveTeamInfos.teamInfoList.Where(x => x.liveMemberNum > 0).Count();
 
@@ -372,7 +370,7 @@ public partial class LiveStatsBusiness(
     {
         using var scope = serviceProvider.CreateScope();
 
-        var redisConnection = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
+        var redis = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
 
         LiveTeamInfo team;
         var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
@@ -381,15 +379,13 @@ public partial class LiveStatsBusiness(
         int ranknum = totalTeams;
         try
         {
-            var redis = redisConnection.GetDatabase();
-
-            // Retrieve existing data from Redis
+            // Retrieve existing data from the in-process match state store
             string existingData = await redis.StringGetAsync($"{HelperRedis.isEliminated}:{teamId}");
 
-            var currentrank = await redis.StringGetAsync($"{HelperRedis.isEliminated}:{teamId}");
+            string currentrank = await redis.StringGetAsync($"{HelperRedis.isEliminated}:{teamId}");
             if (string.IsNullOrEmpty(currentrank))
             {
-                currentrank = ranknum;
+                currentrank = ranknum.ToString();
             }
             team = new LiveTeamInfo { TeamName = teamName, TeamId = teamId, IsEliminated = isEliminated };
 
@@ -400,6 +396,7 @@ public partial class LiveStatsBusiness(
             apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(TeamEliminatedGuid, $"logo", ConfigGlobal.LogosImages + $"\\{teamId}.png"));
             SetTexts setTexts = new SetTexts();
             backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(TeamEliminatedGuid, 3, true, 10000, apiCalls));
+            redis.PublishTeamEliminated(new LiveTeamEliminatedEvent(teamName, teamId, totalEliminations, rank));
 
             // Save updated data to Redis
             await redis.StringSetAsync($"{HelperRedis.isEliminated}:{teamId}", rank.ToString());

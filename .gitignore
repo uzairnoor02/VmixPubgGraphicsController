@@ -361,3 +361,11 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# vmix-dashboard (Vite/React)
+vmix-dashboard/dist/
+vmix-dashboard/*.tsbuildinfo
+vmix-dashboard/vite.config.ts.timestamp-*.mjs
+
+# runtime state (JSON snapshots, uploaded graphics, sqlite fallback)
+state/
+**/state/

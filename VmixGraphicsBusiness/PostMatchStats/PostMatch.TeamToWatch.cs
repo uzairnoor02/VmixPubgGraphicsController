@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using StackExchange.Redis;
 using System;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -14,6 +13,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
     {
         public async Task TeamsToWatch(Match matches)
         {
+            await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
                 var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);

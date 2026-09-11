@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.8.34330.188
@@ -8,6 +8,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VmixGraphicsBusiness", "VmixGraphicsBusiness\VmixGraphicsBusiness.csproj", "{7E93FD6F-6598-411A-8D14-294D3A33DD06}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VmixData", "VmixData\VmixData.csproj", "{1EFDF968-0BF4-4A98-96AA-6263BABFB4DA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DummyDataHarness", "DummyDataHarness\DummyDataHarness.csproj", "{5C599E93-6F48-4A79-9ED0-2623A385FA1B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -27,6 +29,10 @@ Global
 		{1EFDF968-0BF4-4A98-96AA-6263BABFB4DA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1EFDF968-0BF4-4A98-96AA-6263BABFB4DA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1EFDF968-0BF4-4A98-96AA-6263BABFB4DA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5C599E93-6F48-4A79-9ED0-2623A385FA1B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5C599E93-6F48-4A79-9ED0-2623A385FA1B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5C599E93-6F48-4A79-9ED0-2623A385FA1B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5C599E93-6F48-4A79-9ED0-2623A385FA1B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

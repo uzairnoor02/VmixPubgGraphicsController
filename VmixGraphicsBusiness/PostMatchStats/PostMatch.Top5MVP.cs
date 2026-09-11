@@ -16,6 +16,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
     {
         public async Task Top5MatchMVP(Match matches)
         {
+            await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
                 var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
@@ -83,6 +84,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
         }
         public async Task Top5StageMVP(Match matches)
         {
+            await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
                 // First, get aggregated stats for each player across all matches in the stage
@@ -168,6 +170,7 @@ namespace VmixGraphicsBusiness.PostMatchStats
         }
         public async Task StageMVP(Match matches)
         {
+            await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
                 var playerStageStats = _vmix_GraphicsContext.PlayerStats
