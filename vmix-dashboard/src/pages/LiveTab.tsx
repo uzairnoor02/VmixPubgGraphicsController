@@ -60,7 +60,7 @@ export default function LiveTab() {
       </div>
 
       {sortedTeams.length === 0 ? (
-        <div className="empty-state">No live data yet — start a match from the WinForms app on the graphics PC.</div>
+        <div className="empty-state">No live data yet — start a match from the Match Control tab.</div>
       ) : (
         <div className="grid">
           {sortedTeams.map((team) => (

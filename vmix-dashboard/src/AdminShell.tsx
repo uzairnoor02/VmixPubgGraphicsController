@@ -1,17 +1,21 @@
 import { useState } from "react";
 import { clearAuthed } from "./Login";
 import LiveTab from "./pages/LiveTab";
+import MatchControlTab from "./pages/MatchControlTab";
 import TeamsTab from "./pages/TeamsTab";
 import OverlaySettingsTab from "./pages/OverlaySettingsTab";
 import GraphicsTab from "./pages/GraphicsTab";
+import GraphicsStudio from "./studio/GraphicsStudio";
 
-// Deliberately a plain useState tab switch instead of a routing library - four tabs on one page
-// doesn't need real URLs, and it keeps this dashboard dependency-free (no react-router) which
-// matters more than deep-linkable tabs for something one operator uses from a laptop next to the
-// production PC. The one route that IS a real URL is /overlay (see App.tsx), because that one has
-// to be pasted into vMix as its own address.
+// Deliberately a plain useState tab switch instead of a routing library - a handful of tabs on
+// one page doesn't need real URLs, and it keeps this dashboard dependency-free (no react-router)
+// which matters more than deep-linkable tabs for something one operator uses from a laptop next
+// to the production PC. The one route that IS a real URL is /overlay (see App.tsx), because that
+// one has to be pasted into vMix as its own address.
 const TABS = [
   { id: "live", label: "Live", component: LiveTab },
+  { id: "match-control", label: "Match Control", component: MatchControlTab },
+  { id: "studio", label: "Graphics Studio", component: GraphicsStudio },
   { id: "teams", label: "Teams", component: TeamsTab },
   { id: "overlay-settings", label: "Overlay Settings", component: OverlaySettingsTab },
   { id: "graphics", label: "Custom Graphics", component: GraphicsTab },

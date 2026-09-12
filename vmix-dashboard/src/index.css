@@ -392,6 +392,81 @@ button.danger:hover { background: rgba(255, 59, 48, 0.12); }
 .graphics-row .copy-row { flex: 1; min-width: 260px; }
 
 /* ============================================================
+   Match Control tab
+   ============================================================ */
+
+.form-row {
+  margin-bottom: 12px;
+}
+.form-row label {
+  display: block;
+  font-size: 11.5px;
+  color: #7d8590;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+.form-row select,
+.form-row input[type="text"],
+.form-row input:not([type]) {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0f1115;
+  border: 1px solid #2a2e38;
+  color: #e8e8ea;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.form-row select:focus,
+.form-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.confirm-box {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 176, 32, 0.1);
+  border: 1px solid rgba(255, 176, 32, 0.4);
+  border-radius: 8px;
+}
+.confirm-box p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #f2d9a8;
+  white-space: pre-line;
+}
+.confirm-box input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0f1115;
+  border: 1px solid #2a2e38;
+  color: #e8e8ea;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.log-entry {
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #1a1d24;
+}
+.log-entry.log-success { color: var(--success); }
+.log-entry.log-error { color: var(--danger); }
+.log-entry.log-info { color: #b6bcc6; }
+
+/* ============================================================
    On-air overlay (/overlay) - what actually shows in vMix
    ============================================================ */
 
