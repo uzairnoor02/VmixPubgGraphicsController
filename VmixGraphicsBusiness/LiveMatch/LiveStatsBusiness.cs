@@ -33,6 +33,39 @@ public partial class LiveStatsBusiness(
     static string ApiKey = "AIzaSyArCp-haDhlIEb_zeuy4vZiC9syjyG-H5I"; // Replace with your API key
     public readonly IConfiguration _config = config;
 
+    /// <summary>The exact field subset GetLiveData.FetchAndPostData used to trim a raw
+    /// gettotalplayerlist response down to before calling CreateDynamicLiveStats - extracted here
+    /// so the Ingest API (VmixIngestAgent pushing pcob data from a customer PC that can't be
+    /// reached directly) can run the identical mapping instead of duplicating it.</summary>
+    public static LivePlayersList FilterPlayerInfo(LivePlayersList livePlayerInfo)
+    {
+        return new LivePlayersList
+        {
+            PlayerInfoList = livePlayerInfo.PlayerInfoList.Select(player => new LivePlayerInfo
+            {
+                UId = player.UId,
+                PlayerName = player.PlayerName,
+                TeamId = player.TeamId,
+                TeamName = player.TeamName,
+                Health = player.Health,
+                HealthMax = player.HealthMax,
+                LiveState = player.LiveState,
+                KillNum = player.KillNum,
+                KillNumByGrenade = player.KillNumByGrenade,
+                KillNumInVehicle = player.KillNumInVehicle,
+                GotAirDropNum = player.GotAirDropNum,
+                UseFragGrenadeNum = player.UseFragGrenadeNum,
+                UseSmokeGrenadeNum = player.UseSmokeGrenadeNum,
+                UseBurnGrenadeNum = player.UseBurnGrenadeNum,
+                BHasDied = player.BHasDied,
+                IsOutsideBlueCircle = player.IsOutsideBlueCircle,
+                Rank = player.Rank,
+                Assists = player.Assists,
+                KillNumBeforeDie = player.KillNumBeforeDie,
+            }).ToList()
+        };
+    }
+
     [AutomaticRetry(Attempts = 0), DisableConcurrentExecution(timeoutInSeconds: 2)]
     public async Task<List<TeamLiveStats>> CreateLiveStats(Match match, LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats)
     {

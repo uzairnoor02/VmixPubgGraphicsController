@@ -124,8 +124,9 @@ export const api = {
     req<{ ok: boolean; message?: string; error?: string }>("/api/tournaments", { method: "POST", body: JSON.stringify({ name }) }),
   addStage: (tournamentName: string, stageName: string) =>
     req<{ ok: boolean; message?: string; error?: string }>("/api/tournaments/stages", { method: "POST", body: JSON.stringify({ tournamentName, stageName }) }),
-  startMatch: (selector: MatchSelector, confirm = false, typedConfirmation?: string) =>
-    req<StartMatchResult>("/api/match/start", { method: "POST", body: JSON.stringify({ ...selector, confirm, typedConfirmation }) }),
+  startMatch: (selector: MatchSelector, confirm = false, typedConfirmation?: string, mode: "direct" | "agent" = "direct") =>
+    req<StartMatchResult>("/api/match/start", { method: "POST", body: JSON.stringify({ ...selector, confirm, typedConfirmation, mode }) }),
+  getIngestStatus: () => req<{ active: boolean; matchId: number | null; wasInGame: boolean }>("/api/ingest/status"),
   stopMatch: () => req<{ ok: boolean }>("/api/match/stop", { method: "POST" }),
   runPostMatchStep: (step: string, selector: MatchSelector) =>
     req<{ ok: boolean; error?: string }>(`/api/postmatch/run/${step}`, { method: "POST", body: JSON.stringify(selector) }),

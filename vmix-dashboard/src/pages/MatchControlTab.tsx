@@ -15,6 +15,7 @@ export default function MatchControlTab() {
   const [stages, setStages] = useState<string[]>([]);
   const [selector, setSelector] = useState<MatchSelector>({ tournament: "", stage: "", day: "1", match: "1" });
   const [mapName, setMapName] = useState(MAPS[0]);
+  const [mode, setMode] = useState<"direct" | "agent">("direct");
 
   const [newTournamentName, setNewTournamentName] = useState("");
   const [newStageName, setNewStageName] = useState("");
@@ -74,7 +75,7 @@ export default function MatchControlTab() {
     if (!selector.tournament || !selector.stage) { pushLog("Pick a tournament and stage first.", "error"); return; }
     setBusy("start");
     try {
-      const res = await api.startMatch(selector, confirm, typed);
+      const res = await api.startMatch(selector, confirm, typed, mode);
       if (res.requiresConfirmation) {
         setPendingConfirm({ message: res.message, requiresTypedDelete: res.requiresTypedDelete });
       } else {
@@ -184,6 +185,14 @@ export default function MatchControlTab() {
             <label>Match</label>
             <select value={selector.match} onChange={(e) => setSelector((s) => ({ ...s, match: e.target.value }))}>
               {MATCHES.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+
+          <div className="form-row">
+            <label>Data source</label>
+            <select value={mode} onChange={(e) => setMode(e.target.value as "direct" | "agent")}>
+              <option value="direct">Direct — pcob reachable from this machine</option>
+              <option value="agent">Agent — VmixIngestAgent running on the customer's PC</option>
             </select>
           </div>
 

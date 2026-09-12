@@ -20,7 +20,11 @@ namespace Pubg_Ranking_System
     /// </summary>
     public record MatchSelector(string Tournament, string Stage, string Day, string Match);
 
-    public record StartMatchRequest(string Tournament, string Stage, string Day, string Match, bool Confirm = false, string? TypedConfirmation = null);
+    /// <summary>Mode "direct" (default) - this app polls pcob itself, unchanged from before.
+    /// Mode "agent" - this app does NOT poll pcob; it waits for VmixIngestAgent (running on the
+    /// customer's PC next to pcob) to push ticks to POST /api/ingest/tick instead. Use "agent"
+    /// whenever this application isn't running on the same machine/LAN segment as pcob.</summary>
+    public record StartMatchRequest(string Tournament, string Stage, string Day, string Match, bool Confirm = false, string? TypedConfirmation = null, string Mode = "direct");
 
     public record StartMatchResponse(bool Ok, int StatusCode, string Message, bool RequiresConfirmation, bool RequiresTypedDelete, int? MatchId);
 
@@ -49,7 +53,7 @@ namespace Pubg_Ranking_System
     /// </summary>
     public static class MatchControlApi
     {
-        public static void MapMatchControlEndpoints(this WebApplication app, IServiceProvider rootProvider, IBackgroundJobClient backgroundJobClient)
+        public static void MapMatchControlEndpoints(this WebApplication app, IServiceProvider rootProvider, IBackgroundJobClient backgroundJobClient, IngestCoordinator ingestCoordinator)
         {
             // ---------- Tournament / stage / match lookups (dropdown data) ----------
 
@@ -118,10 +122,24 @@ namespace Pubg_Ranking_System
                 var (message, statusCode, match, isCompleted) = await tournamentBusiness.add_match(
                     request.Tournament, request.Stage, request.Day, request.Match);
 
+                bool useAgent = string.Equals(request.Mode, "agent", StringComparison.OrdinalIgnoreCase);
+
+                async Task ActivateAsync()
+                {
+                    if (useAgent)
+                    {
+                        await ActivateForAgentIngestAsync(scope, ingestCoordinator, match);
+                    }
+                    else
+                    {
+                        await EnqueueStartAsync(scope, backgroundJobClient, match);
+                    }
+                }
+
                 switch (statusCode)
                 {
                     case 0:
-                        await EnqueueStartAsync(scope, backgroundJobClient, match);
+                        await ActivateAsync();
                         return Results.Ok(new StartMatchResponse(true, 0, message, false, false, match.MatchId));
 
                     case 1:
@@ -129,7 +147,7 @@ namespace Pubg_Ranking_System
                         {
                             return Results.Ok(new StartMatchResponse(true, 1, message, true, false, match.MatchId));
                         }
-                        await EnqueueStartAsync(scope, backgroundJobClient, match);
+                        await ActivateAsync();
                         return Results.Ok(new StartMatchResponse(true, 1, message, false, false, match.MatchId));
 
                     case 2:
@@ -142,7 +160,7 @@ namespace Pubg_Ranking_System
                             return Results.Ok(new StartMatchResponse(true, 2, message, true, true, match.MatchId));
                         }
                         await tournamentBusiness.DeleteMatchHistory(match);
-                        await EnqueueStartAsync(scope, backgroundJobClient, match);
+                        await ActivateAsync();
                         return Results.Ok(new StartMatchResponse(true, 2, "Completed match deleted and restarted.", false, false, match.MatchId));
 
                     default:
@@ -159,6 +177,7 @@ namespace Pubg_Ranking_System
                 using var scope = rootProvider.CreateScope();
                 var logger = scope.ServiceProvider.GetRequiredService<ILogger<Reset>>();
                 CancelAllHighPriorityJobs(backgroundJobClient, logger);
+                ingestCoordinator.Clear();
 
                 var matchState = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
                 var keyPatterns = new[]
@@ -289,6 +308,22 @@ namespace Pubg_Ranking_System
         {
             backgroundJobClient.Enqueue<GetLiveData>(HangfireQueues.HighPriority, gld => gld.FetchAndPostData(match));
             await Task.CompletedTask;
+        }
+
+        /// <summary>"agent" mode equivalent of EnqueueStartAsync - instead of this app polling
+        /// pcob itself, it clears leftover match state (same ResetMatchState() call
+        /// FetchAndPostData makes at its own start) and records this match as the one
+        /// POST /api/ingest/tick should attach incoming VmixIngestAgent data to.</summary>
+        private static async Task ActivateForAgentIngestAsync(IServiceScope scope, IngestCoordinator ingestCoordinator, Match match)
+        {
+            var matchState = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
+            matchState.ResetMatchState();
+
+            var postMatch = scope.ServiceProvider.GetRequiredService<PostMatch>();
+            var teamPoints = await postMatch.fetchTeamPointsAsync(match);
+
+            ingestCoordinator.SetActiveMatch(match, teamPoints);
+            matchState.PublishMatchStatus($"Match {match.MatchId} started successfully! (waiting for agent data)");
         }
 
         private static async Task<Match?> ResolveMatchAsync(vmix_graphicsContext db, MatchSelector selector)

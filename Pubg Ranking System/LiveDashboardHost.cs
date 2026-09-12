@@ -169,7 +169,13 @@ namespace Pubg_Ranking_System
 
                     // Match control (start/stop/reports/tournament setup) - every action that used
                     // to be a Form1 button click, now REST endpoints. See MatchControlApi.cs.
-                    app.MapMatchControlEndpoints(rootProvider, backgroundJobClient);
+                    var ingestCoordinator = rootProvider.GetRequiredService<IngestCoordinator>();
+                    app.MapMatchControlEndpoints(rootProvider, backgroundJobClient, ingestCoordinator);
+
+                    // Ingest endpoint for VmixIngestAgent - the small program that runs on the
+                    // customer's PC next to pcob when this application isn't on the same machine.
+                    // See IngestApi.cs and VmixIngestAgent/.
+                    app.MapIngestEndpoints(rootProvider, configuration, ingestCoordinator);
 
                     // Simple shared-key login for the web dashboard, mirroring the WinForms app's
                     // key-entry auth screen but without a hard dependency on Google Sheets - this

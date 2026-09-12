@@ -107,32 +107,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                         {
                             LivePlayersList livePlayerInfo = JsonSerializer.Deserialize<LivePlayersList>(PlayerData)!;
                             TeamInfoList TeamInfoList = JsonSerializer.Deserialize<TeamInfoList>(teamdata)!;
-                            var filteredPlayerInfo = new LivePlayersList
-                            {
-                                PlayerInfoList = livePlayerInfo.PlayerInfoList.Select(player => new LivePlayerInfo
-                                {
-                                    UId = player.UId,
-                                    PlayerName = player.PlayerName,
-                                    TeamId = player.TeamId,
-                                    TeamName = player.TeamName,
-                                    Health = player.Health,
-                                    HealthMax = player.HealthMax,
-                                    LiveState = player.LiveState,
-                                    KillNum = player.KillNum,
-                                    KillNumByGrenade = player.KillNumByGrenade,
-                                    KillNumInVehicle = player.KillNumInVehicle,
-                                    GotAirDropNum = player.GotAirDropNum,
-                                    UseFragGrenadeNum = player.UseFragGrenadeNum,
-                                    UseSmokeGrenadeNum = player.UseSmokeGrenadeNum,
-                                    UseBurnGrenadeNum = player.UseBurnGrenadeNum,
-                                    BHasDied = player.BHasDied,
-                                    IsOutsideBlueCircle = player.IsOutsideBlueCircle,
-                                    Rank = player.Rank,
-                                    Assists = player.Assists,
-                                    KillNumBeforeDie = player.KillNumBeforeDie,
-
-                                }).ToList()
-                            };
+                            var filteredPlayerInfo = LiveStatsBusiness.FilterPlayerInfo(livePlayerInfo);
 
                             // Process this tick's data directly, in-process, instead of bouncing it
                             // through a Hangfire queue. That old hop added a Redis round trip plus a

@@ -2,10 +2,11 @@ import { useState } from "react";
 import { Eye, Palette, Plus, Rows3, Type } from "lucide-react";
 import { useTheme } from "../ThemeContext";
 import { useStudioElement } from "../StudioConfigContext";
-import { Bg, DEFAULT_HEALTH_STOPS, HealthStop, RowRule, bgCss, colorForPlayer, resolveRowBg } from "../theme";
+import { Bg, DEFAULT_HEALTH_STOPS, HealthStop, RowRule } from "../theme";
 import { BgEditor, ColumnStyleEditor, ColumnStyle, EditorPanel, PageShell, ResetToThemeButton, RowRuleItem, addRowRule, btnGhost, pill } from "../StudioControls";
 import { SAMPLE_STANDINGS } from "../sampleData";
 import { HealthGradientEditor } from "../HealthGradientEditor";
+import { StandingsRenderer } from "../renderers/StandingsRenderer";
 
 const DEFAULT_COLUMNS: Record<string, ColumnStyle> = {
   rank: { mode: "default", custom: {} },
@@ -25,9 +26,7 @@ export default function StandingsPage() {
 
   const headerBg = headerBgOverride || theme.headerBg;
   const setCol = (key: string) => (next: ColumnStyle) => setColumns((prev) => ({ ...prev, [key]: next }));
-  const visibleTeams = mode === "top4" ? SAMPLE_STANDINGS.filter((t) => t.rank <= 4) : SAMPLE_STANDINGS;
-  const col = (key: string) => columns[key]?.mode === "custom" ? columns[key].custom : ({} as any);
-  const logoScale = columns.logo?.mode === "custom" ? (columns.logo.custom.scale ?? 1) : 1;
+  const rows = SAMPLE_STANDINGS.map((t) => ({ key: t.teamId, rank: t.rank, name: t.teamName, kills: t.kills, players: t.players }));
 
   return (
     <PageShell title="Standings" subtitle="Live team standings with per-player health bars">
@@ -40,25 +39,7 @@ export default function StandingsPage() {
           </div>
         </div>
         <div style={{ width: "100%", maxWidth: 460, borderRadius: theme.radius + 4, overflow: "hidden", background: theme.chromaKey, padding: 14 }}>
-          <div style={{ borderRadius: theme.radius, overflow: "hidden", background: theme.panelBg, backdropFilter: `blur(${theme.panelBlur})`, WebkitBackdropFilter: `blur(${theme.panelBlur})`, border: `1px solid ${theme.panelBorder}`, boxShadow: theme.glow } as any}>
-            <div style={{ display: "flex", alignItems: "center", padding: "11px 16px", background: bgCss(headerBg), fontSize: 12.5, fontWeight: 700, color: theme.headerTextColor, fontFamily: theme.fontDisplay, letterSpacing: 0.6 }}>
-              <div style={{ width: 26 }}>#</div><div style={{ width: 22 * logoScale + 8 }} /><div style={{ flex: 1 }}>TEAM</div><div style={{ width: 64, textAlign: "center" }}>ALIVE</div><div style={{ width: 40, textAlign: "center" }}>ELIMS</div>
-            </div>
-            {visibleTeams.slice(0, 10).map((team, i) => {
-              const ruleBg = resolveRowBg(rowRules, team.rank);
-              const rankStyle = col("rank"), nameStyle = col("teamName"), killStyle = col("kills");
-              return (
-                <div key={team.teamId} style={{ display: "flex", alignItems: "center", padding: "8px 16px", background: (ruleBg ? bgCss(ruleBg) : (i % 2 === 0 ? theme.rowBgEven : theme.rowBgOdd)), borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                  <div style={{ width: 26, fontWeight: 800, fontFamily: rankStyle.fontFamily || theme.fontDisplay, fontSize: rankStyle.fontSize ? `${rankStyle.fontSize}px` : "16px", color: rankStyle.color || theme.textPrimary }}>{team.rank}</div>
-                  <div style={{ width: 22 * logoScale + 8, display: "flex", alignItems: "center" }}><div style={{ width: 20 * logoScale, height: 20 * logoScale, borderRadius: 4 * logoScale, background: "rgba(255,255,255,0.15)", flexShrink: 0 }} /></div>
-                  <div style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8, fontFamily: nameStyle.fontFamily || theme.fontBody, fontSize: nameStyle.fontSize ? `${nameStyle.fontSize}px` : "13.5px", fontWeight: 600, color: nameStyle.color || theme.textPrimary }}>{team.teamName}</div>
-                  <div style={{ width: 64, display: "flex", gap: 3, justifyContent: "center" }}>{team.players.map((p, j) => { const { color, pulse } = colorForPlayer(healthStops, p); return <div key={j} style={{ width: 9, height: 17, borderRadius: 3, background: color, animation: pulse ? "sb-pulse 1s ease-in-out infinite" : "none", opacity: p.liveState === 5 ? 0.5 : 1 }} />; })}</div>
-                  <div style={{ width: 40, textAlign: "center", fontWeight: 700, fontFamily: killStyle.fontFamily || theme.fontBody, fontSize: killStyle.fontSize ? `${killStyle.fontSize}px` : "13px", color: killStyle.color || theme.textPrimary }}>{team.kills}</div>
-                </div>
-              );
-            })}
-          </div>
-          <style>{`@keyframes sb-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }`}</style>
+          <StandingsRenderer theme={theme} mode={mode} healthStops={healthStops} columns={columns} rowRules={rowRules} headerBg={headerBg} rows={rows} />
         </div>
       </div>
 

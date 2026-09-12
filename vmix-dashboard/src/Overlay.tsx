@@ -3,18 +3,25 @@ import * as signalR from "@microsoft/signalr";
 import { API_BASE, api } from "./lib/api";
 import type { OverlayConfig } from "./lib/api";
 import type { TeamLiveStats } from "./types";
+import { getConfigElement, getStudioTheme } from "./studio/configAccess";
+import { Bg, DEFAULT_HEALTH_STOPS, HealthStop, RowRule } from "./studio/theme";
+import type { ColumnStyle } from "./studio/StudioControls";
+import { StandingsRenderer, StandingsRow } from "./studio/renderers/StandingsRenderer";
 
 // This is the page you paste into vMix as a Web Browser source - it has no login, no nav, no
 // buttons, nothing but the graphics themselves on a solid chroma-key background. Everything about
-// how it looks (chroma color, which panels are visible) comes from OverlayConfig, set from the
-// Overlay Settings tab and pushed here live over SignalR so a change goes out on-air with zero
-// manual steps on the graphics PC - no re-uploading a title, no touching vMix at all.
+// how it looks (chroma color, which panels are visible, and now the Standings look itself) comes
+// from OverlayConfig, set from the Overlay Settings / Graphics Studio tabs and pushed here live
+// over SignalR so a change goes out on-air with zero manual steps on the graphics PC.
 //
-// One honest limitation, on purpose: the WinForms app's TeamLiveStats.Player1-4Health fields are
-// image *file paths* it swaps into vMix's native Title graphics (see EvaluateLiveStatus in
-// LiveStatsBusiness.cs), not a plain alive/knocked/dead number - so a browser can't render a
-// correct "players alive" count from them without one small backend addition (exposing the
-// existing numeric LiveState alongside the image path). Left out here rather than guessed at.
+// The Standings panel below renders through the exact same <StandingsRenderer> the Graphics
+// Studio's editor preview uses (see studio/renderers/StandingsRenderer.tsx) - a Studio edit and
+// what's on air share one render path, not a "preview approximation" of it. It reads theme/style
+// settings directly out of this component's own `config` state (already kept live by the
+// OverlayConfigChanged subscription below) via the pure getConfigElement/getStudioTheme helpers,
+// rather than through StudioConfigProvider's React context - that context does its own fetch on
+// mount with no live-update subscription, which would fall out of sync with Studio edits here;
+// reading the one OverlayConfig this component already keeps fresh avoids that entirely.
 
 const DEFAULT_CONFIG: OverlayConfig = {
   chromaKeyColor: "#00FF00",
@@ -132,24 +139,36 @@ export default function Overlay() {
   const sortedTeams = useMemo(() => [...teams].sort((a, b) => a.teamRank - b.teamRank), [teams]);
   const visible = (id: string) => config.elementVisibility[id] ?? true;
 
+  // Same config keys StandingsPage.tsx (Graphics Studio) reads/writes via useStudioElement - see
+  // that file and StudioConfigContext.tsx for the write side of this.
+  const studioTheme = getStudioTheme(config);
+  const healthStops = getConfigElement<HealthStop[]>(config, "standings.healthStops", DEFAULT_HEALTH_STOPS);
+  const columns = getConfigElement<Record<string, ColumnStyle>>(config, "standings.columns", {});
+  const rowRules = getConfigElement<RowRule[]>(config, "standings.rowRules", []);
+  const headerBgOverride = getConfigElement<Bg | null>(config, "standings.headerBg", null);
+  const headerBg = headerBgOverride || studioTheme.headerBg;
+
+  // TeamLiveStats doesn't carry a full team name (only `tag`) - real per-player health/liveState
+  // now comes from the Player{1-4}LiveState/HealthPercent fields added alongside the pre-rendered
+  // image paths (see VmixGraphicsBusiness/TeamLiveStats.cs).
+  const standingsRows: StandingsRow[] = sortedTeams.map((team) => ({
+    key: team.tag + team.teamRank,
+    rank: team.teamRank,
+    name: team.tag,
+    kills: team.eliminations,
+    players: [
+      { health: team.player1HealthPercent, liveState: team.player1LiveState },
+      { health: team.player2HealthPercent, liveState: team.player2LiveState },
+      { health: team.player3HealthPercent, liveState: team.player3LiveState },
+      { health: team.player4HealthPercent, liveState: team.player4LiveState },
+    ],
+  }));
+
   return (
     <div className="overlay-root" style={{ backgroundColor: config.chromaKeyColor }}>
-      {visible("leaderboard") && sortedTeams.length > 0 && (
-        <div className="overlay-leaderboard">
-          <div className="overlay-leaderboard-header">
-            <span>#</span>
-            <span>TEAM</span>
-            <span>ELIMS</span>
-            <span>PTS</span>
-          </div>
-          {sortedTeams.map((team) => (
-            <div key={team.tag + team.teamRank} className={`overlay-leaderboard-row ${team.teamEliminated ? "is-eliminated" : ""}`}>
-              <span className="rank">{team.teamRank}</span>
-              <span className="tag">{team.tag}</span>
-              <span className="elims">{team.eliminations}</span>
-              <span className="pts">{team.totalPoints}</span>
-            </div>
-          ))}
+      {visible("leaderboard") && standingsRows.length > 0 && (
+        <div style={{ position: "absolute", top: 48, right: 48, width: 420 }}>
+          <StandingsRenderer theme={studioTheme} mode="full" healthStops={healthStops} columns={columns} rowRules={rowRules} headerBg={headerBg} rows={standingsRows} maxRows={16} />
         </div>
       )}
 

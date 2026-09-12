@@ -55,6 +55,11 @@ namespace Pubg_Ranking_System
                 var matchState = new MatchStateStore();
                 services.AddSingleton(matchState);
 
+                // Tracks which match is "live" for the remote-agent ingest path (VmixIngestAgent
+                // running on the customer's PC next to pcob, posting to POST /api/ingest/tick) -
+                // see IngestCoordinator.cs and IngestApi.cs.
+                services.AddSingleton<IngestCoordinator>();
+
                 // Overlay look/feel (chroma-key color, per-element show/hide) now lives here
                 // instead of being hardcoded in the overlay HTML - controllable from the web
                 // dashboard's Overlay Settings page. Singleton + its own small JSON file (see
