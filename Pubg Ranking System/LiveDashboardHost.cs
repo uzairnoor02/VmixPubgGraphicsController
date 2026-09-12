@@ -167,6 +167,10 @@ namespace Pubg_Ranking_System
 
                     app.MapHub<LiveDashboardHub>("/hubs/match");
 
+                    // Match control (start/stop/reports/tournament setup) - every action that used
+                    // to be a Form1 button click, now REST endpoints. See MatchControlApi.cs.
+                    app.MapMatchControlEndpoints(rootProvider, backgroundJobClient);
+
                     // Simple shared-key login for the web dashboard, mirroring the WinForms app's
                     // key-entry auth screen but without a hard dependency on Google Sheets - this
                     // is a LAN-only, view-only surface, so a single configured key is enough for

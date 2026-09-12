@@ -149,25 +149,46 @@ namespace Pubg_Ranking_System
                     serviceProvider.GetRequiredService<IBackgroundJobClient>(),
                     serviceProvider.GetRequiredService<Reset>());
 
-                var mainForm = serviceProvider.GetRequiredService<Form1>();
+                // Headless from here on - there is no WinForms window anymore. Match control,
+                // report generation, team management, and auth all happen through the web API /
+                // React dashboard (LiveDashboardHost + MatchControlApi), not a desktop UI. What
+                // Form1_Load and the AuthenticationForm dialog used to do at startup now happens
+                // directly here instead:
 
-
-                // Before running the application, show the authentication form
-                var authForm = serviceProvider.GetRequiredService<AuthenticationForm>();
-
-
-                if (authForm.ShowDialog() != DialogResult.OK)
+                // Form1_Load used to wipe a stale per-run output folder before each session.
+                try
                 {
-                    return;
+                    var outputFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "resources");
+                    if (Directory.Exists(outputFolder))
+                    {
+                        Directory.Delete(outputFolder, true);
+                        Console.WriteLine($"Deleted folder: {outputFolder}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error deleting folder: {ex.Message}");
                 }
 
-                // Open the web dashboard automatically, the same way the WinForms window itself
-                // opens automatically - removes the manual "go start a browser" step. This is a
-                // pure convenience on top of LiveDashboardHost, which was already started above
-                // and has had the time it took to fill in the auth form to come up, so the page
-                // should be ready the moment the browser opens. Fire-and-forget: if there's no
-                // default browser configured (e.g. running on a bare server) this must never stop
-                // the WinForms app itself from starting, so any failure here is swallowed.
+                // Form1_Load also synced auth keys with the cloud (Google Sheets) on startup - the
+                // web dashboard's own login (POST /api/auth/login, WebDashboard:AuthKey) is
+                // separate and unaffected by whether this succeeds.
+                try
+                {
+                    using var authScope = serviceProvider.CreateScope();
+                    var authKeyService = authScope.ServiceProvider.GetRequiredService<AuthKeyService>();
+                    await authKeyService.SyncKeysWithCloudAsync();
+                    Console.WriteLine("Keys synced with cloud successfully");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error syncing keys with cloud: {ex.Message}");
+                }
+
+                // Open the web dashboard automatically on this machine, the same convenience the
+                // WinForms window used to provide by just appearing. Fire-and-forget: if there's no
+                // default browser configured (e.g. running as a bare service) this must never stop
+                // the app itself from starting, so any failure here is swallowed.
                 var autoOpenSetting = Configuration["WebDashboard:AutoOpenBrowser"];
                 var autoOpenBrowser = string.IsNullOrWhiteSpace(autoOpenSetting) || !autoOpenSetting.Equals("false", StringComparison.OrdinalIgnoreCase);
                 if (autoOpenBrowser)
@@ -187,14 +208,23 @@ namespace Pubg_Ranking_System
                     }
                 }
 
-                Application.Run(mainForm);
+                Console.WriteLine("Pubg Ranking System is running headless. Web dashboard: " +
+                    (Configuration["WebDashboard:DashboardUrl"] ?? "http://localhost:5050") +
+                    " | Hangfire dashboard: http://localhost:5001 | Press Ctrl+C to exit.");
+
+                // Keep the process alive until asked to stop (Ctrl+C, or the host process/service
+                // manager sending a shutdown signal) - this replaces Application.Run(mainForm) as
+                // this app's "block forever" point now that there's no window to pump messages for.
+                var shutdown = new TaskCompletionSource();
+                Console.CancelKeyPress += (_, e) => { e.Cancel = true; shutdown.TrySetResult(); };
+                AppDomain.CurrentDomain.ProcessExit += (_, _) => shutdown.TrySetResult();
+                await shutdown.Task;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"ERROR at some step:\n\n{ex.Message}\n\nStack Trace:\n{ex.StackTrace}",
-                    "Application Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                // Headless now - nobody is there to see a MessageBox, so this goes to the console
+                // (and the file logger, once it's wired up enough to have caught this) instead.
+                Console.WriteLine($"ERROR at some step:\n\n{ex.Message}\n\nStack Trace:\n{ex.StackTrace}");
             }
             finally
             {
@@ -513,30 +543,20 @@ namespace Pubg_Ranking_System
 
                 if (tournament == null)
                 {
-                    var result = MessageBox.Show(
-                        $"Tournament '{tournamentjsonData.TournamentName}' does not exist.\nDo you want to create it?",
-                        "Create Tournament",
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question);
-
-                    if (result == DialogResult.Yes)
+                    // Headless service - nobody is there to click a MessageBox, so this now
+                    // auto-creates the tournament (same outcome as always clicking "Yes" in the
+                    // old WinForms confirmation dialog) and logs it instead of blocking a thread
+                    // on a dialog no one can see.
+                    tournament = new Tournament
                     {
-                        tournament = new Tournament
-                        {
-                            Name = tournamentjsonData.TournamentName,
-                            Stages = new List<Stage>()
-                        };
+                        Name = tournamentjsonData.TournamentName,
+                        Stages = new List<Stage>()
+                    };
 
-                        _context.Tournaments.Add(tournament);
-                        await _context.SaveChangesAsync();
+                    _context.Tournaments.Add(tournament);
+                    await _context.SaveChangesAsync();
 
-                        MessageBox.Show($"Tournament '{tournament.Name}' created successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                    else
-                    {
-                        MessageBox.Show("Tournament data import cancelled.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        return;
-                    }
+                    _logger.LogInformation("Tournament '{Tournament}' did not exist - created automatically.", tournament.Name);
                 }
 
                 foreach (var stageData in tournamentjsonData.Stages)
