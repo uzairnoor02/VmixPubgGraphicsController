@@ -12,4 +12,27 @@ export interface TeamLiveStats {
   player3Health?: string;
   player4Health?: string;
   teamBackground: string;
+  // Numeric liveState (0 Normal,1 OnPlane,2 OnParachute,3 OnVehicle,4 Knocked,5 Dead,
+  // 6 Disconnected) and 0-100 health percent alongside the pre-rendered image-path fields above -
+  // lets a web client compute its own ALIVE/TOTAL count or render its own health bar instead of
+  // only being able to display vMix's pre-baked image.
+  player1LiveState: number;
+  player2LiveState: number;
+  player3LiveState: number;
+  player4LiveState: number;
+  player1HealthPercent: number;
+  player2HealthPercent: number;
+  player3HealthPercent: number;
+  player4HealthPercent: number;
+}
+
+/** true for liveState values EvaluateLiveStatus treats as "alive" (0 Normal through 3 OnVehicle);
+ *  4 (knocked) counts as alive-but-down for an ALIVE/TOTAL count, 5 (dead) and 6 (disconnected) do not. */
+export function isPlayerAlive(liveState: number): boolean {
+  return liveState >= 0 && liveState <= 4;
+}
+
+export function teamAliveCount(team: TeamLiveStats): number {
+  return [team.player1LiveState, team.player2LiveState, team.player3LiveState, team.player4LiveState]
+    .filter((s) => isPlayerAlive(s)).length;
 }

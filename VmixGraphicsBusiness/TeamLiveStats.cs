@@ -19,6 +19,21 @@ public class TeamLiveStats
     public string? Player3Health { get; set; }
     public string? Player4Health { get; set; }
     public string TeamBackground { get; set; }
+
+    // Numeric liveState (0 Normal,1 OnPlane,2 OnParachute,3 OnVehicle,4 Knocked,5 Dead,
+    // 6 Disconnected - per the official PC-OB API) and health percent (0-100) alongside the
+    // existing image-path fields above, so a web client (the Studio preview, the live overlay,
+    // the Live tab's ALIVE/TOTAL count) can drive its own rendering instead of only being able to
+    // display the pre-rendered vMix image path. Left nullable/defaulted to "dead" (5) so a team
+    // with fewer than 4 players reporting doesn't read as "alive" by omission.
+    public int Player1LiveState { get; set; } = 5;
+    public int Player2LiveState { get; set; } = 5;
+    public int Player3LiveState { get; set; } = 5;
+    public int Player4LiveState { get; set; } = 5;
+    public int Player1HealthPercent { get; set; }
+    public int Player2HealthPercent { get; set; }
+    public int Player3HealthPercent { get; set; }
+    public int Player4HealthPercent { get; set; }
 }
 
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
 import { API_BASE, api } from "../lib/api";
-import type { TeamLiveStats } from "../types";
+import { teamAliveCount, type TeamLiveStats } from "../types";
 
 export default function LiveTab() {
   const [teams, setTeams] = useState<TeamLiveStats[]>([]);
@@ -68,6 +68,7 @@ export default function LiveTab() {
               <div className="rank">#{team.teamRank}</div>
               <div className="tag">{team.tag}</div>
               <div className="stats">
+                <span>{teamAliveCount(team)}/4 alive</span>
                 <span>{team.totalPoints} pts</span>
                 <span>{team.eliminations} elims</span>
               </div>

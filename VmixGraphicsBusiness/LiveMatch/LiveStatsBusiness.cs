@@ -177,24 +177,32 @@ public partial class LiveStatsBusiness(
                             {
                                 case 1:
                                     teamStats.Player1Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
+                                    teamStats.Player1LiveState = player.LiveState;
+                                    teamStats.Player1HealthPercent = HealthPercent(player.Health, player.HealthMax);
                                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P1", teamStats.Player1Health));
                                     if (player.IsOutsideBlueCircle)
                                         isinBlue = true;
                                     break;
                                 case 2:
                                     teamStats.Player2Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
+                                    teamStats.Player2LiveState = player.LiveState;
+                                    teamStats.Player2HealthPercent = HealthPercent(player.Health, player.HealthMax);
                                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P2", teamStats.Player2Health));
                                     if (player.IsOutsideBlueCircle)
                                         isinBlue = true;
                                     break;
                                 case 3:
                                     teamStats.Player3Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
+                                    teamStats.Player3LiveState = player.LiveState;
+                                    teamStats.Player3HealthPercent = HealthPercent(player.Health, player.HealthMax);
                                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P3", teamStats.Player3Health));
                                     if (player.IsOutsideBlueCircle)
                                         isinBlue = true;
                                     break;
                                 case 4:
                                     teamStats.Player4Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
+                                    teamStats.Player4LiveState = player.LiveState;
+                                    teamStats.Player4HealthPercent = HealthPercent(player.Health, player.HealthMax);
                                     apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P4", teamStats.Player4Health));
                                     if (player.IsOutsideBlueCircle)
                                         isinBlue = true;
@@ -259,6 +267,15 @@ public partial class LiveStatsBusiness(
         }
         return null;
     }
+    /// <summary>0-100 integer health percent, guarding the same healthMax==0 case
+    /// EvaluateLiveStatus already guards below. Shared so TeamLiveStats' new numeric
+    /// PlayerNHealthPercent fields use the exact same math as the image selection does.</summary>
+    public static int HealthPercent(int health, int healthMax)
+    {
+        if (healthMax <= 0) return 0;
+        return (int)Math.Round(health / (float)healthMax * 100);
+    }
+
     public static (string HealthImage, string liveStatus) EvaluateLiveStatus(int liveState, int health, int healthMax)
     {
         string liveStatus;
