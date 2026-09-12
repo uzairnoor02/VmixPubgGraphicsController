@@ -68,6 +68,27 @@ PC/LAN) from "where the main app + React dashboard run" (can now be anywhere). P
 **Secrets.** `WebDashboard:AuthKey` and the new `Agent:IngestKey` are randomly generated, not
 placeholders — see `Claude outputs/CREDENTIALS.md`.
 
+## Runtime-verified, not just compiled
+
+Every earlier checkpoint on this branch was "it compiles" only - never actually run. Doing so
+surfaced a real bug: `GET /api/teams` and `POST /api/teams/load` (pre-existing code) took
+`IDbContextFactory<vmix_graphicsContext>` as a direct minimal-API parameter, but
+`LiveDashboardHost`'s second `WebApplicationBuilder` never registered EF Core in its own service
+collection - only the main app's container has it. This threw at endpoint-metadata-build time,
+inside `Start()`'s try/catch, so it was silently swallowed and only logged to the console - **the
+entire second host (the whole React dashboard, `/overlay`, SignalR, everything built this
+session) never actually started**, in every prior commit on this branch. Fixed by resolving that
+factory from `rootProvider` once, like every other handler already does.
+
+After that fix, actually verified end-to-end: `dotnet run`, then `curl` against the live process
+confirming 401 (no key) / 401 (wrong key) / 200 (correct key) on `/api/tournaments`, 200 on the
+public `/api/match/teams` and `/overlay`, 401 then 409 on `/api/ingest/tick`. Then a real browser
+session: logged into the dashboard with the generated key, clicked into Match Control (renders,
+queries the live DB correctly - "No tournaments yet" against the actual configured MySQL), clicked
+into Graphics Studio's Standings and Top 4 pages (both render their sample data and editor panels
+correctly, zero console errors), and loaded `/overlay` directly (correct chroma-key background,
+correctly empty since no match is live, zero console errors).
+
 ## What's partially done
 
 - **Overlay rendering:** only Standings goes through a Studio-shared renderer against live data.
