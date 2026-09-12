@@ -364,7 +364,17 @@ namespace VmixGraphicsBusiness.LiveMatch
 
                 _logger.LogInformation($"Top 4 live ranking updated. Positions: {string.Join(", ", sortedTeams.Select(t => $"T{t.position}={t.team.TeamName}({t.team.WinProbability:F1}%)"))}");
 
-                return sortedTeams.Select(t => t.team).ToList();
+                var finalTeams = sortedTeams.Select(t => t.team).ToList();
+
+                // Same real WinProbability numbers ApiCallProcessor just pushed to vMix, now also
+                // reaching the web overlay - see MatchStateStore.PublishTop4Rankings.
+                using (var pubScope = serviceProvider.CreateScope())
+                {
+                    var matchState = pubScope.ServiceProvider.GetRequiredService<MatchStateStore>();
+                    matchState.PublishTop4Rankings(finalTeams);
+                }
+
+                return finalTeams;
             }
             catch (Exception ex)
             {

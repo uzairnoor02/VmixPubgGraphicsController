@@ -7,6 +7,7 @@ import { getConfigElement, getStudioTheme } from "./studio/configAccess";
 import { Bg, DEFAULT_HEALTH_STOPS, HealthStop, RowRule } from "./studio/theme";
 import type { ColumnStyle } from "./studio/StudioControls";
 import { StandingsRenderer, StandingsRow } from "./studio/renderers/StandingsRenderer";
+import { Top4Renderer, Top4Team } from "./studio/renderers/Top4Renderer";
 
 // This is the page you paste into vMix as a Web Browser source - it has no login, no nav, no
 // buttons, nothing but the graphics themselves on a solid chroma-key background. Everything about
@@ -64,9 +65,20 @@ interface Banner {
   accentColor?: string;
 }
 
+// Mirrors VmixGraphicsBusiness.LiveMatch.LiveStatsBusiness.Top4TeamStats - pushed over the
+// "Top4Updated" SignalR event (see MatchStateStore.PublishTop4Rankings), real win-probability
+// numbers included, only while 4 or fewer teams remain.
+interface RawTop4Team {
+  teamId: number;
+  teamName: string;
+  winProbability: number;
+  playersHealth: { healthPercent: number; liveState: number }[];
+}
+
 export default function Overlay() {
   const [config, setConfig] = useState<OverlayConfig>(DEFAULT_CONFIG);
   const [teams, setTeams] = useState<TeamLiveStats[]>([]);
+  const [rawTop4, setRawTop4] = useState<RawTop4Team[] | null>(null);
   const [feed, setFeed] = useState<FeedEntry[]>([]);
   const [teamEliminatedBanner, setTeamEliminatedBanner] = useState<Banner | null>(null);
   const [achievementBanner, setAchievementBanner] = useState<Banner | null>(null);
@@ -82,6 +94,7 @@ export default function Overlay() {
       .build();
 
     connection.on("TeamsUpdated", (updated: TeamLiveStats[]) => setTeams(updated));
+    connection.on("Top4Updated", (updated: RawTop4Team[]) => setRawTop4(updated));
     connection.on("OverlayConfigChanged", (updated: OverlayConfig) => setConfig(updated));
     connection.on("OverlayEvent", (evt: { type: string; title?: string; subtitle?: string; imageUrl?: string; accentColor?: string }) => {
       const id = `${evt.type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -164,11 +177,48 @@ export default function Overlay() {
     ],
   }));
 
+  // Top4Page.tsx (Graphics Studio) writes these same keys - see useStudioElement calls there.
+  const wwcdBarOverride = getConfigElement<Bg | null>(config, "top4.wwcdBar", null);
+  const wwcdBar: Bg = wwcdBarOverride || { type: "gradient", angle: 90, stops: [{ pos: 0, color: "#F5A623" }, { pos: 100, color: "#F76B1C" }] };
+  const top4CardBg = getConfigElement<Bg>(config, "top4.cardBg", { type: "solid", color: "rgba(10,10,15,0.75)" });
+  const top4Fields = getConfigElement<Record<string, ColumnStyle>>(config, "top4.fields", {});
+  // Prefer the real win-probability board (Top4Updated / CreateTop4LiveRanking) whenever it's
+  // available - it only gets pushed once 4 or fewer teams remain. Before that (or if it hasn't
+  // arrived yet this session), fall back to the top-ranked surviving teams from TeamsUpdated with
+  // no WWCD % shown, rather than fabricating a number - see teamAliveCount for why 0% would be
+  // misleading (a team could be down to 1 alive player and still show as "healthy").
+  const top4Rows: Top4Team[] = rawTop4 && rawTop4.length > 0
+    ? rawTop4.map((team) => ({
+        key: team.teamId,
+        overallRank: sortedTeams.find((t) => t.tag === team.teamName)?.teamRank ?? 0,
+        tag: team.teamName,
+        wwcd: Math.round(team.winProbability * 10) / 10,
+        players: team.playersHealth.slice(0, 4).map((p) => ({ health: p.healthPercent, liveState: p.liveState })),
+      }))
+    : sortedTeams.filter((t) => !t.teamEliminated).slice(0, 4).map((team) => ({
+        key: team.tag + team.teamRank,
+        overallRank: team.teamRank,
+        tag: team.tag,
+        wwcd: NaN,
+        players: [
+          { health: team.player1HealthPercent, liveState: team.player1LiveState },
+          { health: team.player2HealthPercent, liveState: team.player2LiveState },
+          { health: team.player3HealthPercent, liveState: team.player3LiveState },
+          { health: team.player4HealthPercent, liveState: team.player4LiveState },
+        ],
+      }));
+
   return (
     <div className="overlay-root" style={{ backgroundColor: config.chromaKeyColor }}>
       {visible("leaderboard") && standingsRows.length > 0 && (
         <div style={{ position: "absolute", top: 48, right: 48, width: 420 }}>
           <StandingsRenderer theme={studioTheme} mode="full" healthStops={healthStops} columns={columns} rowRules={rowRules} headerBg={headerBg} rows={standingsRows} maxRows={16} />
+        </div>
+      )}
+
+      {visible("top4") && top4Rows.length > 0 && (
+        <div style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", width: 720 }}>
+          <Top4Renderer theme={studioTheme} wwcdBar={wwcdBar} cardBg={top4CardBg} fields={top4Fields} teams={top4Rows} />
         </div>
       )}
 

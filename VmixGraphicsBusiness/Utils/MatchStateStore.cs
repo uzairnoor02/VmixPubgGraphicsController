@@ -51,6 +51,18 @@ namespace VmixGraphicsBusiness.Utils
             try { LiveTeamsUpdated?.Invoke(teams); } catch { /* subscriber's problem, never ours */ }
         }
 
+        /// <summary>Raised whenever CreateTop4LiveRanking recomputes the final-4 win-probability
+        /// board (already pushed straight to vMix's native Title graphics via ApiCallProcessor) -
+        /// so the web overlay's Top 4 / WWCD panel can show the same real numbers instead of the
+        /// placeholder 0% it fell back to before this existed. Top4TeamStats already carries
+        /// per-player HealthPercent/LiveState, so no new DTO was needed here.</summary>
+        public event Action<List<VmixGraphicsBusiness.LiveMatch.LiveStatsBusiness.Top4TeamStats>>? Top4RankingsUpdated;
+
+        public void PublishTop4Rankings(List<VmixGraphicsBusiness.LiveMatch.LiveStatsBusiness.Top4TeamStats> teams)
+        {
+            try { Top4RankingsUpdated?.Invoke(teams); } catch { /* subscriber's problem, never ours */ }
+        }
+
         /// <summary>Raised whenever a player achievement (grenade elim, vehicle kill, airdrop
         /// loot, first blood, ...) is newly detected in SetPlayerAcheivments.cs, so the web
         /// overlay (LiveDashboardHost.cs, in the Pubg Ranking System project) can push a live

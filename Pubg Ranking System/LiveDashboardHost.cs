@@ -449,6 +449,10 @@ namespace Pubg_Ranking_System
                     {
                         _ = hubContext.Clients.All.SendAsync("TeamsUpdated", teams);
                     };
+                    matchState.Top4RankingsUpdated += teams =>
+                    {
+                        _ = hubContext.Clients.All.SendAsync("Top4Updated", teams);
+                    };
                     matchState.MatchStatusChanged += status =>
                     {
                         _ = hubContext.Clients.All.SendAsync("StatusChanged", status);
