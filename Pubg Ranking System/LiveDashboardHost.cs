@@ -178,12 +178,15 @@ namespace Pubg_Ranking_System
                     app.MapIngestEndpoints(rootProvider, configuration, ingestCoordinator);
 
                     // Simple shared-key login for the web dashboard, mirroring the WinForms app's
-                    // key-entry auth screen but without a hard dependency on Google Sheets - this
-                    // is a LAN-only, view-only surface, so a single configured key is enough for
-                    // now. The key lives in appsettings.json (WebDashboard:AuthKey) instead of the
-                    // React bundle so it can be changed without rebuilding the dashboard; defaults
-                    // to "1234" if unset. This checks the key only - it does not gate the other
-                    // endpoints above, which stay open for this first pass same as before.
+                    // key-entry auth screen but without a hard dependency on Google Sheets. The key
+                    // lives in appsettings.json (WebDashboard:AuthKey) instead of the React bundle
+                    // so it can be changed without rebuilding the dashboard. This endpoint itself
+                    // stays unauthenticated (that's the whole point - it's how you get the key
+                    // validated in the first place) but every admin action endpoint below now
+                    // requires the SAME key as a real `Authorization: Bearer <key>` header
+                    // (DashboardAuth.cs / .RequireDashboardKey()) - the SPA sends it on every
+                    // request once logged in (see vmix-dashboard/src/lib/api.ts), it's not just a
+                    // one-time check the login screen forgets afterward.
                     app.MapPost("/api/auth/login", (LoginRequest request) =>
                     {
                         var expectedKey = configuration["WebDashboard:AuthKey"] ?? "1234";
@@ -200,7 +203,19 @@ namespace Pubg_Ranking_System
                     // confirmation, since there's no dialog to show on a web request) and using a
                     // short-lived DbContext from the pooled factory instead of a long-held scoped
                     // context, since this can be called at any point during a live match.
-                    app.MapPost("/api/teams/load", async (HttpRequest request, IDbContextFactory<vmix_graphicsContext> dbFactory) =>
+                    // dbFactory is resolved from rootProvider (the MAIN app's DI container),
+                    // not taken as a minimal-API parameter - this second WebApplication's own
+                    // builder.Services never registered EF Core at all (see Start()'s
+                    // WebApplication.CreateBuilder() above), so asking the minimal API pipeline to
+                    // inject it directly silently fails IServiceProviderIsService's check, gets
+                    // misread as an inferred request-body parameter, and throws at startup instead
+                    // of at first request - which is exactly what happened here before this fix:
+                    // the entire second host (this whole file, the React dashboard, /overlay,
+                    // everything) failed to start, silently, because Start()'s try/catch swallows
+                    // the exception and only logs it to the console.
+                    var dbFactory = rootProvider.GetRequiredService<IDbContextFactory<vmix_graphicsContext>>();
+
+                    app.MapPost("/api/teams/load", async (HttpRequest request) =>
                     {
                         string rawJson;
                         using (var reader = new StreamReader(request.Body))
@@ -301,11 +316,11 @@ namespace Pubg_Ranking_System
                             teamsUpdated = totalUpdated,
                             stages = stagesSummary
                         });
-                    });
+                    }).RequireDashboardKey();
 
                     // Current roster, grouped by tournament -> stage -> teams, for the Teams tab to
                     // render and for the overlay/graphics pages to pick a team's display name from.
-                    app.MapGet("/api/teams", async (IDbContextFactory<vmix_graphicsContext> dbFactory) =>
+                    app.MapGet("/api/teams", async () =>
                     {
                         await using var db = await dbFactory.CreateDbContextAsync();
 
@@ -328,7 +343,7 @@ namespace Pubg_Ranking_System
                         });
 
                         return Results.Json(result);
-                    });
+                    }).RequireDashboardKey();
 
                     app.MapGet("/api/match/teams", () =>
                     {
@@ -356,7 +371,7 @@ namespace Pubg_Ranking_System
 
                         overlayConfigStore.Update(config);
                         return Results.Ok(new { ok = true });
-                    });
+                    }).RequireDashboardKey();
 
                     app.MapGet("/api/graphics", () =>
                     {
@@ -374,7 +389,7 @@ namespace Pubg_Ranking_System
                             : Enumerable.Empty<object>();
 
                         return Results.Json(files);
-                    });
+                    }).RequireDashboardKey();
 
                     // Deliberately restricted to .html files only (no arbitrary uploads) since
                     // these are meant to be pasted straight into a vMix Web Browser source, not a
@@ -410,7 +425,7 @@ namespace Pubg_Ranking_System
                         }
 
                         return Results.Ok(new { ok = true, name = safeName, url = $"/graphics/{safeName}" });
-                    });
+                    }).RequireDashboardKey();
 
                     app.MapDelete("/api/graphics/{name}", (string name) =>
                     {
@@ -428,19 +443,19 @@ namespace Pubg_Ranking_System
 
                         File.Delete(targetPath);
                         return Results.Ok(new { ok = true });
-                    });
+                    }).RequireDashboardKey();
 
                     app.MapPost("/api/match/reset", async () =>
                     {
                         await reset.ResetAll(backgroundJobClient);
                         return Results.Ok(new { ok = true });
-                    });
+                    }).RequireDashboardKey();
 
                     app.MapPost("/api/overlay/event", (OverlayEvent overlayEvent) =>
                     {
                         BroadcastOverlayEvent(overlayEvent);
                         return Results.Ok(new { ok = true });
-                    });
+                    }).RequireDashboardKey();
 
                     // Push every update straight to connected clients as it happens.
                     var hubContext = app.Services.GetRequiredService<IHubContext<LiveDashboardHub>>();

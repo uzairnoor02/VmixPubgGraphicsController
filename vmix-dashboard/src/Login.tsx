@@ -4,20 +4,29 @@ const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? "http://localhost:50
 
 // sessionStorage (not localStorage) so it clears when the tab/browser closes, mirroring the
 // WinForms app asking for the key again each time it starts - not a "remember me forever" login.
-const SESSION_KEY = "vmix_dashboard_authed";
+//
+// This now stores the actual key, not just a "logged in" boolean - every admin-action API call
+// requires it as a real `Authorization: Bearer <key>` header (see lib/api.ts's req() helper and
+// Pubg Ranking System/DashboardAuth.cs on the server), not just a one-time check this screen did
+// and then forgot about.
+const SESSION_KEY = "vmix_dashboard_auth_key";
 
 export function isAuthed(): boolean {
+  return getAuthKey() !== null;
+}
+
+export function getAuthKey(): string | null {
   try {
-    return sessionStorage.getItem(SESSION_KEY) === "true";
+    return sessionStorage.getItem(SESSION_KEY);
   } catch {
     // Private browsing / storage disabled - just fall back to asking every time.
-    return false;
+    return null;
   }
 }
 
-function setAuthed() {
+function setAuthKey(key: string) {
   try {
-    sessionStorage.setItem(SESSION_KEY, "true");
+    sessionStorage.setItem(SESSION_KEY, key);
   } catch {
     // Ignore - worst case the user gets asked again on the next reload.
   }
@@ -56,7 +65,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
       });
       const data = await res.json().catch(() => ({ ok: false }));
       if (res.ok && data.ok) {
-        setAuthed();
+        setAuthKey(key.trim());
         onSuccess();
       } else {
         setError("Invalid key. Please check your key and try again.");

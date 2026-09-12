@@ -2,6 +2,8 @@
 // this instead of hand-rolling fetch calls, so the base URL, error handling, and response shapes
 // live in exactly one place.
 
+import { clearAuthed, getAuthKey } from "../Login";
+
 export const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? "http://localhost:5050";
 
 export interface OverlayConfig {
@@ -73,13 +75,28 @@ export const POST_MATCH_STEPS = [
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const isForm = init?.body instanceof FormData;
+  // Every admin-action endpoint requires this as a real Authorization header now (see
+  // Pubg Ranking System/DashboardAuth.cs); public ones (GET /api/overlay/config, /api/match/teams,
+  // /api/match/status - what /overlay itself reads) ignore it, so it's safe to always attach it
+  // when we have one, including from the unauthenticated /overlay route where there won't be one.
+  const authKey = getAuthKey();
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       ...(init?.body && !isForm ? { "Content-Type": "application/json" } : {}),
+      ...(authKey ? { Authorization: `Bearer ${authKey}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
+
+  if (res.status === 401) {
+    // The stored key is missing/wrong/rotated server-side - forget it and send the operator back
+    // to the login screen instead of leaving them looking at a dashboard that silently fails
+    // every action from here on.
+    clearAuthed();
+    window.location.reload();
+    throw new Error("Session expired - please log in again.");
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);

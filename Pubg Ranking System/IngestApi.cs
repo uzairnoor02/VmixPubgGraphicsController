@@ -119,6 +119,8 @@ namespace Pubg_Ranking_System
                 return Results.Ok(new { ok = true });
             });
 
+            // Admin-only diagnostic (not used by /overlay or by VmixIngestAgent itself, which only
+            // ever POSTs to /tick) - gated behind the dashboard key like every other admin action.
             app.MapGet("/api/ingest/status", () =>
             {
                 var match = ingestCoordinator.CurrentMatch;
@@ -128,7 +130,7 @@ namespace Pubg_Ranking_System
                     matchId = match?.MatchId,
                     wasInGame = ingestCoordinator.WasInGame,
                 });
-            });
+            }).RequireDashboardKey();
         }
     }
 }

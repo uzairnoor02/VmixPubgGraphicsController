@@ -55,9 +55,16 @@ namespace Pubg_Ranking_System
     {
         public static void MapMatchControlEndpoints(this WebApplication app, IServiceProvider rootProvider, IBackgroundJobClient backgroundJobClient, IngestCoordinator ingestCoordinator)
         {
+            // Every endpoint in this file is an operator *action* (or the dropdown data behind
+            // one) - none of it is read by the unauthenticated /overlay page - so the whole group
+            // requires the dashboard key. See DashboardAuth.cs for what's deliberately excluded
+            // and why (GET /api/overlay/config, /api/match/teams, /api/match/status, the SignalR
+            // hub itself).
+            var admin = app.MapGroup("").RequireDashboardKey();
+
             // ---------- Tournament / stage / match lookups (dropdown data) ----------
 
-            app.MapGet("/api/tournaments", async () =>
+            admin.MapGet("/api/tournaments", async () =>
             {
                 using var scope = rootProvider.CreateScope();
                 var tournamentBusiness = scope.ServiceProvider.GetRequiredService<TournamentBusiness>();
@@ -68,7 +75,7 @@ namespace Pubg_Ranking_System
             // Mirrors the WinForms combo box exactly: every stage name across every tournament,
             // not filtered by the selected tournament. Kept as-is rather than "fixed" here since
             // changing it would be a behavior change beyond this migration's scope.
-            app.MapGet("/api/stages", async () =>
+            admin.MapGet("/api/stages", async () =>
             {
                 using var scope = rootProvider.CreateScope();
                 var tournamentBusiness = scope.ServiceProvider.GetRequiredService<TournamentBusiness>();
@@ -76,7 +83,7 @@ namespace Pubg_Ranking_System
                 return Results.Json(names);
             });
 
-            app.MapPost("/api/tournaments", async (AddTournamentRequest request) =>
+            admin.MapPost("/api/tournaments", async (AddTournamentRequest request) =>
             {
                 if (string.IsNullOrWhiteSpace(request?.Name))
                 {
@@ -91,7 +98,7 @@ namespace Pubg_Ranking_System
                     : Results.Json(new { ok = false, error = message }, statusCode: StatusCodes.Status400BadRequest);
             });
 
-            app.MapPost("/api/tournaments/stages", async (AddStageRequest request) =>
+            admin.MapPost("/api/tournaments/stages", async (AddStageRequest request) =>
             {
                 if (string.IsNullOrWhiteSpace(request?.TournamentName) || string.IsNullOrWhiteSpace(request?.StageName))
                 {
@@ -114,7 +121,7 @@ namespace Pubg_Ranking_System
             // TypedConfirmation="DELETE" for a completed match) once the operator has agreed - the
             // same two-step "are you sure" -> "type DELETE" flow the WinForms dialog had, just
             // expressed as request/response instead of MessageBox.Show.
-            app.MapPost("/api/match/start", async (StartMatchRequest request) =>
+            admin.MapPost("/api/match/start", async (StartMatchRequest request) =>
             {
                 using var scope = rootProvider.CreateScope();
                 var tournamentBusiness = scope.ServiceProvider.GetRequiredService<TournamentBusiness>();
@@ -172,7 +179,7 @@ namespace Pubg_Ranking_System
             // to guarantee a clean slate for a WinForms app with mutable form state); a headless
             // web API doesn't carry that same state, so clearing the match-related keys and
             // cancelling queued jobs is the whole story here - no process restart needed or wanted.
-            app.MapPost("/api/match/stop", async () =>
+            admin.MapPost("/api/match/stop", async () =>
             {
                 using var scope = rootProvider.CreateScope();
                 var logger = scope.ServiceProvider.GetRequiredService<ILogger<Reset>>();
@@ -201,7 +208,7 @@ namespace Pubg_Ranking_System
 
             // ---------- Post-match report generation (one step, or the whole set) ----------
 
-            app.MapPost("/api/postmatch/run/{step}", async (string step, MatchSelector selector) =>
+            admin.MapPost("/api/postmatch/run/{step}", async (string step, MatchSelector selector) =>
             {
                 using var scope = rootProvider.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<vmix_graphicsContext>();
@@ -240,7 +247,7 @@ namespace Pubg_Ranking_System
             // Equivalent of Form1's setall() (button6) - every step properly awaited in sequence.
             // button7_Click's version of this (fire every WWCDStatsAsync/MatchMvp/etc. call without
             // await) is intentionally NOT reproduced anywhere in this API.
-            app.MapPost("/api/postmatch/run-all", async (MatchSelector selector) =>
+            admin.MapPost("/api/postmatch/run-all", async (MatchSelector selector) =>
             {
                 using var scope = rootProvider.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<vmix_graphicsContext>();
@@ -276,7 +283,7 @@ namespace Pubg_Ranking_System
                     : Results.Json(new { ok = false, partial = true, errors }, statusCode: StatusCodes.Status207MultiStatus);
             });
 
-            app.MapPost("/api/prematch/map-top-performers", async (MatchSelector selector, string mapName) =>
+            admin.MapPost("/api/prematch/map-top-performers", async (MatchSelector selector, string mapName) =>
             {
                 using var scope = rootProvider.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<vmix_graphicsContext>();
@@ -295,7 +302,7 @@ namespace Pubg_Ranking_System
             // (distinct from POST /api/teams/load in LiveDashboardHost.cs, which accepts a JSON
             // body directly from the browser - this one re-reads JsonTeamDataPath from
             // appsettings.json, same as reload_teams_btn_Click did.)
-            app.MapPost("/api/teams/reload", async () =>
+            admin.MapPost("/api/teams/reload", async () =>
             {
                 using var scope = rootProvider.CreateScope();
                 var jsonTeamDataService = scope.ServiceProvider.GetRequiredService<JsonTeamDataService>();
