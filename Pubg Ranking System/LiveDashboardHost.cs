@@ -149,6 +149,18 @@ namespace Pubg_Ranking_System
                             policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
                     });
 
+                    // This is a second, separate WebApplication with its own DI container - it
+                    // does NOT inherit rootProvider's registrations (see the EF Core note further
+                    // down for the same trap). TenancyApi.cs and ObservabilityApi.cs's minimal-API
+                    // endpoints take TournamentRegistry/TenantScopeManager as parameters and expect
+                    // the framework to inject them as services, so they must be registered here too
+                    // - otherwise the request-delegate factory can't resolve TenantScopeManager and
+                    // startup fails with "Failure to infer one or more parameters" on any POST
+                    // endpoint that also has a body parameter (e.g. /api/ingest/heartbeat), since it
+                    // tries to fall back to treating it as a second inferred body parameter.
+                    builder.Services.AddSingleton(rootProvider.GetRequiredService<TournamentRegistry>());
+                    builder.Services.AddSingleton(rootProvider.GetRequiredService<TenantScopeManager>());
+
                     var app = builder.Build();
                     app.UseCors();
 
