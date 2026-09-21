@@ -27,15 +27,15 @@ import { SpectatorMapRenderer } from "../studio/renderers/SpectatorMapRenderer";
 // like without booting FakePcob's serve command or waiting for a real tournament.
 //
 // Everything here is driven by the Graphics Studio's own SAMPLE_* fixtures (studio/sampleData.ts)
-// rather than tools/FakePcob/seed/demo-midmatch.json / demo-last4.json. Those two fixtures exist
-// for a from-a-file replay of the live feed (see PHASE-1-FAKE-PCOB.md Task 10 and SEEDS.md), but
-// this build was not allowed to open seed/*.json directly (Hard rule B0 - read SEEDS.md, never the
-// JSON itself), and SEEDS.md's prose description of the demo fixtures wasn't enough to pin down
-// their exact shape (in particular whether they're pre-aggregated TeamLiveStats[] or raw
-// PCOB playerInfoList records) with any confidence. Task 10 explicitly allows this fallback:
-// "If a renderer's props cannot be produced from this data, render it with the Studio's own sample
-// data and note it in REPORT.md" - recorded there under Decisions. Every graphic below uses that
-// fallback, not just the ones the task anticipated.
+// rather than tools/FakePcob/seed/demo-midmatch.json / demo-last4.json. Per SEEDS.md those two
+// fixtures are raw pcob-shaped {"playerInfoList":[...]} records (same 43-field shape as the real
+// match seeds), not the TeamLiveStats[]/pre-aggregated shape this page's renderers consume - using
+// them here would mean re-implementing the server's own team/rank aggregation (LiveStatsBusiness.cs)
+// a second time on the client, only for a demo page, which is exactly the kind of scope creep this
+// phase's hard rules (additive, minimal-blast-radius changes) warn against. Task 10 explicitly
+// allows the simpler path: "If a renderer's props cannot be produced from this data, render it
+// with the Studio's own sample data and note it in REPORT.md" - recorded there under Decisions.
+// Every graphic below takes that fallback, not just the ones the task anticipated needing it.
 //
 // Panel rendering reuses the exact renderer components (and the Task 9 panelOpacity prop) that
 // both the Graphics Studio editor and the real /overlay route use - a demo click here shows
