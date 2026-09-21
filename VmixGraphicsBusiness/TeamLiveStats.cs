@@ -1,4 +1,4 @@
-﻿
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,6 +12,13 @@ public class TeamLiveStats
     public bool TeamEliminated { get; set; }
     public string Logo { get; set; }
     public string Tag { get; set; }
+
+    // The team's full name. NOTE: the Teams table currently has only TeamId + TeamName (no
+    // separate short-tag column), so today this carries the same string as Tag - exposing it
+    // under the name the web client actually wants means the overlay stops calling a full name a
+    // "tag", and the day the schema gains a real short tag only the population line below changes,
+    // not the overlay. Nullable so an older snapshot deserialises cleanly.
+    public string? TeamName { get; set; }
     public int TotalPoints { get; set; }
     public int Eliminations { get; set; }
     public string? Player1Health { get; set; }

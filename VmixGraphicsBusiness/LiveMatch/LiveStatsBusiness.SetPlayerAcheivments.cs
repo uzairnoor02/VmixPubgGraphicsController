@@ -79,7 +79,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                          vmi_layerSetOnOff.GetSetImageApiCall(vmixData.VehiclePlayerAcheivmentGuid, $"PICP1", $"{ConfigGlobal.PlayerImages}\\{player.UId}.png")
                     };
                     backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.VehiclePlayerAcheivmentGuid, 3, true, 4000, apiCalls));
-                    _redisDb.PublishAchievement(new LiveAchievementEvent("achievement.vehicleKill", player.PlayerName ?? "Unknown Player", currentTeam.teamid.ToString()));
+                    _redisDb.PublishAchievement(new LiveAchievementEvent("achievement.vehicleKill", player.PlayerName ?? "Unknown Player", currentTeam.teamid.ToString(), player.UId.ToString()));
 
                 }
             }
@@ -130,7 +130,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                     };
 
                     backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.GrenadePlayerAcheivmentGuid, 3, true, 4000, apiCalls));
-                    _redisDb.PublishAchievement(new LiveAchievementEvent("achievement.grenadeElim", player.PlayerName ?? "Unknown Player", currentTeam.teamid.ToString()));
+                    _redisDb.PublishAchievement(new LiveAchievementEvent("achievement.grenadeElim", player.PlayerName ?? "Unknown Player", currentTeam.teamid.ToString(), player.UId.ToString()));
                 }
             }
         }
@@ -181,7 +181,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                 };
 
                     backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.AirDropPlayerAcheivmentGuid, 3, true, 4000, apiCalls));
-                    _redisDb.PublishAchievement(new LiveAchievementEvent("achievement.airdropLoot", airdropPlayer.PlayerName ?? "Unknown Player", currentTeam.teamid.ToString()));
+                    _redisDb.PublishAchievement(new LiveAchievementEvent("achievement.airdropLoot", airdropPlayer.PlayerName ?? "Unknown Player", currentTeam.teamid.ToString(), airdropPlayer.UId.ToString()));
                 }
             }
         }
@@ -230,7 +230,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                 };
 
                     backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(vmixData.FirstBloodPlayerAcheivmentGuid, 3, true, 4000, apiCalls));
-                    _redisDb.PublishAchievement(new LiveAchievementEvent("achievement.firstKill", FirstBloodplayer.PlayerName ?? "Unknown Player", currentTeam.teamid.ToString()));
+                    _redisDb.PublishAchievement(new LiveAchievementEvent("achievement.firstKill", FirstBloodplayer.PlayerName ?? "Unknown Player", currentTeam.teamid.ToString(), FirstBloodplayer.UId.ToString()));
                 }
                 return true;
 

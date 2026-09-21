@@ -76,3 +76,96 @@ export const ACHIEVEMENT_TYPES: AchievementTypeDef[] = [
 ];
 
 export const ROWS_PER_PAGE = 8;
+
+/** Sample for the Player Highlight card (MVP of the Match / Star Player). Stats are named the way
+ *  the post-match pipeline already computes them in PostMatch.MatchMvp / PostMatch.Top5MVP. */
+export interface SampleHighlightPlayer {
+  playerName: string;
+  teamName: string;
+  kills: number;
+  damage: number;
+  survivalTime: string;
+  assists: number;
+}
+
+export const SAMPLE_HIGHLIGHT_PLAYER: SampleHighlightPlayer = {
+  playerName: "Asi8CASANOVA",
+  teamName: "ASxi8 Esports",
+  kills: 12,
+  damage: 1847,
+  survivalTime: "28:41",
+  assists: 4,
+};
+
+/** The three presets that share the Player Highlight renderer - same card, different eyebrow and
+ *  stat set, which is why they are one component rather than three. */
+export const HIGHLIGHT_PRESETS = [
+  { id: "mvp", label: "MVP OF THE MATCH", stats: ["kills", "damage", "survivalTime"] },
+  { id: "star", label: "STAR PLAYER", stats: ["kills", "damage", "assists"] },
+  { id: "highlight", label: "PLAYER HIGHLIGHT", stats: ["kills", "damage", "assists", "survivalTime"] },
+] as const;
+
+/** Sample for Teams to Watch — PostMatch.TeamToWatch.cs computes the real selection. */
+export const SAMPLE_TEAMS_TO_WATCH = [
+  { key: 1, rank: 1, teamName: "ASxi8 Esports", reason: "Two WWCDs in the last four matches and the highest elimination count of the stage.", stats: [{ label: "WWCD", value: 2 }, { label: "Elims", value: 30 }] },
+  { key: 2, rank: 3, teamName: "Team Star", reason: "Most consistent placement — never finished outside the top six this stage.", stats: [{ label: "Avg place", value: "3.2" }, { label: "Pts", value: 39 }] },
+  { key: 3, rank: 5, teamName: "R3GICIDE", reason: "Climbed nine places over the last two matches on pure elimination points.", stats: [{ label: "Elims", value: 24 }, { label: "Gained", value: "+9" }] },
+];
+
+/** Sample for the MVP Rankings table — PostMatch.Top5MVP.cs is the real source. */
+export interface SampleMvpRow {
+  rank: number; playerName: string; teamName: string; kills: number; damage: number;
+  assists: number; survivalTime: string; rating: number | null;
+}
+export const SAMPLE_MVP_ROWS: SampleMvpRow[] = [
+  { rank: 1, playerName: "Asi8CASANOVA", teamName: "ASxi8 Esports", kills: 12, damage: 1847, assists: 4, survivalTime: "28:41", rating: 9.4 },
+  { rank: 2, playerName: "rpgREHMAN", teamName: "RPG", kills: 11, damage: 1622, assists: 3, survivalTime: "26:02", rating: 8.8 },
+  { rank: 3, playerName: "R3G・IRON", teamName: "R3GICIDE", kills: 9, damage: 1490, assists: 6, survivalTime: "27:55", rating: 8.5 },
+  { rank: 4, playerName: "SWAT-BILAL", teamName: "Swat Rivals", kills: 8, damage: 1310, assists: 2, survivalTime: "22:18", rating: 7.9 },
+  { rank: 5, playerName: "TOGxUZAIR", teamName: "TOGxUZ", kills: 7, damage: 1204, assists: 5, survivalTime: "25:40", rating: null },
+];
+
+/** Sample for the Champions card. */
+export const SAMPLE_CHAMPIONS = {
+  teamName: "ASxi8 Esports",
+  players: [{ playerName: "Asi8CASANOVA" }, { playerName: "Asi8RAZA" }, { playerName: "Asi8HAMZA" }, { playerName: "Asi8TALHA" }],
+  stats: [{ label: "Points", value: 51 }, { label: "WWCD", value: 2 }, { label: "Elims", value: 30 }],
+};
+
+/** Head-to-Head sample. Real data comes from the TeamPoints table, one row per team per match. */
+export const SAMPLE_HEAD_TO_HEAD = {
+  left: { teamName: "ASxi8 Esports", matchTotals: [14, 9, 17, 11] },
+  right: { teamName: "Team Star", matchTotals: [12, 15, 6, 6] },
+  stats: [
+    { label: "Total points", left: 51, right: 39, winner: "left" as const },
+    { label: "WWCD", left: 2, right: 1, winner: "left" as const },
+    { label: "Eliminations", left: 30, right: 27, winner: "left" as const },
+    { label: "Avg placement", left: "2.8", right: "3.2", winner: "left" as const },
+    { label: "Best finish", left: "1st", right: "1st", winner: "none" as const },
+  ],
+};
+
+/** Team intro / WWCD card sample. */
+export const SAMPLE_TEAM_INTRO = {
+  teamName: "ASxi8 Esports",
+  wwcd: 42.6,
+  players: [
+    { playerName: "Asi8CASANOVA", health: 100, liveState: 0 },
+    { playerName: "Asi8RAZA", health: 64, liveState: 0 },
+    { playerName: "Asi8HAMZA", health: 18, liveState: 4 },
+    { playerName: "Asi8TALHA", health: 0, liveState: 5 },
+  ],
+  stats: [{ label: "Points", value: 51 }, { label: "Elims", value: 30 }, { label: "Rank", value: "#1" }],
+};
+
+/** Spectator map sample — world coordinates in the same 0..816000 range pcob reports. */
+export const SAMPLE_MAP_PLAYERS = [
+  { key: 1, teamId: 1, teamName: "ASxi8", x: 320000, y: 410000, liveState: 0 },
+  { key: 2, teamId: 1, teamName: "ASxi8", x: 328000, y: 418000, liveState: 0 },
+  { key: 3, teamId: 1, teamName: "ASxi8", x: 315000, y: 424000, liveState: 4 },
+  { key: 4, teamId: 2, teamName: "Star", x: 610000, y: 220000, liveState: 0 },
+  { key: 5, teamId: 2, teamName: "Star", x: 618000, y: 232000, liveState: 0 },
+  { key: 6, teamId: 3, teamName: "R3G", x: 140000, y: 690000, liveState: 0 },
+  { key: 7, teamId: 3, teamName: "R3G", x: 152000, y: 702000, liveState: 5 },
+  { key: 8, teamId: 4, teamName: "RPG", x: 480000, y: 560000, liveState: 0 },
+];

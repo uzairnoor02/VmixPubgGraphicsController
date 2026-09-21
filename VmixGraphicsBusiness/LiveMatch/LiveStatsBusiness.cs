@@ -249,6 +249,7 @@ public partial class LiveStatsBusiness(
                     var score = allTeamRanks.Where(x => x.TeamId == currentTeamInfo.teamid).Select(x => x.TotalPoints).First().ToString();
                     teamStats.Eliminations = eliminations;
                     teamStats.Tag = currentTeamInfo.teamName;
+                    teamStats.TeamName = currentTeamInfo.teamName;
                     _logger.LogInformation($"Team: {currentTeamInfo.teamName}, Team ID: {teamId}, Overall Rank: {overallRank}, UI Position: {uiPosition}, Score: {currentTeamInfo.score}");
 
                     // Use uiPosition for UI elements layout but display overallRank as the actual rank

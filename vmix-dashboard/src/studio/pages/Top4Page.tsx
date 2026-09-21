@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Palette, Type } from "lucide-react";
 import { useTheme } from "../ThemeContext";
-import { useStudioElement } from "../StudioConfigContext";
+import { useChromaKey, useStudioElement } from "../StudioConfigContext";
 import { Bg } from "../theme";
 import { BgEditor, ColumnStyle, ColumnStyleEditor, EditorPanel, PageShell, ResetToThemeButton } from "../StudioControls";
 import { SAMPLE_TOP4 } from "../sampleData";
@@ -13,6 +13,7 @@ const DEFAULT_FIELDS: Record<string, ColumnStyle> = {
 
 export default function Top4Page() {
   const { theme } = useTheme();
+  const [chromaKey] = useChromaKey();
   const [tab, setTab] = useState("wwcdBar");
   const [wwcdBarOverride, setWwcdBarOverride] = useStudioElement<Bg | null>("top4.wwcdBar", null);
   const [fields, setFields] = useStudioElement("top4.fields", DEFAULT_FIELDS);
@@ -24,7 +25,7 @@ export default function Top4Page() {
   return (
     <PageShell title="Top 4 / WWCD Chance" subtitle="Final-four panel with per-player health ticks and win-probability bar">
       <div style={{ flex: "1 1 560px" }}>
-        <div style={{ width: "100%", maxWidth: 680, borderRadius: theme.radius, overflow: "hidden", background: theme.chromaKey, padding: 14 }}>
+        <div style={{ width: "100%", maxWidth: 680, borderRadius: theme.radius, overflow: "hidden", background: chromaKey, padding: 14 }}>
           <Top4Renderer theme={theme} wwcdBar={wwcdBar} cardBg={cardBg} fields={fields} teams={SAMPLE_TOP4.map((t) => ({ key: t.overallRank, overallRank: t.overallRank, tag: t.tag, wwcd: t.wwcd, players: t.players }))} />
         </div>
         <div style={{ fontSize: 11, color: "#5c5c66", marginTop: 12, lineHeight: 1.6, maxWidth: 500 }}>

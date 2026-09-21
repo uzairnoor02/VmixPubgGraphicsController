@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Eye, Palette, Plus, Rows3, Type } from "lucide-react";
 import { useTheme } from "../ThemeContext";
-import { useStudioElement } from "../StudioConfigContext";
+import { useChromaKey, useStudioElement } from "../StudioConfigContext";
 import { Bg, DEFAULT_HEALTH_STOPS, HealthStop, RowRule } from "../theme";
 import { BgEditor, ColumnStyleEditor, ColumnStyle, EditorPanel, PageShell, ResetToThemeButton, RowRuleItem, addRowRule, btnGhost, pill } from "../StudioControls";
 import { SAMPLE_STANDINGS } from "../sampleData";
@@ -17,6 +17,7 @@ const DEFAULT_COLUMNS: Record<string, ColumnStyle> = {
 
 export default function StandingsPage() {
   const { theme } = useTheme();
+  const [chromaKey] = useChromaKey();
   const [mode, setMode] = useState<"full" | "top4">("full");
   const [healthStops, setHealthStops] = useStudioElement<HealthStop[]>("standings.healthStops", DEFAULT_HEALTH_STOPS);
   const [columns, setColumns] = useStudioElement("standings.columns", DEFAULT_COLUMNS);
@@ -38,7 +39,7 @@ export default function StandingsPage() {
             <button onClick={() => setMode("top4")} style={{ ...pill(mode === "top4"), padding: "4px 10px", fontSize: 11 }}>Top 4</button>
           </div>
         </div>
-        <div style={{ width: "100%", maxWidth: 460, borderRadius: theme.radius + 4, overflow: "hidden", background: theme.chromaKey, padding: 14 }}>
+        <div style={{ width: "100%", maxWidth: 460, borderRadius: theme.radius + 4, overflow: "hidden", background: chromaKey, padding: 14 }}>
           <StandingsRenderer theme={theme} mode={mode} healthStops={healthStops} columns={columns} rowRules={rowRules} headerBg={headerBg} rows={rows} />
         </div>
       </div>

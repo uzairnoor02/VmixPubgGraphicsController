@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Flame, LayoutGrid, Settings2, ShieldAlert, Sparkles, Trophy, Users, Zap } from "lucide-react";
+import { Award, Binoculars, CircleDot, Crown, Flame, LayoutGrid, Map, Settings2, ShieldAlert, Sparkles, Star, Swords, Trophy, Users, Zap } from "lucide-react";
 import { StudioConfigProvider } from "./StudioConfigContext";
 import { ThemeProvider, useTheme } from "./ThemeContext";
 import { THEMES } from "./theme";
@@ -10,6 +10,14 @@ import RankingsPage from "./pages/RankingsPage";
 import TopPlayersPage from "./pages/TopPlayersPage";
 import EliminatedSidebarPage from "./pages/EliminatedSidebarPage";
 import AchievementPage from "./pages/AchievementPage";
+import CircleStatusPage from "./pages/CircleStatusPage";
+import PlayerHighlightPage from "./pages/PlayerHighlightPage";
+import TeamsToWatchPage from "./pages/TeamsToWatchPage";
+import MvpRankingsPage from "./pages/MvpRankingsPage";
+import ChampionsPage from "./pages/ChampionsPage";
+import HeadToHeadPage from "./pages/HeadToHeadPage";
+import TeamIntroPage from "./pages/TeamIntroPage";
+import SpectatorMapPage from "./pages/SpectatorMapPage";
 
 // The Graphics Studio - design-time editor for every graphic the /overlay route can show. Changes
 // here save into OverlayConfig.elementSettings (see StudioConfigContext.tsx) and reach the live
@@ -23,6 +31,14 @@ const NAV_ITEMS = [
   { id: "top-players", label: "Top Players", icon: Users, page: TopPlayersPage },
   { id: "eliminated", label: "Eliminated & Sidebar", icon: ShieldAlert, page: EliminatedSidebarPage },
   { id: "achievement", label: "Achievement Popup", icon: Zap, page: AchievementPage },
+  { id: "circle", label: "Circle Status", icon: CircleDot, page: CircleStatusPage },
+  { id: "highlight", label: "Player Highlight", icon: Star, page: PlayerHighlightPage },
+  { id: "mvp", label: "MVP Rankings", icon: Award, page: MvpRankingsPage },
+  { id: "teams-to-watch", label: "Teams to Watch", icon: Binoculars, page: TeamsToWatchPage },
+  { id: "champions", label: "Champions", icon: Crown, page: ChampionsPage },
+  { id: "head-to-head", label: "Head to Head", icon: Swords, page: HeadToHeadPage },
+  { id: "team-intro", label: "Team Intro / WWCD", icon: Users, page: TeamIntroPage },
+  { id: "spectator-map", label: "Spectator Map", icon: Map, page: SpectatorMapPage },
 ] as const;
 
 function GraphicsStudioInner() {

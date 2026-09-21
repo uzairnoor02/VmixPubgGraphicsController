@@ -19,6 +19,10 @@ const SAVE_DEBOUNCE_MS = 400;
 
 interface StudioConfigContextValue {
   loading: boolean;
+  /** The org-wide chroma key the live overlay actually paints. Studio previews must use this,
+   *  not the per-theme placeholder, or the operator keys against a green that isn't on air. */
+  chromaKeyColor: string;
+  setChromaKeyColor: (hex: string) => void;
   activeThemeId: string;
   setActiveThemeId: (id: string) => void;
   getElement: <T,>(key: string, defaultValue: T) => T;
@@ -35,6 +39,12 @@ export function useStudioConfig(): StudioConfigContextValue {
 
 /** Convenience hook for one page's config slice: behaves like useState, but reads its initial
  *  value from the shared OverlayConfig and persists every change through it. */
+/** The live chroma key, for any Studio preview that shows a keyed background. */
+export function useChromaKey(): [string, (hex: string) => void] {
+  const { chromaKeyColor, setChromaKeyColor } = useStudioConfig();
+  return [chromaKeyColor, setChromaKeyColor];
+}
+
 export function useStudioElement<T>(key: string, defaultValue: T): [T, (value: T | ((prev: T) => T)) => void] {
   const { getElement, setElement } = useStudioConfig();
   const value = getElement(key, defaultValue);
@@ -81,14 +91,24 @@ export function StudioConfigProvider({ children }: { children: ReactNode }) {
     });
   }, [scheduleSave]);
 
+  const chromaKeyColor = config?.chromaKeyColor || "#00FF00";
+  const setChromaKeyColor = useCallback((hex: string) => {
+    setConfig((prev) => {
+      const base: OverlayConfig = prev ?? { chromaKeyColor: "#00FF00", elementVisibility: {}, elementSettings: {} };
+      const next: OverlayConfig = { ...base, chromaKeyColor: hex };
+      scheduleSave(next);
+      return next;
+    });
+  }, [scheduleSave]);
+
   const activeThemeId = getElement(THEME_KEY, DEFAULT_THEME_ID);
   const setActiveThemeId = useCallback((id: string) => {
     if (THEMES[id]) setElement(THEME_KEY, id);
   }, [setElement]);
 
   const value = useMemo<StudioConfigContextValue>(() => ({
-    loading, activeThemeId, setActiveThemeId, getElement, setElement,
-  }), [loading, activeThemeId, setActiveThemeId, getElement, setElement]);
+    loading, chromaKeyColor, setChromaKeyColor, activeThemeId, setActiveThemeId, getElement, setElement,
+  }), [loading, chromaKeyColor, setChromaKeyColor, activeThemeId, setActiveThemeId, getElement, setElement]);
 
   return <StudioConfigContext.Provider value={value}>{children}</StudioConfigContext.Provider>;
 }

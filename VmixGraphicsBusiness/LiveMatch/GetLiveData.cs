@@ -31,6 +31,10 @@ namespace VmixGraphicsBusiness.LiveMatch
         // poll loop for the BCL default of 100 seconds.
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
 
+        // Per-match tracker turning pcob's rolling getkillinfo list into "what's new since the
+        // last tick" - see KillFeedTracker for why every failure mode there is silent.
+        private readonly VmixGraphicsBusiness.Utils.KillFeedTracker _killFeed = new();
+
         // Target cadence for the live poll loop. PUBG's own feed updates roughly every 2 seconds,
         // so this stays comfortably ahead of that instead of chasing it.
         private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
@@ -88,6 +92,10 @@ namespace VmixGraphicsBusiness.LiveMatch
                 teampoints = await _dbBusiness.fetchTeamPointsAsync(match);
             }
 
+            // A fresh match must never inherit the previous match's kills, or every one of them
+            // would re-announce on the first tick.
+            _killFeed.Reset();
+
             _matchState.PublishMatchStatus($"Match {match.MatchId} started successfully!");
 
             while (await IsInGame())
@@ -122,6 +130,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                                 // Feeds the SignalR hub for the web dashboard - see LiveDashboardHub.
                                 _matchState.PublishLiveTeams(teamLiveStatsList);
                             }
+                            await PollKillFeedAsync();
                             previousData = PlayerData;
                             await _matchState.StringSetAsync(HelperRedis.PlayerInfolist, PlayerData);
                             await _matchState.StringSetAsync(HelperRedis.TeamInfoList, teamdata);
@@ -191,6 +200,46 @@ namespace VmixGraphicsBusiness.LiveMatch
             }
 
             _matchState.PublishMatchStatus("");
+        }
+
+        /// <summary>
+        /// Polls pcob's getkillinfo and publishes only eliminations not seen yet this match, so
+        /// the overlay's kill feed shows real "X eliminated Y" lines instead of the derived
+        /// "a team's elimination count went up" fallback.
+        ///
+        /// Entirely best-effort: getkillinfo is a newer PC-OB endpoint that may not exist on
+        /// every pcob build, and its exact response shape is unconfirmed (see KillInfo). Any
+        /// failure here must not disturb the stats tick that just succeeded, so everything is
+        /// swallowed and the feed simply stays empty.
+        /// </summary>
+        private async Task PollKillFeedAsync()
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync(_pcobUrl + "getkillinfo");
+                if (!response.IsSuccessStatusCode) return;
+                var raw = await response.Content.ReadAsStringAsync();
+
+                // One sample per match, so the assumed field names can be confirmed against a
+                // real pcob from a single test match rather than guessed at forever.
+                if (_killFeed.ShouldLogRawSample())
+                {
+                    Console.WriteLine($"[killfeed] first getkillinfo payload this match: {raw}");
+                }
+
+                foreach (var kill in _killFeed.GetNewKills(raw))
+                {
+                    _matchState.PublishKill(new VmixGraphicsBusiness.Utils.LiveKillEvent(
+                        kill.KillerName ?? "Unknown",
+                        kill.VictimName ?? "an opponent",
+                        kill.Distance,
+                        VmixGraphicsBusiness.Utils.KillFeedTracker.IsLongRange(kill)));
+                }
+            }
+            catch
+            {
+                // getkillinfo is optional - never let it break a tick that otherwise worked.
+            }
         }
 
         public async Task<int> GetCircleInfo()

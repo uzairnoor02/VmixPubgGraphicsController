@@ -5,6 +5,9 @@ export interface TeamLiveStats {
   teamEliminated: boolean;
   logo: string;
   tag: string;
+  /** Full team name. Optional because an older backend build doesn't send it - callers should
+   *  fall back to `tag`, which is what the overlay displayed before this field existed. */
+  teamName?: string;
   totalPoints: number;
   eliminations: number;
   player1Health?: string;

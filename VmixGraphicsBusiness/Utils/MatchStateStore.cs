@@ -86,6 +86,17 @@ namespace VmixGraphicsBusiness.Utils
             try { TeamEliminated?.Invoke(teamEliminatedEvent); } catch { /* subscriber's problem, never ours */ }
         }
 
+        /// <summary>Raised once per newly-detected elimination, from the getkillinfo poll in
+        /// GetLiveData (direct mode) or IngestApi (agent mode), via KillFeedTracker. This is what
+        /// finally replaces the overlay's derived "a team's elimination count went up" fallback
+        /// with real per-kill lines carrying both player names.</summary>
+        public event Action<LiveKillEvent>? KillDetected;
+
+        public void PublishKill(LiveKillEvent killEvent)
+        {
+            try { KillDetected?.Invoke(killEvent); } catch { /* subscriber's problem, never ours */ }
+        }
+
         public MatchStateStore(string? snapshotDirectory = null)
         {
             var dir = snapshotDirectory ?? Path.Combine(AppContext.BaseDirectory, "state");
@@ -278,7 +289,14 @@ namespace VmixGraphicsBusiness.Utils
     /// <summary>One newly-detected player achievement, handed from SetPlayerAcheivments.cs to
     /// MatchStateStore.PublishAchievement and on to the web overlay. `Type` matches the id the
     /// Overlay Settings tab / Overlay.tsx use, e.g. "achievement.grenadeElim".</summary>
-    public record LiveAchievementEvent(string Type, string PlayerName, string? TeamTag);
+    /// <summary>PlayerUid is optional and defaults to null purely so existing call sites keep
+    /// compiling; when supplied, the overlay can show that player's real photo (served over HTTP
+    /// from the PlayerImages folder) instead of falling back to a generic icon.</summary>
+    public record LiveAchievementEvent(string Type, string PlayerName, string? TeamTag, string? PlayerUid = null);
+
+    /// <summary>One newly-detected elimination from pcob's getkillinfo, handed to the web overlay's
+    /// kill feed. Distance is null when pcob didn't report one.</summary>
+    public record LiveKillEvent(string KillerName, string VictimName, double? Distance, bool IsLongRange);
 
     /// <summary>One team newly confirmed fully eliminated, handed from
     /// LiveStatsBusiness.IsEliminatedAsync to MatchStateStore.PublishTeamEliminated and on to the

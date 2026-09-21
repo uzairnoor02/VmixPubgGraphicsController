@@ -73,6 +73,131 @@ export const POST_MATCH_STEPS = [
   { id: "top-grenadiers", label: "Top Grenadiers" },
 ] as const;
 
+// ---------------------------------------------------------------- Tenancy
+// Mirrors Pubg Ranking System/TenancyApi.cs. A tournament is the tenant boundary: its overlay
+// token is what vMix points at, its agent key is what the ingest agent authenticates with, and
+// neither is the tournament id (which appears in logs and URLs and is therefore not a secret).
+
+export interface IssuedKeyView {
+  id: string;
+  kind: string;
+  mask: string;
+  label: string | null;
+  current: boolean;
+  createdAtUtc: string;
+  lastUsedAtUtc: string | null;
+  retiredAtUtc: string | null;
+  graceSeconds: number;
+  usableUntilUtc: string | null;
+}
+
+export interface AgentView {
+  connected: boolean;
+  summary: string;
+  version: string | null;
+  secondsSinceLastTick: number | null;
+  ticksAccepted: number;
+  ticksDropped: number;
+  versionSupported: boolean;
+}
+
+export interface TournamentView {
+  id: string;
+  name: string;
+  orgId: string | null;
+  enabled: boolean;
+  isDefault: boolean;
+  createdAtUtc: string;
+  scheduledStartUtc: string | null;
+  scheduledEndUtc: string | null;
+  overlayUrl: string | null;
+  overlayToken: string | null;
+  agent: AgentView | null;
+  scopeLoaded: boolean;
+  keys: IssuedKeyView[];
+}
+
+export interface WhoAmI {
+  kind: string;
+  tournamentId: string | null;
+  tournamentName: string | null;
+  canAdministerAll: boolean;
+  correlationId: string;
+}
+
+export interface CreateTournamentResult {
+  ok: boolean;
+  tournament: TournamentView;
+  agentKeyOnce: string | null;
+  note: string;
+}
+
+export interface IssuedKeyResult {
+  ok: boolean;
+  kind?: string;
+  key: string;
+  mask: string;
+  graceMinutes?: number;
+  note: string;
+}
+
+export interface TournamentPatch {
+  name?: string;
+  enabled?: boolean;
+  scheduledStartUtc?: string | null;
+  scheduledEndUtc?: string | null;
+}
+
+// ---------------------------------------------------------------- Observability
+// Mirrors Pubg Ranking System/ObservabilityApi.cs.
+
+export interface LogEntry {
+  seq: number;
+  ts: string;
+  level: string;
+  category: string;
+  message: string;
+  tournamentId: string | null;
+  tournament: string | null;
+  error: string | null;
+  props: Record<string, string> | null;
+}
+
+export interface LogPage {
+  // Pass this back as afterSeq to tail the log instead of re-reading the whole ring.
+  nextSeq: number;
+  scope: string;
+  records: LogEntry[];
+}
+
+export interface LogQuery {
+  tournamentId?: string;
+  minLevel?: string;
+  afterSeq?: number;
+  max?: number;
+}
+
+export interface AgentStatusView extends AgentView {
+  tournamentId: string;
+  tournament: string;
+  sessionId: string | null;
+  lastContactUtc: string | null;
+  secondsSinceLastContact: number | null;
+  averageTickIntervalSeconds: number | null;
+  lastObservedLatencySeconds: number | null;
+  minimumVersion: string | null;
+  ingest: {
+    matchActive: boolean;
+    matchId: number | null;
+    wasInGame: boolean;
+    sessionId: string | null;
+    acceptedSeq: number;
+    publishedSeq: number;
+    staleTicksDropped: number;
+    supersededTicksDropped: number;
+  };
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const isForm = init?.body instanceof FormData;
   // Every admin-action endpoint requires this as a real Authorization header now (see
@@ -112,7 +237,10 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   // Overlay Settings
-  getOverlayConfig: () => req<OverlayConfig>("/api/overlay/config"),
+  // Optional headers so the on-air overlay can identify its tournament with X-Overlay-Token
+  // (see Overlay.tsx); the dashboard calls it with none and gets this install's own config.
+  getOverlayConfig: (headers?: Record<string, string>) =>
+    req<OverlayConfig>("/api/overlay/config", headers ? { headers } : undefined),
   saveOverlayConfig: (config: OverlayConfig) =>
     req<{ ok: boolean }>("/api/overlay/config", { method: "POST", body: JSON.stringify(config) }),
 
@@ -151,5 +279,49 @@ export const api = {
     req<{ ok: boolean; partial?: boolean; errors?: string[] }>("/api/postmatch/run-all", { method: "POST", body: JSON.stringify(selector) }),
   mapTopPerformers: (selector: MatchSelector, mapName: string) =>
     req<{ ok: boolean; error?: string }>(`/api/prematch/map-top-performers?mapName=${encodeURIComponent(mapName)}`, { method: "POST", body: JSON.stringify(selector) }),
+  // Tenancy - tournaments and their generated credentials
+  whoami: () => req<WhoAmI>("/api/tenancy/whoami"),
+  listTournaments: () => req<TournamentView[]>("/api/tenancy/tournaments"),
+  createTournament: (name: string, orgId?: string) =>
+    req<CreateTournamentResult>("/api/tenancy/tournaments", {
+      method: "POST",
+      body: JSON.stringify({ name, orgId }),
+    }),
+  updateTournament: (id: string, patch: TournamentPatch) =>
+    req<{ ok: boolean; tournament: TournamentView }>(
+      `/api/tenancy/tournaments/${encodeURIComponent(id)}`,
+      { method: "POST", body: JSON.stringify(patch) }
+    ),
+  deleteTournament: (id: string) =>
+    req<{ ok: boolean }>(`/api/tenancy/tournaments/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  // graceMinutes defaults server-side to a non-zero window so rotating mid-event doesn't black
+  // out the graphics; pass 0 explicitly for an immediate cut-off.
+  rotateKey: (id: string, kind: string, graceMinutes?: number) =>
+    req<IssuedKeyResult>(
+      `/api/tenancy/tournaments/${encodeURIComponent(id)}/keys/${encodeURIComponent(kind)}/rotate`,
+      { method: "POST", body: JSON.stringify({ graceMinutes }) }
+    ),
+  issueOperatorKey: (id: string) =>
+    req<IssuedKeyResult>(`/api/tenancy/tournaments/${encodeURIComponent(id)}/keys/dashboard`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  revokeKey: (id: string, keyId: string) =>
+    req<{ ok: boolean }>(
+      `/api/tenancy/tournaments/${encodeURIComponent(id)}/keys/${encodeURIComponent(keyId)}/revoke`,
+      { method: "POST" }
+    ),
+
+  // Observability
+  getLogs: (query: LogQuery = {}) => {
+    const params = new URLSearchParams();
+    if (query.tournamentId) params.set("tournamentId", query.tournamentId);
+    if (query.minLevel) params.set("minLevel", query.minLevel);
+    if (query.afterSeq) params.set("afterSeq", String(query.afterSeq));
+    if (query.max) params.set("max", String(query.max));
+    const qs = params.toString();
+    return req<LogPage>(`/api/observability/logs${qs ? `?${qs}` : ""}`);
+  },
+  getAgentStatus: () => req<AgentStatusView[]>("/api/observability/agents"),
   reloadTeamsFromConfiguredJson: () => req<{ ok: boolean }>("/api/teams/reload", { method: "POST" }),
 };

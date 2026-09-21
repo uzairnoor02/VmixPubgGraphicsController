@@ -1,3 +1,7 @@
+using VmixGraphicsBusiness.Tenancy;
+using VmixGraphicsBusiness.Observability;
+using Pubg_Ranking_System.Tenancy;
+using Pubg_Ranking_System.Observability;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,6 +69,24 @@ namespace Pubg_Ranking_System
                 // dashboard's Overlay Settings page. Singleton + its own small JSON file (see
                 // OverlayConfigStore.cs), same "in-process, survives restart" pattern as matchState.
                 services.AddSingleton<OverlayConfigStore>();
+
+                // Tenancy. The registry is the directory of tournaments and the credentials that
+                // open them (see TournamentRegistry.cs); the scope manager hands out one set of
+                // per-tournament stores per tenant (see TenantScope.cs).
+                //
+                // Note what the default scope wraps: the three singletons registered just above,
+                // not new instances. That is what keeps a single-machine install behaving exactly
+                // as it does today - same state files, same objects, same call sites - while
+                // requests that arrive with a tournament credential get routed elsewhere.
+                var stateRoot = Path.Combine(AppContext.BaseDirectory, "state");
+                var tournamentRegistry = new TournamentRegistry(stateRoot);
+                services.AddSingleton(tournamentRegistry);
+                services.AddSingleton(sp => new TenantScopeManager(
+                    tournamentRegistry,
+                    sp.GetRequiredService<MatchStateStore>(),
+                    sp.GetRequiredService<OverlayConfigStore>(),
+                    sp.GetRequiredService<IngestCoordinator>(),
+                    stateRoot));
 
                 // Hybrid database: try MySQL first, and if it isn't reachable within a few
                 // seconds, fall back to a local SQLite file automatically so the app never fails
@@ -148,6 +170,25 @@ namespace Pubg_Ranking_System
                 // on the network can open Chrome and watch live stats without RDP/physical access
                 // to this PC. View-only for now; see LiveDashboardHost.cs for what's in/out of
                 // scope for this first pass.
+                // Logging can now reach the per-tournament rings, so anything logged from here
+                // on is visible in the dashboard's Logs tab as well as on disk.
+                var tenantScopes = serviceProvider.GetRequiredService<TenantScopeManager>();
+                StructuredLogProvider.Scopes = tenantScopes;
+
+                var minimumAgentVersion = Configuration["Agent:MinimumVersion"];
+                if (!string.IsNullOrWhiteSpace(minimumAgentVersion))
+                {
+                    tenantScopes.Default.Agent.MinimumAgentVersion = minimumAgentVersion;
+                }
+
+                tenantScopes.Publish("Information", "startup",
+                    "process started; tenancy and structured logging active", null,
+                    properties: new Dictionary<string, string>
+                    {
+                        ["tournaments"] = tournamentRegistry.Count.ToString(),
+                        ["stateRoot"] = stateRoot,
+                    });
+
                 LiveDashboardHost.Start(
                     serviceProvider,
                     matchState,
@@ -242,12 +283,27 @@ namespace Pubg_Ranking_System
                 }
             }
         }
+        /// <summary>
+        /// Held statically because logging is configured before the DI container is built, while
+        /// the tenant manager it fans out to only exists afterwards - see where Scopes is assigned
+        /// in Main. Until that assignment, records still reach the NDJSON file; they just are not
+        /// visible in the dashboard yet.
+        /// </summary>
+        private static readonly StructuredLoggerProvider StructuredLogProvider =
+            new StructuredLoggerProvider(Path.Combine(AppContext.BaseDirectory, "resources", "logs"));
+
         private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
         {
+            // Structured logging. FileLoggerProvider is kept alongside rather than removed - it
+            // is what produced the plain-text files anyone debugging an earlier event will be
+            // reading, and dropping it would orphan that history mid-season. The new provider
+            // writes newline-delimited JSON AND feeds the dashboard's Logs tab, which is the part
+            // that actually gets read during a broadcast.
             services.AddLogging(loggingBuilder =>
             {
                 loggingBuilder.ClearProviders();
                 loggingBuilder.AddProvider(new FileLoggerProvider("resources/logs"));
+                loggingBuilder.AddProvider(StructuredLogProvider);
                 loggingBuilder.SetMinimumLevel(LogLevel.Information);
             });
 

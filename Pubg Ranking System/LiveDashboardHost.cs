@@ -1,3 +1,6 @@
+using VmixGraphicsBusiness.Tenancy;
+using VmixGraphicsBusiness.Observability;
+using Pubg_Ranking_System.Tenancy;
 using Hangfire;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -23,6 +26,36 @@ namespace Pubg_Ranking_System
     /// </summary>
     public class LiveDashboardHub : Hub
     {
+        private readonly TournamentRegistry _registry;
+        private readonly TenantScopeManager _scopes;
+
+        public LiveDashboardHub(TournamentRegistry registry, TenantScopeManager scopes)
+        {
+            _registry = registry;
+            _scopes = scopes;
+        }
+
+        /// <summary>
+        /// Puts every connection into exactly one tournament's group, resolved from the overlay
+        /// token the client connected with (<c>?t=</c>). Before this, every push went to
+        /// Clients.All - which is correct for one event on one machine, and a cross-tenant leak
+        /// the moment a second tournament exists on the same host: a browser watching tournament B
+        /// would receive tournament A's live stats.
+        ///
+        /// A connection with no token, or an unrecognised one, lands in this install's own group.
+        /// That is deliberately not an error: the dashboard itself connects without a token, and
+        /// so does an overlay on a single-tenant install - which is why this change is invisible
+        /// to the existing setup.
+        /// </summary>
+        public override async Task OnConnectedAsync()
+        {
+            var token = Context.GetHttpContext()?.Request.Query["t"].ToString();
+            var lookup = _registry.ResolveOverlayToken(token);
+            var scope = lookup.Success ? _scopes.GetOrCreate(lookup.Tournament!) : _scopes.Default;
+
+            await Groups.AddToGroupAsync(Context.ConnectionId, scope.HubGroup);
+            await base.OnConnectedAsync();
+        }
     }
 
     /// <summary>
@@ -72,9 +105,17 @@ namespace Pubg_Ranking_System
         // should call into next, once it's safe to touch with a compiler on hand.
         private static IHubContext<LiveDashboardHub>? _hubContext;
 
-        public static void BroadcastOverlayEvent(OverlayEvent overlayEvent)
+        // The SignalR group for this install's own tournament. Set when the host starts; until
+        // then there is nowhere to broadcast to anyway.
+        private static string? _defaultHubGroup;
+
+        public static void BroadcastOverlayEvent(OverlayEvent overlayEvent, string? hubGroup = null)
         {
-            _hubContext?.Clients.All.SendAsync("OverlayEvent", overlayEvent);
+            // Defaults to this install's own group rather than Clients.All, so a preview fired
+            // from one tournament's dashboard cannot appear on another tournament's live overlay.
+            var group = hubGroup ?? _defaultHubGroup;
+            if (group is null) return;
+            _hubContext?.Clients.Group(group).SendAsync("OverlayEvent", overlayEvent);
         }
 
         public static void Start(IServiceProvider rootProvider, MatchStateStore matchState, IBackgroundJobClient backgroundJobClient, Reset reset, string urls = "http://0.0.0.0:5050")
@@ -123,6 +164,35 @@ namespace Pubg_Ranking_System
                         RequestPath = "/graphics"
                     });
 
+                    // Player photos. The WinForms path only ever handed vMix a local file path
+                    // (ConfigGlobal.PlayerImages\{UId}.png), which a browser cannot load - so the
+                    // web overlay's achievement banners have been falling back to a generic icon.
+                    // Serving that same folder read-only at /player-images/{UId}.png lets the
+                    // overlay show the real photo, with no change to where the files live or how
+                    // they're named. Guarded: a missing or unconfigured folder skips the mount
+                    // entirely rather than throwing at startup, and a player with no photo on disk
+                    // just 404s, which the overlay already degrades from cleanly.
+                    try
+                    {
+                        var playerImagesDir = ConfigGlobal.PlayerImages;
+                        if (!string.IsNullOrWhiteSpace(playerImagesDir) && Directory.Exists(playerImagesDir))
+                        {
+                            app.UseStaticFiles(new StaticFileOptions
+                            {
+                                FileProvider = new PhysicalFileProvider(playerImagesDir),
+                                RequestPath = "/player-images"
+                            });
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[dashboard] PlayerImages folder not found ('{playerImagesDir}') - achievement banners will use the fallback icon.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[dashboard] Could not serve player images: {ex.Message}");
+                    }
+
                     // Serves the built React dashboard (vmix-dashboard's `npm run build` output)
                     // from this same host on "/" - one process, one port, no separate "npm run
                     // dev" window to keep open next to the WinForms app. Auto-detected relative to
@@ -165,11 +235,32 @@ namespace Pubg_Ranking_System
                         Console.WriteLine($"LiveDashboardHost: dashboard build not found at {dashboardDistPath} - run 'npm run build' in vmix-dashboard/ to serve it from here. The API/SignalR endpoints still work without it.");
                     }
 
+                    // Must run before anything that reads a tenant. Resolves the credential on
+                    // the request - agent key, overlay token, or dashboard key - and never a body
+                    // parameter; see TenantResolution.cs for why that distinction is structural.
+                    app.UseTenantResolution();
+
                     app.MapHub<LiveDashboardHub>("/hubs/match");
+
+                    // Tournaments and their generated credentials (TenancyApi.cs), and the
+                    // logs/agent-liveness/health surface (ObservabilityApi.cs).
+                    app.MapTenancyEndpoints();
+                    app.MapObservabilityEndpoints(async ct =>
+                    {
+                        // Readiness probe passed in as a delegate so ObservabilityApi has no
+                        // dependency on the EF context - and so an install that fell back to
+                        // SQLite reports that honestly instead of this code assuming MySQL.
+                        using var dbScope = rootProvider.CreateScope();
+                        var dbContext = dbScope.ServiceProvider.GetRequiredService<vmix_graphicsContext>();
+                        var reachable = await dbContext.Database.CanConnectAsync(ct);
+                        var provider = dbContext.Database.ProviderName ?? "unknown provider";
+                        return (reachable, (reachable ? "reachable: " : "cannot connect: ") + provider);
+                    });
 
                     // Match control (start/stop/reports/tournament setup) - every action that used
                     // to be a Form1 button click, now REST endpoints. See MatchControlApi.cs.
                     var ingestCoordinator = rootProvider.GetRequiredService<IngestCoordinator>();
+                    var tenantScopes = rootProvider.GetRequiredService<TenantScopeManager>();
                     app.MapMatchControlEndpoints(rootProvider, backgroundJobClient, ingestCoordinator);
 
                     // Ingest endpoint for VmixIngestAgent - the small program that runs on the
@@ -460,21 +551,65 @@ namespace Pubg_Ranking_System
                     // Push every update straight to connected clients as it happens.
                     var hubContext = app.Services.GetRequiredService<IHubContext<LiveDashboardHub>>();
                     _hubContext = hubContext;
+
+                    // These subscriptions are on the singleton stores, which belong to this
+                    // install's own tournament - so they publish to its group, not to every
+                    // connected client. On a single-tenant install every client is in this group,
+                    // making the change behaviour-preserving there.
+                    var defaultGroup = tenantScopes.Default.HubGroup;
+                    _defaultHubGroup = defaultGroup;
+
+                    // Additional tournaments get the same core feeds wired to their own group as
+                    // their scope is created. The achievement/elimination banners below stay on
+                    // the default scope for now: those subscriptions carry real transformation
+                    // logic, and duplicating it per tenant belongs with per-tenant match control
+                    // rather than being copied blind here.
+                    tenantScopes.ScopeCreated += newScope =>
+                    {
+                        if (newScope.IsDefault) return;
+                        var group = newScope.HubGroup;
+                        newScope.MatchState.LiveTeamsUpdated += teams =>
+                        {
+                            _ = hubContext.Clients.Group(group).SendAsync("TeamsUpdated", teams);
+                        };
+                        newScope.MatchState.Top4RankingsUpdated += teams =>
+                        {
+                            _ = hubContext.Clients.Group(group).SendAsync("Top4Updated", teams);
+                        };
+                        newScope.MatchState.MatchStatusChanged += status =>
+                        {
+                            _ = hubContext.Clients.Group(group).SendAsync("StatusChanged", status);
+                        };
+                        newScope.OverlayConfig.ConfigChanged += config =>
+                        {
+                            _ = hubContext.Clients.Group(group).SendAsync("OverlayConfigChanged", config);
+                        };
+                    };
+
+                    // Logs are pushed as they happen so the Logs tab shows a warning the moment it
+                    // is raised, rather than on its next poll.
+                    tenantScopes.LogAppended += logRecord =>
+                    {
+                        var target = string.IsNullOrEmpty(logRecord.TournamentId)
+                            ? defaultGroup
+                            : TenantScope.GroupFor(logRecord.TournamentId!);
+                        _ = hubContext.Clients.Group(target).SendAsync("LogAppended", logRecord);
+                    };
                     matchState.LiveTeamsUpdated += teams =>
                     {
-                        _ = hubContext.Clients.All.SendAsync("TeamsUpdated", teams);
+                        _ = hubContext.Clients.Group(defaultGroup).SendAsync("TeamsUpdated", teams);
                     };
                     matchState.Top4RankingsUpdated += teams =>
                     {
-                        _ = hubContext.Clients.All.SendAsync("Top4Updated", teams);
+                        _ = hubContext.Clients.Group(defaultGroup).SendAsync("Top4Updated", teams);
                     };
                     matchState.MatchStatusChanged += status =>
                     {
-                        _ = hubContext.Clients.All.SendAsync("StatusChanged", status);
+                        _ = hubContext.Clients.Group(defaultGroup).SendAsync("StatusChanged", status);
                     };
                     overlayConfigStore.ConfigChanged += config =>
                     {
-                        _ = hubContext.Clients.All.SendAsync("OverlayConfigChanged", config);
+                        _ = hubContext.Clients.Group(defaultGroup).SendAsync("OverlayConfigChanged", config);
                     };
                     // Real achievement detection (SetPlayerAcheivments.cs, in VmixGraphicsBusiness)
                     // raises this through MatchStateStore rather than calling BroadcastOverlayEvent
@@ -487,7 +622,25 @@ namespace Pubg_Ranking_System
                         var subtitle = string.IsNullOrWhiteSpace(achievement.TeamTag)
                             ? achievement.PlayerName
                             : $"{achievement.PlayerName} ({achievement.TeamTag})";
-                        BroadcastOverlayEvent(new OverlayEvent(achievement.Type, null, subtitle, null, null, null));
+                        // Relative URL on purpose: the overlay is served from this same host, and
+                        // a relative path keeps working whether it's opened as localhost, a LAN
+                        // address, or a hostname, without knowing which one vMix used.
+                        var photoUrl = string.IsNullOrWhiteSpace(achievement.PlayerUid)
+                            ? null
+                            : $"/player-images/{achievement.PlayerUid}.png";
+                        BroadcastOverlayEvent(new OverlayEvent(achievement.Type, null, subtitle, photoUrl, null, null));
+                    };
+
+                    // Real per-elimination feed, replacing the overlay's derived fallback. Type
+                    // "elimination" is what Overlay.tsx already routes into the feed list.
+                    matchState.KillDetected += kill =>
+                    {
+                        var detail = kill.Distance is > 0 ? $"{Math.Round(kill.Distance.Value)}m" : null;
+                        if (kill.IsLongRange) detail = detail is null ? "long range" : $"{detail} — long range";
+                        BroadcastOverlayEvent(new OverlayEvent(
+                            "elimination",
+                            $"{kill.KillerName} eliminated {kill.VictimName}",
+                            detail, null, null, null));
                     };
                     matchState.TeamEliminated += teamEliminatedEvent =>
                     {

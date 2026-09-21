@@ -1,23 +1,35 @@
 import { useEffect, useState } from "react";
 import { API_BASE, api } from "../lib/api";
 import type { OverlayConfig } from "../lib/api";
+import { GRAPHICS } from "../lib/graphics";
 
-const ELEMENTS: { id: string; label: string; group: string }[] = [
-  { id: "leaderboard", label: "Leaderboard panel", group: "Panels" },
-  { id: "eliminationFeed", label: "Elimination feed", group: "Panels" },
-  { id: "teamEliminatedBanner", label: '"TEAM ELIMINATED" banner', group: "Panels" },
-  { id: "achievement.grenadeElim", label: "Grenade Elimination", group: "Achievements" },
-  { id: "achievement.vehicleKill", label: "Vehicle Kill", group: "Achievements" },
-  { id: "achievement.airdropLoot", label: "Airdrop Loot", group: "Achievements" },
-  { id: "achievement.firstKill", label: "First Kill", group: "Achievements" },
-  { id: "achievement.knockout", label: "Knockout", group: "Achievements" },
-  { id: "achievement.chickenDinner", label: "Winner Winner Chicken Dinner", group: "Achievements" },
-];
+// Element list comes from the shared catalogue in lib/graphics.ts - this tab and the Director
+// tab previously kept separate hand-maintained lists, which drifted every time a graphic was
+// added. Group labels are mapped to this tab's own Panels/Achievements split.
+/** #RGB or #RRGGBB. vMix keys on a flat colour, so anything else is not a usable chroma value. */
+function isValidHex(value: string): boolean {
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value.trim());
+}
+
+/** Expands #RGB to #RRGGBB so what is stored is always the same shape. */
+function normalizeHex(value: string): string {
+  const v = value.trim();
+  if (/^#[0-9a-fA-F]{3}$/.test(v)) return "#" + v.slice(1).split("").map((c) => c + c).join("");
+  return v.toUpperCase();
+}
+
+const ELEMENTS: { id: string; label: string; group: string }[] = GRAPHICS.map((g) => ({
+  id: g.id,
+  label: g.label,
+  group: g.group === "Achievements" ? "Achievements" : "Panels",
+}));
 
 const PRESET_COLORS = ["#00FF00", "#00B140", "#0000FF", "#FF00FF"];
 
 export default function OverlaySettingsTab() {
   const [config, setConfig] = useState<OverlayConfig | null>(null);
+  // null = mirror the saved value; a string = the operator is mid-edit.
+  const [hexDraft, setHexDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const overlayUrl = `${window.location.origin}/overlay`;
@@ -82,17 +94,28 @@ export default function OverlaySettingsTab() {
           <input
             type="color"
             value={config.chromaKeyColor}
-            onChange={(e) => save({ ...config, chromaKeyColor: e.target.value })}
+            onChange={(e) => { setHexDraft(null); save({ ...config, chromaKeyColor: e.target.value }); }}
           />
+          {/* Typing is buffered: a half-finished value like "#00F" must not be committed as the
+              on-air background mid-keystroke. Only a complete #RGB/#RRGGBB is saved; anything
+              else marks the field invalid and leaves the live colour untouched. */}
           <input
             type="text"
             className="chroma-hex"
-            value={config.chromaKeyColor}
-            onChange={(e) => save({ ...config, chromaKeyColor: e.target.value })}
+            spellCheck={false}
+            maxLength={7}
+            style={hexDraft !== null && !isValidHex(hexDraft) ? { borderColor: "#ff6b81", color: "#ff6b81" } : undefined}
+            value={hexDraft ?? config.chromaKeyColor}
+            onChange={(e) => {
+              const raw = e.target.value.startsWith("#") ? e.target.value : `#${e.target.value}`;
+              setHexDraft(raw);
+              if (isValidHex(raw)) save({ ...config, chromaKeyColor: normalizeHex(raw) });
+            }}
+            onBlur={() => setHexDraft(null)}
           />
           <div className="chroma-presets">
             {PRESET_COLORS.map((c) => (
-              <button key={c} className="chroma-preset" style={{ background: c }} onClick={() => save({ ...config, chromaKeyColor: c })} title={c} />
+              <button key={c} className="chroma-preset" style={{ background: c }} onClick={() => { setHexDraft(null); save({ ...config, chromaKeyColor: c }); }} title={c} />
             ))}
           </div>
         </div>

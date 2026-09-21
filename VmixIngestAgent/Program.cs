@@ -42,6 +42,19 @@ internal static class Program
 
         var wasInGame = false;
 
+        // Tick ordering. Ticks are posted strictly in order, but they don't necessarily arrive
+        // that way: a request that stalls (or that we give up waiting on at HttpTimeoutSeconds
+        // while the server keeps processing it) can land after the tick behind it. Stamping each
+        // one with a monotonic sequence number lets the server discard anything older than what
+        // it has already applied, instead of letting a late tick overwrite fresher stats and make
+        // the overlay jump backwards.
+        //
+        // The session id scopes that counter. It's regenerated at the start of every match (and
+        // implicitly on restart, since this is a fresh process), which is what lets the counter go
+        // back to 1 without the server reading that as a flood of stale ticks.
+        var sessionId = NewSessionId();
+        long seq = 0;
+
         while (!cts.IsCancellationRequested)
         {
             var tickStart = DateTime.UtcNow;
@@ -51,9 +64,22 @@ internal static class Program
 
                 if (isInGame)
                 {
+                    if (!wasInGame)
+                    {
+                        sessionId = NewSessionId();
+                        seq = 0;
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] Match started - ingest session {sessionId}");
+                    }
+
                     var playerListJson = await http.GetStringAsync(pcobBase + "gettotalplayerlist", cts.Token);
                     var teamInfoJson = await http.GetStringAsync(pcobBase + "getteaminfolist", cts.Token);
-                    await PostTickAsync(http, mainAppBase, config.AgentKey, isInGame: true, playerListJson, teamInfoJson);
+                    // getkillinfo is a newer PC-OB endpoint and may be absent on older pcob
+                    // builds, so a failure here is expected rather than exceptional: the tick
+                    // still ships, with kill data omitted, and the feed simply stays empty.
+                    var killInfoJson = await TryGetAsync(http, pcobBase + "getkillinfo", cts.Token);
+                    // Claim the sequence number before awaiting the POST, so ordering reflects
+                    // when the snapshot was taken rather than when its request happened to finish.
+                    await PostTickAsync(http, mainAppBase, config.AgentKey, isInGame: true, playerListJson, teamInfoJson, sessionId, ++seq, killInfoJson);
                     wasInGame = true;
                 }
                 else if (wasInGame)
@@ -68,7 +94,7 @@ internal static class Program
                     }
                     catch { /* best-effort - the match-ended signal below still matters even without final data */ }
 
-                    await PostTickAsync(http, mainAppBase, config.AgentKey, isInGame: false, finalPlayers, finalTeams);
+                    await PostTickAsync(http, mainAppBase, config.AgentKey, isInGame: false, finalPlayers, finalTeams, sessionId, ++seq);
                     wasInGame = false;
                 }
             }
@@ -89,6 +115,22 @@ internal static class Program
         return 0;
     }
 
+    private static string NewSessionId() => Guid.NewGuid().ToString("N");
+
+    /// <summary>GET that returns null rather than throwing, for endpoints whose absence is normal.</summary>
+    private static async Task<string?> TryGetAsync(HttpClient http, string url, CancellationToken token)
+    {
+        try
+        {
+            var response = await http.GetAsync(url, token);
+            return response.IsSuccessStatusCode ? await response.Content.ReadAsStringAsync(token) : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static async Task<bool> IsInGameAsync(HttpClient http, string pcobBase)
     {
         try
@@ -106,18 +148,45 @@ internal static class Program
         }
     }
 
-    private static async Task PostTickAsync(HttpClient http, string mainAppBase, string agentKey, bool isInGame, string? playerListJson, string? teamInfoJson)
+    private static async Task PostTickAsync(HttpClient http, string mainAppBase, string agentKey, bool isInGame, string? playerListJson, string? teamInfoJson, string sessionId, long seq, string? killInfoJson = null)
     {
-        var payload = JsonSerializer.Serialize(new { isInGame, playerListJson, teamInfoJson });
+        var payload = JsonSerializer.Serialize(new { isInGame, playerListJson, teamInfoJson, sessionId, seq, killInfoJson });
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{mainAppBase}/api/ingest/tick") { Content = content };
         request.Headers.Add("X-Agent-Key", agentKey);
 
         var response = await http.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
         if (!response.IsSuccessStatusCode)
         {
-            var body = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] Main app rejected tick ({(int)response.StatusCode}): {body}");
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] Main app rejected tick #{seq} ({(int)response.StatusCode}): {body}");
+            return;
+        }
+
+        // A 200 with applied=false isn't an error - it's the server telling us this tick arrived
+        // after a newer one and was correctly discarded. Worth logging (a steady stream of these
+        // means the link to the server is slower than the poll interval) but never worth retrying:
+        // the next poll already carries fresher data than anything a retry could resend.
+        if (!WasApplied(body))
+        {
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] Tick #{seq} arrived out of order and was discarded by the server: {body}");
+        }
+    }
+
+    private static bool WasApplied(string responseBody)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(responseBody);
+            // Absent "applied" means an older server build that predates tick ordering - treat
+            // its 200 as success rather than logging a false warning every single tick.
+            return !doc.RootElement.TryGetProperty("applied", out var applied)
+                   || applied.ValueKind != JsonValueKind.False;
+        }
+        catch
+        {
+            return true;
         }
     }
 
