@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Award, Box, Car, Crosshair, Skull, Trophy, Zap } from "lucide-react";
 import { Bg, Theme, bgCss } from "../theme";
+import { panelSurface } from "./surface";
 
 // The achievement popup visual - extracted out of AchievementPage.tsx so the Studio preview and
 // the real /overlay route render from exactly the same component, same as StandingsRenderer.
@@ -39,11 +40,13 @@ export interface AchievementRendererProps {
   /** Drives the slide-up entrance. The caller owns timing: a real event on air, a Replay button
    *  in the Studio. */
   visible: boolean;
+  /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
+  panelOpacity?: number;
 }
 
-export function AchievementRenderer({ theme, accentBg, label, primary, detail, icon, photoUrl, visible }: AchievementRendererProps) {
+export function AchievementRenderer({ theme, accentBg, label, primary, detail, icon, photoUrl, visible, panelOpacity }: AchievementRendererProps) {
   return (
-    <div style={{ width: "100%", transform: visible ? "translateY(0)" : "translateY(30px)", opacity: visible ? 1 : 0, transition: "all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)", display: "flex", alignItems: "center", gap: 10, background: "rgba(20,20,26,0.8)", backdropFilter: `blur(${theme.panelBlur})`, WebkitBackdropFilter: `blur(${theme.panelBlur})`, borderRadius: 8, padding: "10px 14px" } as any}>
+    <div style={{ width: "100%", transform: visible ? "translateY(0)" : "translateY(30px)", opacity: visible ? 1 : 0, transition: "all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)", display: "flex", alignItems: "center", gap: 10, ...panelSurface(panelOpacity, "rgba(20,20,26,0.8)", theme.panelBlur), borderRadius: 8, padding: "10px 14px" } as any}>
       {photoUrl ? (
         <img src={photoUrl} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
       ) : (

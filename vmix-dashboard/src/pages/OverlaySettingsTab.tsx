@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { API_BASE, api } from "../lib/api";
 import type { OverlayConfig } from "../lib/api";
 import { GRAPHICS } from "../lib/graphics";
+import { getConfigElement } from "../studio/configAccess";
 
 // Element list comes from the shared catalogue in lib/graphics.ts - this tab and the Director
 // tab previously kept separate hand-maintained lists, which drifted every time a graphic was
@@ -121,6 +122,34 @@ export default function OverlaySettingsTab() {
         </div>
       </div>
 
+      <div className="panel">
+        <h2>Canvas background mode</h2>
+        <p className="panel-hint">
+          "Chroma" is today's behaviour (fills with the color above). "Transparent" paints nothing at
+          all, for vMix Browser Sources that composite real alpha instead of a chroma key. "Solid"
+          fills with a plain color. "Image" is preview-only - it never renders on air here, only in
+          the Demo page (Task 10) - and is stored under a separate preview.* key this page ignores.
+        </p>
+        <div className="canvas-mode-row">
+          {(["chroma", "transparent", "solid", "image"] as const).map((mode) => (
+            <button
+              key={mode}
+              className={mode === getConfigElement<string>(config, "canvas.mode", "chroma") ? "" : "secondary"}
+              onClick={() => save({ ...config, elementSettings: { ...config.elementSettings, ["canvas.mode"]: mode } })}
+            >
+              {mode}
+            </button>
+          ))}
+          {getConfigElement<string>(config, "canvas.mode", "chroma") === "solid" && (
+            <input
+              type="color"
+              value={getConfigElement<string>(config, "canvas.solidColor", "#000000")}
+              onChange={(e) => save({ ...config, elementSettings: { ...config.elementSettings, ["canvas.solidColor"]: e.target.value } })}
+            />
+          )}
+        </div>
+      </div>
+
       {Object.entries(grouped).map(([group, items]) => (
         <div className="panel" key={group}>
           <h2>{group}</h2>
@@ -135,6 +164,22 @@ export default function OverlaySettingsTab() {
                   }
                 />
                 <span>{el.label}</span>
+                {/* Task 9: per-graphic panel background opacity. 100 (today's appearance) until an
+                    operator touches it - stored in elementSettings, same convention as every other
+                    per-element override (see configAccess.ts), so no backend change is needed. */}
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  className="opacity-slider"
+                  title="Panel background opacity"
+                  value={getConfigElement<number>(config, `${el.id}.backgroundOpacity`, 100)}
+                  onChange={(e) =>
+                    save({ ...config, elementSettings: { ...config.elementSettings, [`${el.id}.backgroundOpacity`]: Number(e.target.value) } })
+                  }
+                />
+                <span className="opacity-value">{getConfigElement<number>(config, `${el.id}.backgroundOpacity`, 100)}%</span>
                 {el.group === "Achievements" && (
                   <button
                     className="secondary preview-btn"

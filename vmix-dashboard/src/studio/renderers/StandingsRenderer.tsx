@@ -1,4 +1,5 @@
 import { Bg, HealthStop, RowRule, Theme, bgCss, colorForPlayer, resolveRowBg } from "../theme";
+import { panelSurface } from "./surface";
 import type { ColumnStyle } from "../StudioControls";
 
 // The actual Standings visual - extracted out of StandingsPage.tsx so the Studio preview and the
@@ -22,15 +23,17 @@ export interface StandingsRendererProps {
   headerBg: Bg;
   rows: StandingsRow[];
   maxRows?: number;
+  /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
+  panelOpacity?: number;
 }
 
-export function StandingsRenderer({ theme, mode, healthStops, columns, rowRules, headerBg, rows, maxRows = 10 }: StandingsRendererProps) {
+export function StandingsRenderer({ theme, mode, healthStops, columns, rowRules, headerBg, rows, maxRows = 10, panelOpacity }: StandingsRendererProps) {
   const visibleRows = mode === "top4" ? rows.filter((r) => r.rank <= 4) : rows;
   const col = (key: string) => columns[key]?.mode === "custom" ? columns[key].custom : ({} as any);
   const logoScale = columns.logo?.mode === "custom" ? (columns.logo.custom.scale ?? 1) : 1;
 
   return (
-    <div style={{ width: "100%", borderRadius: theme.radius, overflow: "hidden", background: theme.panelBg, backdropFilter: `blur(${theme.panelBlur})`, WebkitBackdropFilter: `blur(${theme.panelBlur})`, border: `1px solid ${theme.panelBorder}`, boxShadow: theme.glow } as any}>
+    <div style={{ width: "100%", borderRadius: theme.radius, overflow: "hidden", ...panelSurface(panelOpacity, theme.panelBg, theme.panelBlur), border: `1px solid ${theme.panelBorder}`, boxShadow: panelOpacity !== undefined && panelOpacity <= 0 ? "none" : theme.glow } as any}>
       <div style={{ display: "flex", alignItems: "center", padding: "11px 16px", background: bgCss(headerBg), fontSize: 12.5, fontWeight: 700, color: theme.headerTextColor, fontFamily: theme.fontDisplay, letterSpacing: 0.6 }}>
         <div style={{ width: 26 }}>#</div><div style={{ width: 22 * logoScale + 8 }} /><div style={{ flex: 1 }}>TEAM</div><div style={{ width: 64, textAlign: "center" }}>ALIVE</div><div style={{ width: 40, textAlign: "center" }}>ELIMS</div>
       </div>

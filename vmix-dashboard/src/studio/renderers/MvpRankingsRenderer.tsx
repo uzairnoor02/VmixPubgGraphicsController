@@ -1,4 +1,5 @@
 import { Bg, RowRule, Theme, bgCss, resolveRowBg } from "../theme";
+import { panelSurface } from "./surface";
 import type { ColumnStyle } from "../StudioControls";
 
 // "MVP Rankings" - the ranked player table behind PostMatch.Top5MVP / StageMVP. Distinct from
@@ -42,9 +43,12 @@ export interface MvpRankingsRendererProps {
   columnStyles: Record<string, ColumnStyle>;
   rowRules: RowRule[];
   maxRows?: number;
+  /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
+  panelOpacity?: number;
 }
 
 export function MvpRankingsRenderer({
+  panelOpacity,
   theme, canvasBg, headerBg, title = "MVP RANKINGS", subtitle, rows, columns, columnStyles, rowRules, maxRows = 5,
 }: MvpRankingsRendererProps) {
   const col = (key: string) => (columnStyles[key]?.mode === "custom" ? columnStyles[key].custom : ({} as any));
@@ -62,7 +66,7 @@ export function MvpRankingsRenderer({
       </div>
 
       <div style={{ flex: 1, padding: "0 24px 18px", display: "flex" }}>
-        <div style={{ flex: 1, background: theme.panelBg, backdropFilter: `blur(${theme.panelBlur})`, WebkitBackdropFilter: `blur(${theme.panelBlur})`, borderRadius: 8, overflow: "hidden", fontSize: 12, alignSelf: "flex-start" } as any}>
+        <div style={{ flex: 1, ...panelSurface(panelOpacity, theme.panelBg, theme.panelBlur), borderRadius: 8, overflow: "hidden", fontSize: 12, alignSelf: "flex-start" } as any}>
           <div style={{ display: "flex", background: bgCss(headerBg), fontWeight: 700, padding: "7px 12px", color: theme.headerTextColor, fontFamily: theme.fontDisplay, fontSize: "12px" }}>
             <div style={{ width: 24 }}>#</div>
             <div style={{ flex: 1 }}>PLAYER</div>

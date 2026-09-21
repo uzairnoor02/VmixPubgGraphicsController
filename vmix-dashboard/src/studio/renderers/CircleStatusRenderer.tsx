@@ -1,4 +1,5 @@
 import { Bg, Theme, bgCss } from "../theme";
+import { panelSurface } from "./surface";
 
 // The "circle closing in" status bar - the thin always-on strip that tells the viewer which zone
 // phase the match is in and how long is left. Data comes from pcob's getcircleinfo (see
@@ -24,6 +25,8 @@ export interface CircleStatusRendererProps {
    *  rather than dividing by zero. */
   phaseSeconds: number;
   label?: string;
+  /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
+  panelOpacity?: number;
 }
 
 /** mm:ss, clamped at zero - pcob's Counter can briefly report a negative as a phase flips. */
@@ -42,6 +45,7 @@ export function parseCircleNumber(raw: string | null | undefined): number {
 }
 
 export function CircleStatusRenderer({
+  panelOpacity,
   theme, barBg, circleIndex, phase, secondsRemaining, phaseSeconds, label,
 }: CircleStatusRendererProps) {
   const progress = phaseSeconds > 0
@@ -53,7 +57,7 @@ export function CircleStatusRenderer({
   const urgent = secondsRemaining <= 15;
 
   return (
-    <div style={{ width: "100%", borderRadius: theme.radius, overflow: "hidden", fontFamily: theme.fontDisplay, border: `1px solid ${theme.panelBorder}`, boxShadow: theme.glow, background: theme.panelBg, backdropFilter: `blur(${theme.panelBlur})`, WebkitBackdropFilter: `blur(${theme.panelBlur})` } as any}>
+    <div style={{ width: "100%", borderRadius: theme.radius, overflow: "hidden", fontFamily: theme.fontDisplay, border: `1px solid ${theme.panelBorder}`, boxShadow: panelOpacity !== undefined && panelOpacity <= 0 ? "none" : theme.glow, ...panelSurface(panelOpacity, theme.panelBg, theme.panelBlur) } as any}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 14px" }}>
         <div style={{ background: bgCss(barBg), color: theme.headerTextColor, fontWeight: 800, fontSize: 12, padding: "4px 10px", borderRadius: 4, letterSpacing: 0.5, flexShrink: 0 }}>
           ZONE {circleIndex}

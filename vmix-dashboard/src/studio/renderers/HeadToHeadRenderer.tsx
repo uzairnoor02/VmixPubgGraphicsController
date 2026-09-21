@@ -1,4 +1,5 @@
 import { Bg, Theme, bgCss } from "../theme";
+import { panelSurface } from "./surface";
 import type { ColumnStyle } from "../StudioControls";
 
 // Head-to-Head - two teams compared side by side. Feasible because the TeamPoints table already
@@ -35,6 +36,8 @@ export interface HeadToHeadRendererProps {
   right: HeadToHeadTeam;
   stats: HeadToHeadStat[];
   fields: Record<string, ColumnStyle>;
+  /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
+  panelOpacity?: number;
 }
 
 function TeamHeader({ team, theme, accentBg, align, nameStyle }: { team: HeadToHeadTeam; theme: Theme; accentBg: Bg; align: "left" | "right"; nameStyle: any }) {
@@ -57,6 +60,7 @@ function TeamHeader({ team, theme, accentBg, align, nameStyle }: { team: HeadToH
 }
 
 export function HeadToHeadRenderer({
+  panelOpacity,
   theme, canvasBg, accentBg, title = "HEAD TO HEAD", subtitle, left, right, stats, fields,
 }: HeadToHeadRendererProps) {
   const nameStyle = fields.teamName?.mode === "custom" ? fields.teamName.custom : ({} as any);
@@ -78,7 +82,7 @@ export function HeadToHeadRenderer({
 
       <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
         {stats.map((stat) => (
-          <div key={stat.label} style={{ display: "flex", alignItems: "center", background: theme.panelBg, backdropFilter: `blur(${theme.panelBlur})`, WebkitBackdropFilter: `blur(${theme.panelBlur})`, borderRadius: 6, padding: "5px 11px" } as any}>
+          <div key={stat.label} style={{ display: "flex", alignItems: "center", ...panelSurface(panelOpacity, theme.panelBg, theme.panelBlur), borderRadius: 6, padding: "5px 11px" } as any}>
             <div style={{ width: 74, textAlign: "left", fontFamily: statStyle.fontFamily || theme.fontDisplay, fontSize: statStyle.fontSize ? `${statStyle.fontSize}px` : "15px", fontWeight: 800, color: stat.winner === "left" ? winColor : (statStyle.color || theme.textPrimary) }}>
               {typeof stat.left === "number" ? stat.left.toLocaleString() : stat.left}
             </div>

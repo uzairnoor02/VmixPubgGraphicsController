@@ -1,4 +1,5 @@
 import { Bg, Theme, bgCss } from "../theme";
+import { panelSurface } from "./surface";
 import type { ColumnStyle } from "../StudioControls";
 
 // "Teams to Watch" - the pre-match / between-match card highlighting a handful of teams and why
@@ -28,9 +29,12 @@ export interface TeamsToWatchRendererProps {
   fields: Record<string, ColumnStyle>;
   /** More than this and the cards get too thin to read at broadcast size. */
   maxTeams?: number;
+  /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
+  panelOpacity?: number;
 }
 
 export function TeamsToWatchRenderer({
+  panelOpacity,
   theme, canvasBg, accentBg, title = "TEAMS TO WATCH", subtitle, teams, fields, maxTeams = 4,
 }: TeamsToWatchRendererProps) {
   const nameStyle = fields.teamName?.mode === "custom" ? fields.teamName.custom : ({} as any);
@@ -51,7 +55,7 @@ export function TeamsToWatchRenderer({
           empty, which looks like a bug on air. */}
       <div style={{ display: "flex", gap: 12, marginTop: 16, flex: 1, justifyContent: "center" }}>
         {visible.map((team) => (
-          <div key={team.key} style={{ flex: "1 1 0", maxWidth: 210, minWidth: 0, display: "flex", flexDirection: "column", background: theme.panelBg, backdropFilter: `blur(${theme.panelBlur})`, WebkitBackdropFilter: `blur(${theme.panelBlur})`, border: `1px solid ${theme.panelBorder}`, borderRadius: 8, overflow: "hidden" } as any}>
+          <div key={team.key} style={{ flex: "1 1 0", maxWidth: 210, minWidth: 0, display: "flex", flexDirection: "column", ...panelSurface(panelOpacity, theme.panelBg, theme.panelBlur), border: `1px solid ${theme.panelBorder}`, borderRadius: 8, overflow: "hidden" } as any}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: bgCss(accentBg) }}>
               {team.logoUrl
                 ? <img src={team.logoUrl} alt="" style={{ width: 24, height: 24, borderRadius: 4, objectFit: "cover", flexShrink: 0 }} />

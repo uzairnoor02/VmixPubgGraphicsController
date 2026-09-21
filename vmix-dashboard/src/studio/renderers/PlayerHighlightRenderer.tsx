@@ -1,5 +1,6 @@
 import { User } from "lucide-react";
 import { Bg, Theme, bgCss } from "../theme";
+import { panelSurface } from "./surface";
 import type { ColumnStyle } from "../StudioControls";
 
 // One player, big - the card behind "MVP of the Match", "Star Player" and "Player Highlight".
@@ -27,9 +28,12 @@ export interface PlayerHighlightRendererProps {
   teamLogoUrl?: string;
   stats: HighlightStat[];
   fields: Record<string, ColumnStyle>;
+  /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
+  panelOpacity?: number;
 }
 
 export function PlayerHighlightRenderer({
+  panelOpacity,
   theme, canvasBg, accentBg, label, playerName, teamName, photoUrl, teamLogoUrl, stats, fields,
 }: PlayerHighlightRendererProps) {
   const nameStyle = fields.playerName?.mode === "custom" ? fields.playerName.custom : ({} as any);
@@ -39,7 +43,7 @@ export function PlayerHighlightRenderer({
     <div style={{ width: "100%", height: "100%", borderRadius: theme.radius, overflow: "hidden", background: bgCss(canvasBg), fontFamily: theme.fontDisplay, display: "flex", border: `1px solid ${theme.panelBorder}`, boxShadow: theme.glow } as any}>
       {/* Portrait. Falls back to a generic figure when no photo exists for this UID, the same
           way the achievement banner does, so a missing file is never a broken image. */}
-      <div style={{ width: "38%", flexShrink: 0, background: theme.panelBg, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", borderRight: `1px solid ${theme.panelBorder}` }}>
+      <div style={{ width: "38%", flexShrink: 0, ...panelSurface(panelOpacity, theme.panelBg, theme.panelBlur), display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", borderRight: `1px solid ${theme.panelBorder}` }}>
         {photoUrl
           ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           : <User size={72} color="rgba(255,255,255,0.35)" />}

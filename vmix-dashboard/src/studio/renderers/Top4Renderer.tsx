@@ -1,4 +1,5 @@
 import { Bg, DEAD_COLOR, KNOCKED_COLOR, Theme, bgCss, hexToRgb, rgbToHex } from "../theme";
+import { panelSurface } from "./surface";
 import type { ColumnStyle } from "../StudioControls";
 
 // The actual Top 4 / WWCD Chance visual - extracted out of Top4Page.tsx so the Studio preview and
@@ -39,9 +40,11 @@ export interface Top4RendererProps {
   cardBg: Bg;
   fields: Record<string, ColumnStyle>;
   teams: Top4Team[];
+  /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
+  panelOpacity?: number;
 }
 
-export function Top4Renderer({ theme, wwcdBar, cardBg, fields, teams }: Top4RendererProps) {
+export function Top4Renderer({ theme, wwcdBar, cardBg, fields, teams, panelOpacity }: Top4RendererProps) {
   const rankStyle = fields.overallRank?.mode === "custom" ? fields.overallRank.custom : ({} as any);
   const tagStyle = fields.tag?.mode === "custom" ? fields.tag.custom : ({} as any);
   const wwcdTextStyle = fields.wwcdText?.mode === "custom" ? fields.wwcdText.custom : ({} as any);
@@ -56,7 +59,7 @@ export function Top4Renderer({ theme, wwcdBar, cardBg, fields, teams }: Top4Rend
         const tagLen = t.tag.length;
         const autoTagSize = tagLen > 14 ? 13 : tagLen > 10 ? 15 : tagLen > 7 ? 17 : 20;
         return (
-        <div key={t.key} style={{ flex: 1, minWidth: 0, borderRadius: 10, overflow: "hidden", background: bgCss(cardBg), backdropFilter: `blur(${theme.panelBlur})`, WebkitBackdropFilter: `blur(${theme.panelBlur})`, border: `1px solid ${theme.panelBorder}`, boxShadow: theme.glow, display: "flex", flexDirection: "column" } as any}>
+        <div key={t.key} style={{ flex: 1, minWidth: 0, borderRadius: 10, overflow: "hidden", ...panelSurface(panelOpacity, bgCss(cardBg), theme.panelBlur), border: `1px solid ${theme.panelBorder}`, boxShadow: panelOpacity !== undefined && panelOpacity <= 0 ? "none" : theme.glow, display: "flex", flexDirection: "column" } as any}>
 
           <div style={{ background: "rgba(255,255,255,0.06)", padding: "9px 10px 8px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

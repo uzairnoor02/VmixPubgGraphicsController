@@ -1,4 +1,5 @@
 import { Bg, Theme, bgCss } from "../theme";
+import { panelSurface } from "./surface";
 
 // The two graphics from EliminatedSidebarPage.tsx, extracted so the Studio preview and the real
 // /overlay route render from exactly the same components - same pattern as StandingsRenderer.
@@ -18,15 +19,17 @@ export interface EliminatedBannerRendererProps {
    *  a real elimination event and in the Studio it is triggered by a Replay button. */
   visible: boolean;
   label?: string;
+  /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
+  panelOpacity?: number;
 }
 
-export function EliminatedBannerRenderer({ theme, bannerBg, teamName, logoUrl, visible, label = "TEAM ELIMINATED" }: EliminatedBannerRendererProps) {
+export function EliminatedBannerRenderer({ theme, bannerBg, teamName, logoUrl, visible, label = "TEAM ELIMINATED", panelOpacity }: EliminatedBannerRendererProps) {
   return (
     <div style={{ width: "100%", transform: visible ? "scale(1) translateY(0)" : "scale(0.85) translateY(-12px)", opacity: visible ? 1 : 0, transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)" }}>
       <div style={{ background: bgCss(bannerBg), padding: "10px 20px", clipPath: "polygon(0 0, 100% 0, 96% 100%, 0% 100%)" }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: theme.headerTextColor, fontFamily: theme.fontDisplay, letterSpacing: 0.5 }}>{label}</div>
       </div>
-      <div style={{ background: theme.panelBg, backdropFilter: `blur(${theme.panelBlur})`, WebkitBackdropFilter: `blur(${theme.panelBlur})`, display: "flex", alignItems: "center", gap: 10, padding: "8px 16px" } as any}>
+      <div style={{ ...panelSurface(panelOpacity, theme.panelBg, theme.panelBlur), display: "flex", alignItems: "center", gap: 10, padding: "8px 16px" } as any}>
         {logoUrl
           ? <img src={logoUrl} alt="" style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", flexShrink: 0 }} />
           : <div style={{ width: 32, height: 32, borderRadius: 4, background: "rgba(255,255,255,0.15)", flexShrink: 0 }} />}
@@ -55,16 +58,18 @@ export interface SidebarRendererProps {
   headerBg: Bg;
   rows: SidebarRow[];
   maxRows?: number;
+  /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
+  panelOpacity?: number;
 }
 
-export function SidebarRenderer({ theme, headerBg, rows, maxRows = 16 }: SidebarRendererProps) {
+export function SidebarRenderer({ theme, headerBg, rows, maxRows = 16, panelOpacity }: SidebarRendererProps) {
   return (
     <div style={{ width: "100%", borderRadius: theme.radius, overflow: "hidden", fontFamily: theme.fontDisplay, border: "1px solid rgba(255,255,255,0.12)", boxShadow: theme.glow }}>
       <div style={{ display: "flex", background: bgCss(headerBg), color: theme.headerTextColor, fontWeight: 700, fontSize: 11, padding: "5px 10px" }}>
         <div style={{ width: 20 }}>#</div><div style={{ flex: 1 }}>TEAM</div>
         <div style={{ width: 44, textAlign: "center" }}>PTS</div><div style={{ width: 36, textAlign: "center" }}>ELIM</div>
       </div>
-      <div style={{ background: theme.panelBg, backdropFilter: `blur(${theme.panelBlur})`, WebkitBackdropFilter: `blur(${theme.panelBlur})` } as any}>
+      <div style={{ ...panelSurface(panelOpacity, theme.panelBg, theme.panelBlur) } as any}>
         {rows.slice(0, maxRows).map((t) => (
           <div key={t.key} style={{ display: "flex", alignItems: "center", padding: "5px 10px", borderTop: "1px solid rgba(255,255,255,0.05)", fontSize: 12 }}>
             <div style={{ width: 20, fontWeight: 700, color: theme.textPrimary }}>{t.rank}</div>

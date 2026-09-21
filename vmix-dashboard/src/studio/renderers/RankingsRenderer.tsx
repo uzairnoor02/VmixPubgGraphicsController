@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Bg, RowRule, Theme, bgCss, resolveRowBg } from "../theme";
+import { panelSurface } from "./surface";
 import type { ColumnStyle } from "../StudioControls";
 
 // The Match/Overall Ranking visual - extracted out of RankingsPage.tsx so the Studio preview and
@@ -40,6 +41,8 @@ export interface RankingsRendererProps {
    *  what belongs on air where nobody can click; "none" hides it entirely. */
   pager?: "controls" | "indicator" | "none";
   onPageChange?: (page: number) => void;
+  /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
+  panelOpacity?: number;
 }
 
 // Rankings always run as exactly TWO pages, split as evenly as possible, with any odd row on
@@ -68,7 +71,7 @@ export function rankingPageRows<T>(rows: T[], page: number): T[] {
 
 export function RankingsRenderer({
   theme, canvasBg, headerBg, title, subtitle, rows, columns, columnStyles, rowRules,
-  page, pager = "indicator", onPageChange,
+  page, pager = "indicator", onPageChange, panelOpacity,
 }: RankingsRendererProps) {
   const totalPages = totalRankingPages(rows.length);
   // Clamp rather than trust the caller: the overlay's auto-advance timer and a live roster that
@@ -95,7 +98,7 @@ export function RankingsRenderer({
       </div>
 
       <div style={{ flex: 1, padding: density === "normal" ? "0 24px 18px" : "0 24px 12px", display: "flex" }}>
-        <div style={{ flex: 1, background: theme.panelBg, backdropFilter: `blur(${theme.panelBlur})`, WebkitBackdropFilter: `blur(${theme.panelBlur})`, borderRadius: 8, overflow: "hidden", fontSize: 12, alignSelf: "flex-start" } as any}>
+        <div style={{ flex: 1, ...panelSurface(panelOpacity, theme.panelBg, theme.panelBlur), borderRadius: 8, overflow: "hidden", fontSize: 12, alignSelf: "flex-start" } as any}>
           <div style={{ display: "flex", background: bgCss(headerBg), fontWeight: 700, padding: density === "normal" ? "7px 12px" : "5px 12px", color: theme.headerTextColor, fontFamily: theme.fontDisplay, fontSize: "12px" }}>
             <div style={{ width: 24 }}>#</div>
             <div style={{ flex: 1 }}>TEAM</div>

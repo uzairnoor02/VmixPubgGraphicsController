@@ -1,4 +1,5 @@
 import { Bg, HealthStop, Theme, bgCss, colorForPlayer } from "../theme";
+import { panelSurface } from "./surface";
 import type { ColumnStyle } from "../StudioControls";
 
 // The team intro / WWCD card - a single team with its roster and win probability, shown before a
@@ -27,9 +28,12 @@ export interface TeamIntroRendererProps {
   healthStops?: HealthStop[];
   fields: Record<string, ColumnStyle>;
   label?: string;
+  /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
+  panelOpacity?: number;
 }
 
 export function TeamIntroRenderer({
+  panelOpacity,
   theme, canvasBg, accentBg, teamName, teamLogoUrl, wwcd, players, stats = [], healthStops, fields, label,
 }: TeamIntroRendererProps) {
   const nameStyle = fields.teamName?.mode === "custom" ? fields.teamName.custom : ({} as any);
@@ -80,7 +84,7 @@ export function TeamIntroRenderer({
 
       <div style={{ marginTop: "auto", paddingTop: 14, display: "flex", gap: 10 }}>
         {roster.map((player) => (
-          <div key={player.playerName} style={{ flex: "1 1 0", maxWidth: 130, minWidth: 0, background: theme.panelBg, backdropFilter: `blur(${theme.panelBlur})`, WebkitBackdropFilter: `blur(${theme.panelBlur})`, border: `1px solid ${theme.panelBorder}`, borderRadius: 7, overflow: "hidden" } as any}>
+          <div key={player.playerName} style={{ flex: "1 1 0", maxWidth: 130, minWidth: 0, ...panelSurface(panelOpacity, theme.panelBg, theme.panelBlur), border: `1px solid ${theme.panelBorder}`, borderRadius: 7, overflow: "hidden" } as any}>
             <div style={{ height: 56, background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
               {player.photoUrl
                 ? <img src={player.photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />

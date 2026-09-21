@@ -275,6 +275,21 @@ export default function Overlay() {
 
   const sortedTeams = useMemo(() => [...teams].sort((a, b) => a.teamRank - b.teamRank), [teams]);
   const visible = (id: string, fallback = true) => config.elementVisibility[id] ?? fallback;
+  // Task 9: per-graphic panel background opacity, stored in elementSettings via the same
+  // getConfigElement convention as every other per-element override on this page (see
+  // standings.healthStops etc. just below) - no new API, no backend change.
+  const panelOpacity = (id: string) => getConfigElement<number>(config, `${id}.backgroundOpacity`, 100);
+  // Canvas background mode (Task 9): chroma (default, unchanged behavior) | transparent (paint
+  // nothing, for vMix Browser Sources that handle real alpha) | solid | image. "image" is
+  // preview-only (Task 10's Demo page) and is never rendered here - only the Demo page reads
+  // the matching `preview.*`-prefixed key, mirroring the existing director.* convention of
+  // keys this page must ignore.
+  const canvasMode = getConfigElement<string>(config, "canvas.mode", "chroma");
+  const canvasSolidColor = getConfigElement<string>(config, "canvas.solidColor", "#000000");
+  const canvasBackgroundStyle: { backgroundColor: string } =
+    canvasMode === "transparent" ? { backgroundColor: "transparent" } :
+    canvasMode === "solid" ? { backgroundColor: canvasSolidColor } :
+    { backgroundColor: config.chromaKeyColor }; // "chroma" and "image" (preview-only) both key as normal on air
 
   // Same config keys StandingsPage.tsx (Graphics Studio) reads/writes via useStudioElement - see
   // that file and StudioConfigContext.tsx for the write side of this.
@@ -423,28 +438,28 @@ export default function Overlay() {
       }));
 
   return (
-    <div className="overlay-root" style={{ backgroundColor: config.chromaKeyColor }}>
+    <div className="overlay-root" style={canvasBackgroundStyle}>
       {visible("leaderboard") && standingsRows.length > 0 && (
         <div style={{ position: "absolute", top: 48, right: 48, width: 420 }}>
-          <StandingsRenderer theme={studioTheme} mode="full" healthStops={healthStops} columns={columns} rowRules={rowRules} headerBg={headerBg} rows={standingsRows} maxRows={16} />
+          <StandingsRenderer theme={studioTheme} mode="full" healthStops={healthStops} columns={columns} rowRules={rowRules} headerBg={headerBg} rows={standingsRows} maxRows={16} panelOpacity={panelOpacity("leaderboard")} />
         </div>
       )}
 
       {visible("top4") && top4Rows.length > 0 && (
         <div style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", width: 720 }}>
-          <Top4Renderer theme={studioTheme} wwcdBar={wwcdBar} cardBg={top4CardBg} fields={top4Fields} teams={top4Rows} />
+          <Top4Renderer theme={studioTheme} wwcdBar={wwcdBar} cardBg={top4CardBg} fields={top4Fields} teams={top4Rows} panelOpacity={panelOpacity("top4")} />
         </div>
       )}
 
       {visible("sidebar", false) && sidebarRows.length > 0 && (
         <div style={{ position: "absolute", top: 48, left: 48, width: 260 }}>
-          <SidebarRenderer theme={studioTheme} headerBg={studioTheme.headerBg} rows={sidebarRows} maxRows={16} />
+          <SidebarRenderer theme={studioTheme} headerBg={studioTheme.headerBg} rows={sidebarRows} maxRows={16} panelOpacity={panelOpacity("sidebar")} />
         </div>
       )}
 
       {visible("topPlayers", false) && topPlayerEntries.length > 0 && (
         <div style={{ position: "absolute", bottom: 48, left: "50%", transform: "translateX(-50%)", width: 560, aspectRatio: "16/9" }}>
-          <TopPlayersRenderer theme={studioTheme} canvasBg={topPlayersCanvasBg} labelBg={topPlayersLabelBg} cardBg={topPlayersCardBg} fields={topPlayersFields} players={topPlayerEntries} />
+          <TopPlayersRenderer theme={studioTheme} canvasBg={topPlayersCanvasBg} labelBg={topPlayersLabelBg} cardBg={topPlayersCardBg} fields={topPlayersFields} players={topPlayerEntries} panelOpacity={panelOpacity("topPlayers")} />
         </div>
       )}
 
@@ -458,6 +473,7 @@ export default function Overlay() {
             secondsRemaining={parseCircleNumber(circle.counter)}
             phaseSeconds={parseCircleNumber(circle.maxTime)}
             label={circlePhase === "closing" ? circleClosingLabel : circleWaitingLabel}
+            panelOpacity={panelOpacity("circle")}
           />
         </div>
       )}
@@ -475,6 +491,7 @@ export default function Overlay() {
             teamLogoUrl={highlight.teamLogoUrl}
             stats={highlightStats}
             fields={highlightFields}
+            panelOpacity={panelOpacity("playerHighlight")}
           />
         </div>
       )}
@@ -483,14 +500,14 @@ export default function Overlay() {
         <div style={{ position: "absolute", top: "12%", left: "50%", transform: "translateX(-50%)", width: 620, aspectRatio: "16/9" }}>
           <MvpRankingsRenderer theme={studioTheme} canvasBg={mvpCanvasBg} headerBg={mvpHeaderBg}
             title={mvpTitle} subtitle={mvpSubtitle} rows={mvpRows} columns={mvpColumns}
-            columnStyles={mvpColumnStyles} rowRules={mvpRowRules} />
+            columnStyles={mvpColumnStyles} rowRules={mvpRowRules} panelOpacity={panelOpacity("mvpRankings")} />
         </div>
       )}
 
       {visible("teamsToWatch", false) && teamsToWatch.length > 0 && (
         <div style={{ position: "absolute", top: "12%", left: "50%", transform: "translateX(-50%)", width: 600, aspectRatio: "16/9" }}>
           <TeamsToWatchRenderer theme={studioTheme} canvasBg={ttwCanvasBg} accentBg={ttwAccentBg}
-            title={ttwTitle} subtitle={ttwSubtitle} teams={teamsToWatch} fields={ttwFields} />
+            title={ttwTitle} subtitle={ttwSubtitle} teams={teamsToWatch} fields={ttwFields} panelOpacity={panelOpacity("teamsToWatch")} />
         </div>
       )}
 
@@ -498,7 +515,7 @@ export default function Overlay() {
         <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", width: 680, aspectRatio: "16/9" }}>
           <ChampionsRenderer theme={studioTheme} canvasBg={champCanvasBg} accentBg={champAccentBg}
             label={champLabel} teamName={champions.teamName} teamLogoUrl={champions.teamLogoUrl}
-            players={champions.players} stats={champions.stats} fields={champFields} />
+            players={champions.players} stats={champions.stats} fields={champFields} panelOpacity={panelOpacity("champions")} />
         </div>
       )}
 
@@ -506,7 +523,7 @@ export default function Overlay() {
         <div style={{ position: "absolute", top: "12%", left: "50%", transform: "translateX(-50%)", width: 600, aspectRatio: "16/9" }}>
           <HeadToHeadRenderer theme={studioTheme} canvasBg={h2hCanvasBg} accentBg={h2hAccentBg}
             title={h2hTitle} subtitle={h2hSubtitle} left={headToHead.left} right={headToHead.right}
-            stats={headToHead.stats} fields={h2hFields} />
+            stats={headToHead.stats} fields={h2hFields} panelOpacity={panelOpacity("headToHead")} />
         </div>
       )}
 
@@ -515,7 +532,7 @@ export default function Overlay() {
           <TeamIntroRenderer theme={studioTheme} canvasBg={introCanvasBg} accentBg={introAccentBg}
             label={introLabel} teamName={teamIntro.teamName} teamLogoUrl={teamIntro.teamLogoUrl}
             wwcd={teamIntro.wwcd} players={teamIntro.players} stats={teamIntro.stats}
-            healthStops={healthStops} fields={introFields} />
+            healthStops={healthStops} fields={introFields} panelOpacity={panelOpacity("teamIntro")} />
         </div>
       )}
 
@@ -549,6 +566,7 @@ export default function Overlay() {
             teamName={teamEliminatedBanner.subtitle ?? teamEliminatedBanner.title}
             logoUrl={teamEliminatedBanner.imageUrl}
             visible={teamElimVisible}
+            panelOpacity={panelOpacity("teamEliminatedBanner")}
           />
         </div>
       )}
@@ -563,6 +581,7 @@ export default function Overlay() {
             icon={achievementIcon(achievementBanner.type)}
             photoUrl={achievementBanner.imageUrl}
             visible={achievementVisible}
+            panelOpacity={panelOpacity(achievementBanner.type)}
           />
         </div>
       )}
