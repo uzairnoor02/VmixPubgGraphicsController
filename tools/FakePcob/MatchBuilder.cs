@@ -324,6 +324,55 @@ public static class MatchBuilder
             pt.IsOutsideBlueCircle = p.IsOutsideBlueCircle;
         }
 
+        // Post-pass: derive kill/grenade/vehicle/airdrop/team-eliminated events by diffing
+        // consecutive frames, so Scenario.cs (Task 5) has real ticks to hang beats on instead of
+        // re-deriving the same logic a second time.
+        var teamMemberIds = seedPlayers.GroupBy(p => p.TeamId).ToDictionary(g => g.Key, g => g.Select(p => p.UId).ToHashSet());
+        var teamWasAlive = teamMemberIds.Keys.ToDictionary(id => id, _ => true);
+        for (int tick = 1; tick <= tickCount; tick++)
+        {
+            var prev = frames[tick - 1];
+            var cur = frames[tick];
+            foreach (var p in seedPlayers)
+            {
+                var pPrev = prev.Players.First(x => x.UId == p.UId);
+                var pCur = cur.Players.First(x => x.UId == p.UId);
+                if (pCur.KillNumByGrenade > pPrev.KillNumByGrenade)
+                {
+                    events.Add(new SimEvent(tick, "grenade", p.UId, null, $"GRENADE ELIMINATION popup - {p.PlayerName} ({p.TeamName})"));
+                }
+                else if (pCur.KillNumInVehicle > pPrev.KillNumInVehicle)
+                {
+                    events.Add(new SimEvent(tick, "vehicle", p.UId, null, $"VEHICLE KILL popup - {p.PlayerName} ({p.TeamName})"));
+                }
+                else if (pCur.KillNum > pPrev.KillNum)
+                {
+                    events.Add(new SimEvent(tick, "kill", p.UId, null, $"{p.PlayerName} ({p.TeamName}) gets a kill"));
+                }
+                if (pCur.GotAirDropNum > pPrev.GotAirDropNum)
+                {
+                    events.Add(new SimEvent(tick, "airdrop", p.UId, null, $"AIRDROP popup - {p.PlayerName} ({p.TeamName}) loots an airdrop"));
+                }
+            }
+            foreach (var (teamId, members) in teamMemberIds)
+            {
+                var aliveNow = cur.Players.Any(p => members.Contains(p.UId) && p.LiveState is >= 0 and <= 4);
+                if (teamWasAlive[teamId] && !aliveNow)
+                {
+                    var teamName = seedPlayers.First(p => p.TeamId == teamId).TeamName;
+                    events.Add(new SimEvent(tick, "teamEliminated", members.First(), null, $"TEAM ELIMINATED popup - {teamName}"));
+                }
+                teamWasAlive[teamId] = aliveNow;
+            }
+            var teamsAliveCount = teamMemberIds.Count(kv => cur.Players.Any(p => kv.Value.Contains(p.UId) && p.LiveState is >= 0 and <= 4));
+            var teamsAlivePrevCount = teamMemberIds.Count(kv => prev.Players.Any(p => kv.Value.Contains(p.UId) && p.LiveState is >= 0 and <= 4));
+            if (teamsAliveCount <= 4 && teamsAlivePrevCount > 4)
+            {
+                events.Add(new SimEvent(tick, "last4Switch", 0, null, "Live rankings hide, Last-4 bar appears top-middle"));
+            }
+        }
+        events.Sort((a, b) => a.Tick.CompareTo(b.Tick));
+
         AssertInvariants(seedPlayers, frames, tickCount);
 
         return new BuiltMatch { MatchKey = matchKey, FinalPlayers = seedPlayers, Frames = frames, TickCount = tickCount, Events = events };
