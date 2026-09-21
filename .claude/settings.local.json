@@ -1,0 +1,16 @@
+   {
+     "permissions": {
+       "allow": [
+         "Read", "Edit", "Write", "Glob", "Grep",
+         "Bash(dotnet build:*)", "Bash(dotnet new:*)",
+         "Bash(git status:*)", "Bash(git branch:*)", "Bash(git switch:*)",
+         "Bash(git checkout:*)", "Bash(git add:*)", "Bash(git commit:*)",
+         "Bash(mkdir:*)", "Bash(ls:*)", "Bash(npx tsc:*)"
+       ],
+       "deny": [
+         "Bash(dotnet run:*)", "Bash(dotnet test:*)", "Bash(dotnet ef:*)",
+         "Bash(git push:*)", "Bash(git reset:*)", "Bash(rm:*)",
+         "Bash(npm run dev:*)", "Bash(npm start:*)", "WebFetch", "WebSearch"
+       ]
+     }
+   }
