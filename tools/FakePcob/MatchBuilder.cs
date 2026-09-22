@@ -80,7 +80,15 @@ public static class MatchBuilder
         foreach (var p in seedPlayers)
         {
             var dt = Math.Min(tickCount, p.SurvivalTime / 2);
-            var survivor = dt >= tickCount; // effectively alive through the whole match
+            // "Survivor" (alive through the whole match) must come from the seed's own liveState,
+            // not from SurvivalTime == match length: several players can tie or come within a
+            // couple of seconds of the match's max survivalTime, and integer-dividing ties/near-
+            // ties by 2 can put a real survivor's dt one tick below tickCount, which previously
+            // marked them as dying before the final frame - only for the final-frame force-
+            // overwrite (see below) to then reset their LiveState back to the seed's real 0
+            // (alive), tripping AssertInvariants' "dead must stay dead" check. LiveState==0 is the
+            // ground truth PCOB itself reports for who's actually alive at match end (SEEDS.md).
+            var survivor = p.LiveState == 0;
             deathTick[p.UId] = dt;
             isSurvivor[p.UId] = survivor;
 
