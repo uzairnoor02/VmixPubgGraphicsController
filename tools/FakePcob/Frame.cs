@@ -45,6 +45,46 @@ public sealed class CircleTimeline
     }
 }
 
+/// The `PlayerAfterMatchAPI` field group (SEEDS.md) - stays hard-zero for the whole match and is
+/// only populated once the match reaches its final tick, exactly matching real PCOB behavior.
+public sealed class AfterMatchFields
+{
+    public int InDamage { get; init; }
+    public int Heal { get; init; }
+    public int HeadShotNum { get; init; }
+    public int SurvivalTime { get; init; }
+    public int DriveDistance { get; init; }
+    public int MarchDistance { get; init; }
+    public int Assists { get; init; }
+    public double OutsideBlueCircleTime { get; init; }
+    public int Knockouts { get; init; }
+    public int RescueTimes { get; init; }
+    public int UseSmokeGrenadeNum { get; init; }
+    public int UseFragGrenadeNum { get; init; }
+    public int UseBurnGrenadeNum { get; init; }
+    public int UseFlashGrenadeNum { get; init; }
+
+    public static readonly AfterMatchFields Zero = new();
+
+    public static AfterMatchFields FromSeed(SeedPlayer seed) => new()
+    {
+        InDamage = seed.InDamage,
+        Heal = seed.Heal,
+        HeadShotNum = seed.HeadShotNum,
+        SurvivalTime = seed.SurvivalTime,
+        DriveDistance = seed.DriveDistance,
+        MarchDistance = seed.MarchDistance,
+        Assists = seed.Assists,
+        OutsideBlueCircleTime = seed.OutsideBlueCircleTime,
+        Knockouts = seed.Knockouts,
+        RescueTimes = seed.RescueTimes,
+        UseSmokeGrenadeNum = seed.UseSmokeGrenadeNum,
+        UseFragGrenadeNum = seed.UseFragGrenadeNum,
+        UseBurnGrenadeNum = seed.UseBurnGrenadeNum,
+        UseFlashGrenadeNum = seed.UseFlashGrenadeNum,
+    };
+}
+
 /// Builds the actual HTTP response bodies FeedServer hands back, applying the three-route timing
 /// model from Task 4. Recon Task 1 found the app calls a single `gettotalplayerlist` GET (no
 /// separate push routes exist) - so "route A" vs "route B" is reproduced as two different

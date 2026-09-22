@@ -181,7 +181,7 @@ public static class MatchBuilder
                 // knock window, then dead. An earlier revive window (if any) briefly interrupts
                 // "normal" with knocked -> back to normal at low health.
                 int liveState;
-                int health;
+                int health = p.HealthMax; // definite-assignment fallback only - every real path below overwrites this
                 if (dead)
                 {
                     liveState = 5;
