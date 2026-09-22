@@ -124,6 +124,37 @@ push anything to the app.
   can't be observed on the real `/overlay` route until they exist. `/demo` (Task 10) exists
   specifically so these graphics can be evaluated today without waiting on that work.
 
+## Post-report fixes (build/runtime errors found after this report was first written)
+
+While actually running the build in Visual Studio, three issues surfaced that this session's lack
+of a local .NET SDK couldn't catch (see "Not done / blockers" below) - all fixed and committed:
+
+- `Frame.cs` referenced an `AfterMatchFields` class (`.Zero`/`.FromSeed(...)`) that was never
+  actually written - added it, mapping 1:1 to the `PlayerAfterMatchAPI` seed fields.
+- `MatchBuilder.cs`'s tick-loop declared `int health;` with no default, and the compiler's
+  definite-assignment analysis couldn't prove every code path assigned it before use (even though,
+  at runtime, every reachable path did) - gave it a `p.HealthMax` fallback default.
+- Runtime crash on `--match m1`: `AssertInvariants` threw `"uId ... came back from liveState 5 ...
+  (dead must stay dead)"`. Root cause - a player's "survivor" (alive-through-the-whole-match) status
+  was inferred from `SurvivalTime` rounding to the match length (`dt >= tickCount`), which breaks
+  for a real survivor whose `SurvivalTime` is a couple of seconds under the match max (integer
+  division put their computed death tick one short of the final tick) - the final-frame
+  force-overwrite then correctly reset them to the seed's real `liveState: 0` (alive), which the
+  invariant check read as an illegal revival. Fixed by deriving survivor status directly from the
+  seed's own `LiveState == 0` instead of reverse-engineering it from timing.
+
+**Note on map mechanics (raised by Uzair mid-session):** the newer "Rondo" map has a player-recall
+mechanic where a dead player can come back mid-match, which would make "dead must stay dead" a
+false invariant for a Rondo match. None of the five bundled seeds (`m1`-`m4`, `d3m2`) carry a map
+name in `SEEDS.md`, and none of their final snapshots show a revival (every seed's dead-player count
+is a clean monotonic total, no liveState transitioning back from 5) - so this fix is correct for all
+five as they stand, and the invariant itself was not the bug. Simulating an actual mid-match recall
+is out of scope here (it would need new tick-generation logic, not a bug fix) - flagged as a
+limitation: **if FakePcob is ever pointed at seed data from a real Rondo match where a player's
+final `liveState` reflects a comeback, `AssertInvariants` will legitimately reject it**, and
+`MatchBuilder`'s reverse-replay model would need an explicit recall window (similar to the existing
+knock/revive window, but crossing back from liveState 5) added as new work, not a fix.
+
 ## Not done / blockers
 
 - **No C# code in `tools/FakePcob` has been verified with `dotnet build`.** This session's shell
