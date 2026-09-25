@@ -41,6 +41,10 @@ public class TeamLiveStats
     public int Player2HealthPercent { get; set; }
     public int Player3HealthPercent { get; set; }
     public int Player4HealthPercent { get; set; }
+
+    /// <summary>Players on the roster (3 for a 3-man team), so the overlay shows 3 health bars
+    /// instead of a phantom dead 4th player.</summary>
+    public int PlayerCount { get; set; }
 }
 
 

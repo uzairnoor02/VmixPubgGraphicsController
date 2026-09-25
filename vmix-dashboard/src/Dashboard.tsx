@@ -6,7 +6,8 @@ import { clearAuthed } from "./Login";
 // Where the WinForms app's embedded dashboard host (LiveDashboardHost.cs) is listening.
 // Change this if the graphics PC's hostname/IP or port differs - or wire it up to a small
 // on-screen settings field later so it doesn't need a rebuild to change.
-const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? "http://localhost:5050";
+// Same rule as lib/api.ts: same-origin in the served build, local app on :5050 under `npm run dev`.
+const API_BASE: string = (import.meta as any).env?.VITE_API_BASE ?? ((import.meta as any).env?.DEV ? "http://localhost:5050" : "");
 
 export default function Dashboard() {
   const [teams, setTeams] = useState<TeamLiveStats[]>([]);

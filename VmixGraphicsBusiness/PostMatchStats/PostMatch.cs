@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using VmixData.Models;
 using VmixData.Models.MatchModels;
-using VmixGraphicsBusiness.vmixutils;
+using VmixGraphicsBusiness.Utils;
 
 namespace VmixGraphicsBusiness.PostMatchStats
 {
@@ -37,6 +37,32 @@ namespace VmixGraphicsBusiness.PostMatchStats
             await RunPostMatchStepAsync("MatchRankings", () => MatchRankings(match));
             await RunPostMatchStepAsync("OverallRankings", () => OverallRankings(match));
             await RunPostMatchStepAsync("TeamsToWatch", () => TeamsToWatch(match));
+            await RunPostMatchStepAsync("Top5MatchMVP", () => Top5MatchMVP(match));
+            await RunPostMatchStepAsync("MatchSummary", () => MatchSummary(match));
+        }
+
+        /// <summary>Hands a finished post-match graphic to the overlay (SignalR event of the same
+        /// name, plus the snapshot a reloading overlay hydrates from). This replaces every
+        /// "set vMix Title field X to Y" call the post-match graphics used to make - the numbers
+        /// computed are the same, only the destination changed. Nothing is put on air by this:
+        /// the Director tab decides what's visible.</summary>
+        private void PublishGraphic(string eventName, object payload)
+        {
+            var store = _serviceProvider.GetService<MatchStateStore>();
+            if (store is null)
+            {
+                logger.LogWarning("MatchStateStore not available - {Event} was computed but not published.", eventName);
+                return;
+            }
+            store.PublishGraphic(eventName, payload);
+            logger.LogInformation("Published post-match graphic {Event}.", eventName);
+        }
+
+        private static string FormatSurvival(double seconds)
+        {
+            if (double.IsNaN(seconds) || seconds < 0) seconds = 0;
+            var t = TimeSpan.FromSeconds(seconds);
+            return $"{(int)t.TotalMinutes:D2}:{t.Seconds:D2}";
         }
 
         private async Task RunPostMatchStepAsync(string stepName, Func<Task> step)

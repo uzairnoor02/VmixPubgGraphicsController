@@ -6,8 +6,11 @@ import { GRAPHICS } from "../lib/graphics";
 import {
   SAMPLE_STANDINGS, SAMPLE_TOP4, SAMPLE_SIDEBAR_TEAMS, SAMPLE_TOP5_KILLS,
   SAMPLE_HIGHLIGHT_PLAYER, SAMPLE_MVP_ROWS, SAMPLE_TEAMS_TO_WATCH, SAMPLE_CHAMPIONS,
-  SAMPLE_HEAD_TO_HEAD, SAMPLE_TEAM_INTRO, SAMPLE_MAP_PLAYERS,
+  SAMPLE_HEAD_TO_HEAD, SAMPLE_TEAM_INTRO, SAMPLE_MAP_PLAYERS, SAMPLE_LIVE_STANDINGS,
+  SAMPLE_MATCH_RANKING, SAMPLE_OVERALL_RANKING,
 } from "../studio/sampleData";
+import { RankingsRenderer, totalRankingPages } from "../studio/renderers/RankingsRenderer";
+import { OverlayStage, layoutFor, layoutStyle } from "../lib/overlayLayout";
 import { StandingsRenderer, StandingsRow } from "../studio/renderers/StandingsRenderer";
 import { Top4Renderer, Top4Team } from "../studio/renderers/Top4Renderer";
 import { TopPlayersRenderer, TopPlayerEntry } from "../studio/renderers/TopPlayersRenderer";
@@ -45,7 +48,7 @@ const ACHIEVEMENT_LABELS: Record<string, string> = {
   "achievement.grenadeElim": "GRENADE ELIM",
   "achievement.vehicleKill": "VEHICLE KILL",
   "achievement.airdropLoot": "AIRDROP LOOT",
-  "achievement.firstKill": "FIRST KILL",
+  "achievement.firstKill": "FIRST BLOOD",
   "achievement.knockout": "KNOCKOUT",
   "achievement.chickenDinner": "WINNER WINNER CHICKEN DINNER",
 };
@@ -55,7 +58,13 @@ interface Banner {
   type: string;
   title: string;
   subtitle?: string;
+  rank?: number;
+  eliminations?: number;
+  victim?: string;
+  teamName?: string;
 }
+
+const L = (id: string, extra?: CSSProperties) => layoutStyle(layoutFor(undefined, id), extra);
 
 interface FeedEntry {
   id: string;
@@ -79,14 +88,17 @@ export default function DemoPage() {
   const [opacity, setOpacity] = useState(100);
 
   // --- Canvas background picker --------------------------------------------------------------
-  const [bgMode, setBgMode] = useState<BgMode>("chromaGreen");
+  // ?bg=<image url> starts the demo over a reference frame (e.g. a screenshot of a real
+  // broadcast) so graphics can be lined up against the game HUD without clicking "Image...".
+  const initialBg = new URLSearchParams(window.location.search).get("bg");
+  const [bgMode, setBgMode] = useState<BgMode>(initialBg ? "image" : "chromaGreen");
   const [customColor, setCustomColor] = useState("#101010");
-  const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
+  const [bgImageUrl, setBgImageUrl] = useState<string | null>(initialBg);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     return () => {
-      if (bgImageUrl) URL.revokeObjectURL(bgImageUrl);
+      if (bgImageUrl && bgImageUrl.startsWith("blob:")) URL.revokeObjectURL(bgImageUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -96,7 +108,7 @@ export default function DemoPage() {
     bgMode === "chromaBlue" ? { backgroundColor: "#0047FF" } :
     bgMode === "custom" ? { backgroundColor: customColor } :
     bgMode === "transparent" ? { background: CHECKERBOARD_BG } :
-    bgImageUrl ? { backgroundImage: `url(${bgImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" } :
+    bgImageUrl ? { background: "#000" } : // the image itself is drawn inside the 1920x1080 stage below, so it lines up with the graphics
     { background: CHECKERBOARD_BG };
 
   // --- Which graphics are switched on -----------------------------------------------------
@@ -104,22 +116,29 @@ export default function DemoPage() {
     const v: Record<string, boolean> = {};
     for (const g of TOGGLEABLE_GRAPHICS) v[g.id] = true;
     v.spectatorMap = false; // off by default on air too (see Overlay.tsx DEFAULT_CONFIG)
+    // Centre-stage post-match cards overlap each other; start with them off and let the demo
+    // operator switch one on at a time, as a director would.
+    for (const id of ["mvpRankings", "teamsToWatch", "champions", "headToHead", "matchRankings", "overallRankings", "mapPerformers", "playerHighlight", "teamIntro", "topPlayers", "sidebar"]) v[id] = false;
+    // ?show=id1,id2 / ?hide=id1 - handy for screenshots and for sharing a specific view.
+    const q = new URLSearchParams(window.location.search);
+    for (const id of (q.get("show") ?? "").split(",").filter(Boolean)) v[id] = true;
+    for (const id of (q.get("hide") ?? "").split(",").filter(Boolean)) v[id] = false;
     return v;
   });
   const toggle = (id: string) => setVisibility((prev) => ({ ...prev, [id]: !prev[id] }));
 
   // --- Simulate elimination: drives the mutually-exclusive Standings <-> Top4/WWCD pair, ---
   // exactly the real ShouldShowTop4Ranking rule from RECON.md #6 (<=4 teams alive shows Top4).
-  const [aliveTeams, setAliveTeams] = useState(10);
+  const [aliveTeams, setAliveTeams] = useState(() => Number(new URLSearchParams(window.location.search).get("alive")) || 10);
   const [feed, setFeed] = useState<FeedEntry[]>([
     { id: "seed-1", title: "R3GICIDE scored an elimination", subtitle: "8 total" },
   ]);
   const [teamElim, setTeamElim] = useState<Banner | null>(null);
   const [teamElimVisible, setTeamElimVisible] = useState(false);
 
-  const fireTeamElim = (teamName: string) => {
+  const fireTeamElim = (teamName: string, rank?: number, eliminations?: number) => {
     const id = `elim-${Date.now()}`;
-    setTeamElim({ id, type: "teamEliminated", title: "TEAM ELIMINATED", subtitle: teamName });
+    setTeamElim({ id, type: "teamEliminated", title: "ELIMINATED", subtitle: teamName, rank, eliminations });
     setTeamElimVisible(false);
     window.setTimeout(() => setTeamElimVisible(true), 30);
     window.setTimeout(() => setTeamElim((cur) => (cur?.id === id ? null : cur)), 5000);
@@ -129,7 +148,7 @@ export default function DemoPage() {
     setAliveTeams((prev) => {
       const next = Math.max(1, prev - 1);
       const eliminated = SAMPLE_STANDINGS.find((t) => t.rank === prev) ?? SAMPLE_STANDINGS[SAMPLE_STANDINGS.length - 1];
-      fireTeamElim(eliminated.teamName);
+      fireTeamElim(eliminated.teamName, prev, eliminated.kills);
       setFeed((f) => [{ id: `elim-feed-${Date.now()}`, title: `${eliminated.teamName} was eliminated`, subtitle: `${next} teams remain` }, ...f].slice(0, 8));
       return next;
     });
@@ -141,7 +160,9 @@ export default function DemoPage() {
   const [achievementVisible, setAchievementVisible] = useState(false);
   const fireAchievement = (type: string) => {
     const id = `${type}-${Date.now()}`;
-    setAchievement({ id, type, title: ACHIEVEMENT_LABELS[type] ?? type, subtitle: SAMPLE_TOP5_KILLS[0]?.playerName });
+    setAchievement({ id, type, title: ACHIEVEMENT_LABELS[type] ?? type, subtitle: SAMPLE_TOP5_KILLS[0]?.playerName,
+      victim: type === "achievement.firstKill" || type === "achievement.grenadeElim" || type === "achievement.vehicleKill" ? "ECHO Frentzy" : undefined,
+      teamName: "NOVA" });
     setAchievementVisible(false);
     window.setTimeout(() => setAchievementVisible(true), 30);
     window.setTimeout(() => setAchievement((cur) => (cur?.id === id ? null : cur)), 5500);
@@ -170,15 +191,27 @@ export default function DemoPage() {
   }, [visibility.circle, circlePhase]);
 
   // --- Sample-data -> renderer props (same shapes Overlay.tsx builds from live data) --------
-  const standingsRows: StandingsRow[] = SAMPLE_STANDINGS.map((t) => ({
-    key: t.teamId, rank: t.rank, name: t.teamName, kills: t.kills,
+  const standingsRows: StandingsRow[] = SAMPLE_LIVE_STANDINGS.map((t, i) => ({
+    key: t.teamId, rank: i + 1, name: t.tag, kills: t.kills, points: t.points, eliminated: t.eliminated,
+    logoUrl: `/team-logos/${t.teamId}.png`,
     players: t.players.map((p) => ({ health: p.health, liveState: p.liveState })),
   }));
 
   const top4Rows: Top4Team[] = SAMPLE_TOP4.map((t, i) => ({
-    key: i, overallRank: t.overallRank, tag: t.tag, wwcd: t.wwcd,
+    key: i, overallRank: t.overallRank, tag: t.tag, wwcd: t.wwcd, throwables: t.throwables ?? null,
+    logoUrl: `/team-logos/${[11, 12, 13, 14][i] ?? 1}.png`,
     players: t.players.map((p) => ({ health: p.health, liveState: p.liveState })),
   }));
+
+  // Match / Overall rankings flip pages on a timer, like on air.
+  const [rankingsPage, setRankingsPage] = useState(0);
+  const rankingsOn = !!visibility.matchRankings || !!visibility.overallRankings;
+  useEffect(() => {
+    if (!rankingsOn) return;
+    const pages = totalRankingPages(Math.max(SAMPLE_MATCH_RANKING.length, SAMPLE_OVERALL_RANKING.length));
+    const t = window.setInterval(() => setRankingsPage((p) => (p + 1) % pages), 6000);
+    return () => window.clearInterval(t);
+  }, [rankingsOn]);
 
   const sidebarRows: SidebarRow[] = SAMPLE_SIDEBAR_TEAMS.map((t) => ({
     key: t.teamId, rank: t.rank, teamName: t.teamName, points: null, kills: t.kills,
@@ -206,32 +239,36 @@ export default function DemoPage() {
     <div style={{ position: "fixed", inset: 0, display: "flex", flexDirection: "column", background: "#0a0a0f", fontFamily: "'Inter', system-ui, sans-serif" }}>
       {/* ---- Canvas: exactly what /overlay would show, at the current demo state ---- */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden", ...canvasStyle }}>
+       <OverlayStage>
+        {bgMode === "image" && bgImageUrl && (
+          <img src={bgImageUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+        )}
         {showStandings && standingsRows.length > 0 && (
-          <div style={{ position: "absolute", top: 48, right: 48, width: 420 }}>
-            <StandingsRenderer theme={theme} mode="full" healthStops={DEFAULT_HEALTH_STOPS} columns={{}} rowRules={[]} headerBg={theme.headerBg} rows={standingsRows} maxRows={16} panelOpacity={opacity} />
+          <div style={L("leaderboard")}>
+            <StandingsRenderer theme={theme} mode="full" healthStops={DEFAULT_HEALTH_STOPS} columns={{}} rowRules={[]} headerBg={theme.headerBg} rows={standingsRows} maxRows={25} panelOpacity={opacity} />
           </div>
         )}
 
         {!showStandings && (
-          <div style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", width: 720 }}>
+          <div style={L("top4")}>
             <Top4Renderer theme={theme} wwcdBar={wwcdBar} cardBg={top4CardBg} fields={{}} teams={top4Rows} panelOpacity={opacity} />
           </div>
         )}
 
         {visibility.sidebar && (
-          <div style={{ position: "absolute", top: 48, left: 48, width: 260 }}>
+          <div style={L("sidebar")}>
             <SidebarRenderer theme={theme} headerBg={theme.headerBg} rows={sidebarRows} maxRows={16} panelOpacity={opacity} />
           </div>
         )}
 
         {visibility.topPlayers && (
-          <div style={{ position: "absolute", bottom: 48, left: "50%", transform: "translateX(-50%)", width: 560, aspectRatio: "16/9" }}>
+          <div style={L("topPlayers", { aspectRatio: "16/9" })}>
             <TopPlayersRenderer theme={theme} canvasBg={theme.headerBg} labelBg={theme.headerBg} cardBg={topPlayersCardBg} fields={{}} players={topPlayerEntries} panelOpacity={opacity} />
           </div>
         )}
 
         {visibility.circle && (
-          <div style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", width: 520 }}>
+          <div style={L("circle")}>
             <CircleStatusRenderer theme={theme} barBg={theme.headerBg} circleIndex={circleIndex} phase={circlePhase}
               secondsRemaining={circleSeconds} phaseSeconds={phaseLength}
               label={circlePhase === "closing" ? "ZONE CLOSING" : "NEXT ZONE IN"} panelOpacity={opacity} />
@@ -239,7 +276,7 @@ export default function DemoPage() {
         )}
 
         {visibility.playerHighlight && (
-          <div style={{ position: "absolute", bottom: 48, right: 48, width: 560, aspectRatio: "16/9" }}>
+          <div style={L("playerHighlight", { aspectRatio: "16/9" })}>
             <PlayerHighlightRenderer theme={theme} canvasBg={theme.headerBg} accentBg={theme.headerBg}
               label="MVP OF THE MATCH" playerName={SAMPLE_HIGHLIGHT_PLAYER.playerName} teamName={SAMPLE_HIGHLIGHT_PLAYER.teamName}
               stats={highlightStats} fields={{}} panelOpacity={opacity} />
@@ -247,29 +284,52 @@ export default function DemoPage() {
         )}
 
         {visibility.mvpRankings && (
-          <div style={{ position: "absolute", top: "12%", left: "50%", transform: "translateX(-50%)", width: 620, aspectRatio: "16/9" }}>
+          <div style={L("mvpRankings", { aspectRatio: "16/9" })}>
             <MvpRankingsRenderer theme={theme} canvasBg={theme.headerBg} headerBg={theme.headerBg} title="MVP RANKINGS" subtitle=""
               rows={SAMPLE_MVP_ROWS} columns={mvpColumns} columnStyles={{}} rowRules={[]} panelOpacity={opacity} />
           </div>
         )}
 
         {visibility.teamsToWatch && (
-          <div style={{ position: "absolute", top: "12%", left: "50%", transform: "translateX(-50%)", width: 600, aspectRatio: "16/9" }}>
+          <div style={L("teamsToWatch", { aspectRatio: "16/9" })}>
             <TeamsToWatchRenderer theme={theme} canvasBg={theme.headerBg} accentBg={theme.headerBg}
               title="TEAMS TO WATCH" subtitle="" teams={SAMPLE_TEAMS_TO_WATCH} fields={{}} panelOpacity={opacity} />
           </div>
         )}
 
+        {visibility.mapPerformers && (
+          <div style={L("mapPerformers", { aspectRatio: "16/9" })}>
+            <TeamsToWatchRenderer theme={theme} canvasBg={theme.headerBg} accentBg={theme.headerBg}
+              title="TOP ERANGEL PERFORMERS" subtitle="" teams={SAMPLE_TEAMS_TO_WATCH} fields={{}} panelOpacity={opacity} />
+          </div>
+        )}
+
         {visibility.champions && (
-          <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", width: 680, aspectRatio: "16/9" }}>
+          <div style={L("champions", { aspectRatio: "16/9" })}>
             <ChampionsRenderer theme={theme} canvasBg={theme.headerBg} accentBg={theme.headerBg} label="CHAMPIONS"
               teamName={SAMPLE_CHAMPIONS.teamName} players={SAMPLE_CHAMPIONS.players} stats={SAMPLE_CHAMPIONS.stats}
               fields={{}} panelOpacity={opacity} />
           </div>
         )}
 
+        {visibility.matchRankings && (
+          <div style={L("matchRankings", { aspectRatio: "16/9" })}>
+            <RankingsRenderer theme={theme} canvasBg={theme.headerBg} headerBg={theme.headerBg} title="MATCH RANKINGS" subtitle="MATCH 3 / 6"
+              rows={SAMPLE_MATCH_RANKING} columns={{ wins: true, placement: true, elim: true }} columnStyles={{}} rowRules={[]}
+              page={rankingsPage} pager="indicator" panelOpacity={opacity} />
+          </div>
+        )}
+
+        {visibility.overallRankings && (
+          <div style={L("overallRankings", { aspectRatio: "16/9" })}>
+            <RankingsRenderer theme={theme} canvasBg={theme.headerBg} headerBg={theme.headerBg} title="OVERALL RANKINGS" subtitle="AFTER MATCH 3 / 6"
+              rows={SAMPLE_OVERALL_RANKING} columns={{ wins: true, placement: true, elim: true }} columnStyles={{}} rowRules={[]}
+              page={rankingsPage} pager="indicator" panelOpacity={opacity} />
+          </div>
+        )}
+
         {visibility.headToHead && (
-          <div style={{ position: "absolute", top: "12%", left: "50%", transform: "translateX(-50%)", width: 600, aspectRatio: "16/9" }}>
+          <div style={L("headToHead", { aspectRatio: "16/9" })}>
             <HeadToHeadRenderer theme={theme} canvasBg={theme.headerBg} accentBg={theme.headerBg}
               title="HEAD TO HEAD" subtitle="" left={SAMPLE_HEAD_TO_HEAD.left} right={SAMPLE_HEAD_TO_HEAD.right}
               stats={SAMPLE_HEAD_TO_HEAD.stats} fields={{}} panelOpacity={opacity} />
@@ -277,7 +337,7 @@ export default function DemoPage() {
         )}
 
         {visibility.teamIntro && (
-          <div style={{ position: "absolute", bottom: 48, left: 48, width: 560, aspectRatio: "16/9" }}>
+          <div style={L("teamIntro", { aspectRatio: "16/9" })}>
             <TeamIntroRenderer theme={theme} canvasBg={theme.headerBg} accentBg={theme.headerBg} label="TEAM SPOTLIGHT"
               teamName={SAMPLE_TEAM_INTRO.teamName} wwcd={SAMPLE_TEAM_INTRO.wwcd} players={SAMPLE_TEAM_INTRO.players}
               stats={SAMPLE_TEAM_INTRO.stats} fields={{}} panelOpacity={opacity} />
@@ -285,15 +345,15 @@ export default function DemoPage() {
         )}
 
         {visibility.spectatorMap && (
-          <div style={{ position: "absolute", bottom: 48, right: 48, width: 320 }}>
+          <div style={L("spectatorMap")}>
             <SpectatorMapRenderer theme={theme} canvasBg={mapCanvasBg} accentBg={theme.headerBg}
               players={SAMPLE_MAP_PLAYERS} />
           </div>
         )}
 
         {visibility.eliminationFeed && feed.length > 0 && (
-          <div className="overlay-feed">
-            {feed.map((entry) => (
+          <div className="overlay-feed" style={L("eliminationFeed")}>
+            {feed.slice(0, 4).map((entry) => (
               <div key={entry.id} className="overlay-feed-item">
                 <span className="dot" />
                 <div>
@@ -306,28 +366,31 @@ export default function DemoPage() {
         )}
 
         {teamElim && visibility.teamEliminatedBanner && (
-          <div key={teamElim.id} style={{ position: "absolute", top: "38%", left: "50%", transform: "translateX(-50%)", width: 620 }}>
+          <div key={teamElim.id} style={L("teamEliminatedBanner")}>
             <EliminatedBannerRenderer theme={theme} bannerBg={theme.headerBg} teamName={teamElim.subtitle ?? teamElim.title}
+              rank={teamElim.rank} eliminations={teamElim.eliminations}
               visible={teamElimVisible} panelOpacity={opacity} />
           </div>
         )}
 
         {achievement && (
-          <div key={achievement.id} style={{ position: "absolute", bottom: 48, left: 48, width: 420 }}>
+          <div key={achievement.id} style={L("achievement")}>
             <AchievementRenderer theme={theme} accentBg={theme.headerBg}
               label={ACHIEVEMENT_LABELS[achievement.type] ?? achievement.title}
               primary={achievement.subtitle ?? achievement.title}
-              icon={achievementIcon(achievement.type)} visible={achievementVisible} panelOpacity={opacity} />
+              victim={achievement.victim} teamName={achievement.teamName}
+              icon={achievementIcon(achievement.type, 40)} visible={achievementVisible} panelOpacity={opacity} />
           </div>
         )}
 
-        <div style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", fontSize: 10, letterSpacing: "0.1em", color: "rgba(255,255,255,0.35)", pointerEvents: "none" }}>
+        <div style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", fontSize: 14, letterSpacing: "0.1em", color: "rgba(255,255,255,0.35)", pointerEvents: "none" }}>
           DEMO PREVIEW - NOT ON AIR
         </div>
+       </OverlayStage>
       </div>
 
-      {/* ---- Control bar ---- */}
-      <div style={{ flex: "0 0 auto", maxHeight: "42vh", overflowY: "auto", background: "#111116", borderTop: "1px solid rgba(255,255,255,0.1)", padding: "14px 20px", color: "#e8e8ec", fontSize: 12.5, display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* ---- Control bar (hidden with ?clean=1, for full-frame screenshots / a vMix input) ---- */}
+      <div style={{ flex: "0 0 auto", maxHeight: "42vh", overflowY: "auto", background: "#111116", borderTop: "1px solid rgba(255,255,255,0.1)", padding: "14px 20px", color: "#e8e8ec", fontSize: 12.5, display: new URLSearchParams(window.location.search).get("clean") ? "none" : "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <strong style={{ fontSize: 13 }}>Demo controls</strong>
           <span style={{ color: "#8a8a94" }}>Every graphic below renders from Studio sample data - no match, no backend needed.</span>
@@ -338,7 +401,7 @@ export default function DemoPage() {
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={eliminateNext} disabled={aliveTeams <= 1} style={btn()}>Eliminate next team</button>
             <button onClick={resetElimination} style={btnGhost()}>Reset to 10</button>
-            <button onClick={() => fireTeamElim(SAMPLE_STANDINGS[0].teamName)} style={btnGhost()}>Fire elimination banner</button>
+            <button onClick={() => fireTeamElim("VIPR", 14, 1)} style={btnGhost()}>Fire elimination banner</button>
           </div>
         </div>
 

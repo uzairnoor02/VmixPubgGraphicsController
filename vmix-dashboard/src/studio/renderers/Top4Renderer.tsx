@@ -1,29 +1,16 @@
-import { Bg, DEAD_COLOR, KNOCKED_COLOR, Theme, bgCss, hexToRgb, rgbToHex } from "../theme";
+import { Bg, DEFAULT_HEALTH_STOPS, HealthStop, Theme, bgCss } from "../theme";
 import { panelSurface } from "./surface";
 import type { ColumnStyle } from "../StudioControls";
+import {
+  DEFAULT_HEALTH_STYLE, HealthStyle, HelmetIcon, THROWABLE_LABELS, THROWABLE_ORDER, ThrowableIcon, Throwables,
+} from "./healthGlyphs";
+import { TeamLogo } from "./shared";
 
-// The actual Top 4 / WWCD Chance visual - extracted out of Top4Page.tsx so the Studio preview and
-// the real /overlay route render from exactly the same component, same reasoning as
-// StandingsRenderer.tsx.
-
-const T4_HEALTH_STOPS = [{ pos: 100, color: "#2ECC71" }, { pos: 60, color: "#8BC34A" }, { pos: 30, color: "#F1C40F" }, { pos: 1, color: "#E74C3C" }];
-
-function t4TickColor(p: { health: number; liveState: number }) {
-  if (p.liveState === 5) return { color: DEAD_COLOR, pulse: false };
-  if (p.liveState === 4) return { color: KNOCKED_COLOR, pulse: true };
-  const sorted = [...T4_HEALTH_STOPS].sort((a, b) => b.pos - a.pos);
-  const h = p.health;
-  if (h >= sorted[0].pos) return { color: sorted[0].color, pulse: false };
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const hi = sorted[i], lo = sorted[i + 1];
-    if (h <= hi.pos && h >= lo.pos) {
-      const t = (h - lo.pos) / (hi.pos - lo.pos || 1);
-      const [r1, g1, b1] = hexToRgb(lo.color), [r2, g2, b2] = hexToRgb(hi.color);
-      return { color: rgbToHex(r1 + (r2 - r1) * t, g1 + (g2 - g1) * t, b1 + (b2 - b1) * t), pulse: false };
-    }
-  }
-  return { color: sorted[sorted.length - 1].color, pulse: false };
-}
+// The Last 4 teams cards (PMGO layout): four wide cards across the top of the screen.
+//   row 1  rank chip | logo | TEAM TAG ............ one helmet per player, filled to health
+//   row 2  frag | smoke | molotov | stun  - what the team is carrying
+//   row 3  (optional) WWCD chance bar
+// Shared by the Studio preview, /demo and /overlay - one render path.
 
 export interface Top4Team {
   key: string | number;
@@ -32,84 +19,123 @@ export interface Top4Team {
   wwcd: number;
   players: { health: number; liveState: number }[];
   logoUrl?: string;
+  /** Carried throwables, summed over the team. null/undefined = not seen yet this match (pcob
+   *  only reports the inventory of the team the observer is watching) -> shown as "-". */
+  throwables?: Throwables | null;
+  eliminated?: boolean;
 }
 
 export interface Top4RendererProps {
   theme: Theme;
+  /** Background of the WWCD chance fill. */
   wwcdBar: Bg;
   cardBg: Bg;
   fields: Record<string, ColumnStyle>;
   teams: Top4Team[];
   /** 0-100, Task 9. Omitted/undefined = 100 = today's appearance, unchanged. */
   panelOpacity?: number;
+  healthStyle?: HealthStyle;
+  healthStops?: HealthStop[];
+  showWwcd?: boolean;
+  showThrowables?: boolean;
+  showRank?: boolean;
 }
 
-export function Top4Renderer({ theme, wwcdBar, cardBg, fields, teams, panelOpacity }: Top4RendererProps) {
+export function Top4Renderer({
+  theme, wwcdBar, cardBg, fields, teams, panelOpacity,
+  healthStyle = DEFAULT_HEALTH_STYLE, healthStops = DEFAULT_HEALTH_STOPS,
+  showWwcd = true, showThrowables = true, showRank = false,
+}: Top4RendererProps) {
   const rankStyle = fields.overallRank?.mode === "custom" ? fields.overallRank.custom : ({} as any);
   const tagStyle = fields.tag?.mode === "custom" ? fields.tag.custom : ({} as any);
   const wwcdTextStyle = fields.wwcdText?.mode === "custom" ? fields.wwcdText.custom : ({} as any);
+  const countStyle = fields.throwables?.mode === "custom" ? fields.throwables.custom : ({} as any);
+  const noShadow = panelOpacity !== undefined && panelOpacity <= 0;
 
   return (
-    <div style={{ display: "flex", gap: 10 }}>
+    <div style={{ display: "flex", gap: 14, fontFamily: theme.fontDisplay }}>
       {teams.map((t) => {
-        // On air four cards share ~720px, so a logo and a long tag cannot share a line without
-        // the tag ellipsising - and the tag is the one thing a viewer must read. The card is
-        // therefore stacked: logo row, then the tag across the full width, then health, then the
-        // WWCD number. The tag also steps down a size for longer names rather than truncating.
+        // Tag steps down in size for long names rather than being cut off - it is the one thing
+        // a viewer must be able to read.
         const tagLen = t.tag.length;
-        const autoTagSize = tagLen > 14 ? 13 : tagLen > 10 ? 15 : tagLen > 7 ? 17 : 20;
+        const autoTagSize = tagLen > 10 ? 17 : tagLen > 7 ? 20 : tagLen > 5 ? 23 : 26;
+        const eliminated = t.eliminated ?? t.players.every((p) => p.liveState === 5 || p.liveState === 6);
+        const wwcdPct = Number.isFinite(t.wwcd) ? Math.max(0, Math.min(100, t.wwcd)) : null;
         return (
-        <div key={t.key} style={{ flex: 1, minWidth: 0, borderRadius: 10, overflow: "hidden", ...panelSurface(panelOpacity, bgCss(cardBg), theme.panelBlur), border: `1px solid ${theme.panelBorder}`, boxShadow: panelOpacity !== undefined && panelOpacity <= 0 ? "none" : theme.glow, display: "flex", flexDirection: "column" } as any}>
+          <div key={t.key} style={{
+            flex: 1, minWidth: 0, borderRadius: Math.min(theme.radius, 8), overflow: "hidden",
+            ...panelSurface(panelOpacity, bgCss(cardBg), theme.panelBlur),
+            border: noShadow ? "none" : `1px solid ${theme.panelBorder}`, boxShadow: noShadow ? "none" : theme.glow,
+            opacity: eliminated ? 0.5 : 1, filter: eliminated ? "grayscale(1)" : "none", transition: "opacity .4s, filter .4s",
+          } as any}>
+            {/* accent line along the top edge, in the theme's header colours */}
+            <div style={{ height: 3, background: bgCss(theme.headerBg) }} />
 
-          <div style={{ background: "rgba(255,255,255,0.06)", padding: "9px 10px 8px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px 6px" }}>
+              {showRank && (
+                <div style={{
+                  minWidth: 22, height: 22, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "rgba(0,0,0,0.45)", flexShrink: 0, fontWeight: 800,
+                  fontFamily: rankStyle.fontFamily || theme.fontDisplay,
+                  fontSize: rankStyle.fontSize ? `${rankStyle.fontSize}px` : "13px",
+                  color: rankStyle.color || theme.textPrimary,
+                }}>{t.overallRank}</div>
+              )}
+              <TeamLogo url={t.logoUrl} size={36} radius={6} />
               <div style={{
-                minWidth: 24, height: 24, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
-                background: "rgba(0,0,0,0.4)", flexShrink: 0, fontWeight: 800,
-                fontFamily: rankStyle.fontFamily || theme.fontDisplay,
-                fontSize: rankStyle.fontSize ? `${rankStyle.fontSize}px` : "14px",
-                color: rankStyle.color || theme.textPrimary,
-              }}>{t.overallRank}</div>
-              {t.logoUrl
-                ? <img src={t.logoUrl} alt="" style={{ width: 38, height: 38, borderRadius: 8, objectFit: "cover", flexShrink: 0, marginLeft: "auto", marginRight: "auto" }} />
-                : <div style={{ width: 38, height: 38, borderRadius: 8, background: theme.accentGradient, flexShrink: 0, marginLeft: "auto", marginRight: "auto" }} />}
-              <div style={{ minWidth: 24, flexShrink: 0 }} />
+                flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                fontWeight: 800, letterSpacing: 0.4,
+                fontFamily: tagStyle.fontFamily || theme.fontDisplay,
+                fontSize: tagStyle.fontSize ? `${tagStyle.fontSize}px` : `${autoTagSize}px`,
+                color: tagStyle.color || theme.textPrimary,
+              }}>{t.tag}</div>
+              <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                {t.players.slice(0, 4).map((p, i) => <HelmetIcon key={i} player={p} style={healthStyle} stops={healthStops} size={28} />)}
+              </div>
             </div>
 
-            <div style={{
-              marginTop: 7, textAlign: "center", width: "100%",
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              fontWeight: 800, letterSpacing: 0.3,
-              fontFamily: tagStyle.fontFamily || theme.fontDisplay,
-              fontSize: tagStyle.fontSize ? `${tagStyle.fontSize}px` : `${autoTagSize}px`,
-              color: tagStyle.color || theme.textPrimary,
-            }}>{t.tag}</div>
+            {showThrowables && (
+              <div style={{ display: "flex", background: "rgba(0,0,0,0.35)", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                {THROWABLE_ORDER.map((kind, i) => {
+                  const count = t.throwables ? t.throwables[kind] : null;
+                  const empty = count === 0;
+                  return (
+                    <div key={kind} title={THROWABLE_LABELS[kind]} style={{
+                      flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "5px 0",
+                      borderLeft: i === 0 ? "none" : "1px solid rgba(255,255,255,0.08)",
+                      opacity: empty ? 0.4 : 1,
+                    }}>
+                      <ThrowableIcon kind={kind} size={17} color={countStyle.color || theme.textPrimary} />
+                      <span style={{
+                        fontWeight: 800, fontVariantNumeric: "tabular-nums",
+                        fontFamily: countStyle.fontFamily || theme.fontDisplay,
+                        fontSize: countStyle.fontSize ? `${countStyle.fontSize}px` : "17px",
+                        color: countStyle.color || theme.textPrimary,
+                      }}>{count ?? "-"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
-            <div style={{ display: "flex", gap: 3, marginTop: 7 }}>
-              {t.players.map((p, i) => {
-                const { color, pulse } = t4TickColor(p);
-                return <div key={i} style={{ flex: 1, height: 6, borderRadius: 3, background: color, animation: pulse ? "t4p-pulse 1s ease-in-out infinite" : "none", opacity: p.liveState === 5 ? 0.45 : 1 }} />;
-              })}
-            </div>
+            {showWwcd && (
+              <div style={{ position: "relative", height: 22, background: "rgba(0,0,0,0.5)" }}>
+                <div style={{ position: "absolute", inset: 0, width: `${wwcdPct ?? 0}%`, background: bgCss(wwcdBar), transition: "width .6s ease" }} />
+                <div style={{
+                  position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 9px",
+                  fontFamily: wwcdTextStyle.fontFamily || theme.fontDisplay, color: wwcdTextStyle.color || "#FFFFFF",
+                  textShadow: "0 1px 2px rgba(0,0,0,0.6)",
+                }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1 }}>WWCD</span>
+                  <span style={{ fontSize: wwcdTextStyle.fontSize ? `${wwcdTextStyle.fontSize}px` : "15px", fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+                    {wwcdPct === null ? "—" : `${Math.round(wwcdPct * 10) / 10}%`}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
-
-          <div style={{ background: bgCss(wwcdBar), padding: "7px 10px", textAlign: "center" }}>
-            <div style={{
-              fontSize: 9.5, fontWeight: 800, letterSpacing: 1,
-              color: wwcdTextStyle.color || "#1a0a05", opacity: 0.85,
-              fontFamily: wwcdTextStyle.fontFamily || theme.fontBody,
-            }}>WWCD CHANCE</div>
-            <div style={{
-              fontWeight: 800, lineHeight: 1.1, fontVariantNumeric: "tabular-nums",
-              fontFamily: wwcdTextStyle.fontFamily || theme.fontDisplay,
-              fontSize: wwcdTextStyle.fontSize ? `${wwcdTextStyle.fontSize}px` : "24px",
-              color: wwcdTextStyle.color || "#1a0a05",
-            }}>{Number.isFinite(t.wwcd) ? `${t.wwcd}%` : "—"}</div>
-          </div>
-        </div>
         );
       })}
-      <style>{`@keyframes t4p-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }`}</style>
     </div>
   );
 }

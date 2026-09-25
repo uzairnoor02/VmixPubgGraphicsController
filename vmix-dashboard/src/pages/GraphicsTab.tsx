@@ -83,7 +83,8 @@ export default function GraphicsTab() {
         ) : (
           <div className="graphics-list">
             {files.map((file) => {
-              const url = `${API_BASE}${file.url}`;
+              // Absolute URL for pasting into vMix: API_BASE is empty (same origin) in the served build.
+              const url = `${API_BASE || window.location.origin}${file.url}`;
               return (
                 <div key={file.name} className="graphics-row">
                   <div>

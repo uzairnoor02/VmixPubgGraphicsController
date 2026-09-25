@@ -205,6 +205,31 @@ namespace Pubg_Ranking_System
                         Console.WriteLine($"[dashboard] Could not serve player images: {ex.Message}");
                     }
 
+                    // Team logos, same idea: the TeamLogosImages folder ({teamId}.png) served
+                    // read-only at /team-logos/{teamId}.png. Every payload the overlay receives
+                    // (standings, rankings, MVP, champions...) points at these URLs - see
+                    // MediaUrls in MatchStateStore.cs.
+                    try
+                    {
+                        var logosDir = ConfigGlobal.LogosImages;
+                        if (!string.IsNullOrWhiteSpace(logosDir) && Directory.Exists(logosDir))
+                        {
+                            app.UseStaticFiles(new StaticFileOptions
+                            {
+                                FileProvider = new PhysicalFileProvider(logosDir),
+                                RequestPath = "/team-logos"
+                            });
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[dashboard] TeamLogosImages folder not found ('{logosDir}') - overlay graphics will show without team logos.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[dashboard] Could not serve team logos: {ex.Message}");
+                    }
+
                     // Serves the built React dashboard (vmix-dashboard's `npm run build` output)
                     // from this same host on "/" - one process, one port, no separate "npm run
                     // dev" window to keep open next to the WinForms app. Auto-detected relative to
@@ -231,7 +256,8 @@ namespace Pubg_Ranking_System
                         app.MapFallback(async httpContext =>
                         {
                             var requestPath = httpContext.Request.Path.Value ?? "";
-                            if (requestPath.StartsWith("/api") || requestPath.StartsWith("/hubs") || requestPath.StartsWith("/graphics"))
+                            if (requestPath.StartsWith("/api") || requestPath.StartsWith("/hubs") || requestPath.StartsWith("/graphics")
+                                || requestPath.StartsWith("/team-logos") || requestPath.StartsWith("/player-images"))
                             {
                                 httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
                                 return;
@@ -268,6 +294,8 @@ namespace Pubg_Ranking_System
                         var provider = dbContext.Database.ProviderName ?? "unknown provider";
                         return (reachable, (reachable ? "reachable: " : "cannot connect: ") + provider);
                     });
+
+                    var tenantScopesForSnapshot = rootProvider.GetRequiredService<TenantScopeManager>();
 
                     // Match control (start/stop/reports/tournament setup) - every action that used
                     // to be a Form1 button click, now REST endpoints. See MatchControlApi.cs.
@@ -458,6 +486,18 @@ namespace Pubg_Ranking_System
                         lock (_snapshotLock) { return Results.Json(new { status = _lastStatus }); }
                     });
 
+                    // Latest payload of every graphic (circle, Top 4, rankings, MVP, champions...)
+                    // keyed by its SignalR event name. The overlay calls this on load and feeds
+                    // each entry through the same handler as the live event, so a vMix Browser
+                    // Source that refreshes mid-show comes back showing exactly what it had.
+                    // Same auth as /api/match/teams (open on the default tournament, token-scoped
+                    // otherwise via TenantResolution).
+                    app.MapGet("/api/overlay/snapshot", (HttpContext httpContext) =>
+                    {
+                        var scope = httpContext.GetTenant().Scope ?? tenantScopesForSnapshot.Default;
+                        return Results.Json(scope.MatchState.GetGraphicsSnapshot());
+                    });
+
                     // Overlay look/feel - chroma-key color and per-element show/hide toggles - read by
                     // the /overlay route on load and pushed live to it (and the dashboard's
                     // Overlay Settings page) over SignalR whenever it changes, so a client can
@@ -596,6 +636,10 @@ namespace Pubg_Ranking_System
                         {
                             _ = hubContext.Clients.Group(group).SendAsync("OverlayConfigChanged", config);
                         };
+                        newScope.MatchState.GraphicPublished += (eventName, payload) =>
+                        {
+                            _ = hubContext.Clients.Group(group).SendAsync(eventName, payload);
+                        };
                     };
 
                     // Logs are pushed as they happen so the Logs tab shows a warning the moment it
@@ -623,6 +667,13 @@ namespace Pubg_Ranking_System
                     {
                         _ = hubContext.Clients.Group(defaultGroup).SendAsync("OverlayConfigChanged", config);
                     };
+                    // Every graphic's data (circle, rankings, MVP, champions, ...) goes out under
+                    // its own event name - this is the app's only output. vMix never gets pushed
+                    // anything; it just displays /overlay as a Browser Source.
+                    matchState.GraphicPublished += (eventName, payload) =>
+                    {
+                        _ = hubContext.Clients.Group(defaultGroup).SendAsync(eventName, payload);
+                    };
                     // Real achievement detection (SetPlayerAcheivments.cs, in VmixGraphicsBusiness)
                     // raises this through MatchStateStore rather than calling BroadcastOverlayEvent
                     // directly, since that project can't reference this one (Pubg Ranking System
@@ -639,8 +690,14 @@ namespace Pubg_Ranking_System
                         // address, or a hostname, without knowing which one vMix used.
                         var photoUrl = string.IsNullOrWhiteSpace(achievement.PlayerUid)
                             ? null
-                            : $"/player-images/{achievement.PlayerUid}.png";
-                        BroadcastOverlayEvent(new OverlayEvent(achievement.Type, null, subtitle, photoUrl, null, null));
+                            : MediaUrls.PlayerPhoto(achievement.PlayerUid);
+                        // Structured fields for the PMGO-style banner: player, team (+ logo via
+                        // teamId) and, when getkillinfo named one, the victim.
+                        var achievementData = new Dictionary<string, string> { ["playerName"] = achievement.PlayerName };
+                        if (!string.IsNullOrWhiteSpace(achievement.TeamTag)) achievementData["teamName"] = achievement.TeamTag!;
+                        if (achievement.TeamId is int achievementTeamId) achievementData["teamId"] = achievementTeamId.ToString();
+                        if (!string.IsNullOrWhiteSpace(achievement.VictimName)) achievementData["victimName"] = achievement.VictimName!;
+                        BroadcastOverlayEvent(new OverlayEvent(achievement.Type, null, subtitle, photoUrl, null, achievementData));
                     };
 
                     // Real per-elimination feed, replacing the overlay's derived fallback. Type
@@ -656,7 +713,13 @@ namespace Pubg_Ranking_System
                     };
                     matchState.TeamEliminated += teamEliminatedEvent =>
                     {
-                        BroadcastOverlayEvent(new OverlayEvent("teamEliminated", "TEAM ELIMINATED", teamEliminatedEvent.TeamName, null, null, null));
+                        BroadcastOverlayEvent(new OverlayEvent("teamEliminated", "TEAM ELIMINATED", teamEliminatedEvent.TeamName,
+                            MediaUrls.TeamLogo(teamEliminatedEvent.TeamId), null,
+                            new Dictionary<string, string>
+                            {
+                                ["rank"] = teamEliminatedEvent.Rank.ToString(),
+                                ["eliminations"] = teamEliminatedEvent.TotalEliminations.ToString(),
+                            }));
                     };
 
                     app.Run();

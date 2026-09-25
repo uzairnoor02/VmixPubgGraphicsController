@@ -77,9 +77,12 @@ internal static class Program
                     // builds, so a failure here is expected rather than exceptional: the tick
                     // still ships, with kill data omitted, and the feed simply stays empty.
                     var killInfoJson = await TryGetAsync(http, pcobBase + "getkillinfo", cts.Token);
+                    // Zone timer and the observed team's backpack (Last 4 throwables) - both optional.
+                    var circleJson = await TryGetAsync(http, pcobBase + "getcircleinfo", cts.Token);
+                    var backpackJson = await TryGetAsync(http, pcobBase + "getteambackpackinfo", cts.Token);
                     // Claim the sequence number before awaiting the POST, so ordering reflects
                     // when the snapshot was taken rather than when its request happened to finish.
-                    await PostTickAsync(http, mainAppBase, config.AgentKey, isInGame: true, playerListJson, teamInfoJson, sessionId, ++seq, killInfoJson);
+                    await PostTickAsync(http, mainAppBase, config.AgentKey, isInGame: true, playerListJson, teamInfoJson, sessionId, ++seq, killInfoJson, circleJson, backpackJson);
                     wasInGame = true;
                 }
                 else if (wasInGame)
@@ -139,7 +142,13 @@ internal static class Program
             if (!response.IsSuccessStatusCode) return false;
             var body = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(body);
-            return doc.RootElement.TryGetProperty("isInGame", out var prop) && prop.GetBoolean();
+            // Case-insensitive, same as the main app's GetLiveData.IsInGame.
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (string.Equals(prop.Name, "isInGame", StringComparison.OrdinalIgnoreCase))
+                    return prop.Value.ValueKind == JsonValueKind.True;
+            }
+            return false;
         }
         catch (Exception ex)
         {
@@ -148,9 +157,9 @@ internal static class Program
         }
     }
 
-    private static async Task PostTickAsync(HttpClient http, string mainAppBase, string agentKey, bool isInGame, string? playerListJson, string? teamInfoJson, string sessionId, long seq, string? killInfoJson = null)
+    private static async Task PostTickAsync(HttpClient http, string mainAppBase, string agentKey, bool isInGame, string? playerListJson, string? teamInfoJson, string sessionId, long seq, string? killInfoJson = null, string? circleJson = null, string? backpackJson = null)
     {
-        var payload = JsonSerializer.Serialize(new { isInGame, playerListJson, teamInfoJson, sessionId, seq, killInfoJson });
+        var payload = JsonSerializer.Serialize(new { isInGame, playerListJson, teamInfoJson, sessionId, seq, killInfoJson, circleJson, backpackJson });
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{mainAppBase}/api/ingest/tick") { Content = content };
         request.Headers.Add("X-Agent-Key", agentKey);

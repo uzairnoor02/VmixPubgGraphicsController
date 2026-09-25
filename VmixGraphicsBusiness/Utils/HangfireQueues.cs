@@ -9,7 +9,7 @@ namespace VmixGraphicsBusiness.Utils
     public static class HangfireQueues
     {
         public const string Default = "default";
-        public const string HighPriority = "high-priority";
-        public const string LowPriority = "low-priority";
+        public const string HighPriority = "high_priority";
+        public const string LowPriority = "low_priority";
     }
 }

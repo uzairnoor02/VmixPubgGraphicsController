@@ -14,7 +14,6 @@ using VmixGraphicsBusiness.LiveMatch;
 using VmixGraphicsBusiness.PostMatchStats;
 using VmixGraphicsBusiness.PreMatch;
 using VmixGraphicsBusiness.Utils;
-using VmixGraphicsBusiness.vmixutils;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace Pubg_Ranking_System
@@ -33,11 +32,10 @@ namespace Pubg_Ranking_System
         private readonly PostMatch _postMatch;
         private readonly PreMatch _preMatch;
         private readonly Reset _reset;
-        private ApiCallProcessor ApiCallProcessor;
 
         public Form1(Add_tournament add_Tournament, GetLiveData getLiveData, LiveStatsBusiness liveStatsBusiness, TournamentBusiness tournamentBusiness,
      IBackgroundJobClient backgroundJobManager, ILogger<Form1> logger, MatchStateStore matchState, IServiceProvider serviceProvider,
-     vmix_graphicsContext vmix_GraphicsContext, PostMatch postMatch, Reset reset, PreMatch preMatch, ApiCallProcessor apiCallProcessor)
+     vmix_graphicsContext vmix_GraphicsContext, PostMatch postMatch, Reset reset, PreMatch preMatch)
         {
             _liveStatsBusiness = liveStatsBusiness;
             _Add_tournament = add_Tournament;
@@ -263,7 +261,7 @@ namespace Pubg_Ranking_System
 
         private async Task StartMatchAsync(Match match)
         {
-            _backgroundJobManager.Enqueue(HangfireQueues.HighPriority, () => _getLiveData.FetchAndPostData(match));
+            _backgroundJobManager.Enqueue(() => _getLiveData.FetchAndPostData(match));
             _logger.LogInformation("Match started: MatchId={MatchId}, Day={Day}",
                 match.MatchId, match.MatchDayId);
         }
@@ -471,7 +469,7 @@ namespace Pubg_Ranking_System
 
         private void button2_Click(object sender, EventArgs e)
         {
-            _backgroundJobManager.Enqueue(HangfireQueues.HighPriority, () => _reset.ResetAll(_backgroundJobManager));
+            _backgroundJobManager.Enqueue(() => _reset.ResetAll(_backgroundJobManager));
         }
 
         private async void button3_Click(object sender, EventArgs e)
@@ -586,7 +584,7 @@ namespace Pubg_Ranking_System
                 }
                 else if (status == "Ended")
                 {
-                    _backgroundJobManager.Enqueue(HangfireQueues.HighPriority, () => _reset.ResetAll(_backgroundJobManager));
+                    _backgroundJobManager.Enqueue(() => _reset.ResetAll(_backgroundJobManager));
                     await stop_Click(true);
                     await Task.Delay(5000);
                     await setall();

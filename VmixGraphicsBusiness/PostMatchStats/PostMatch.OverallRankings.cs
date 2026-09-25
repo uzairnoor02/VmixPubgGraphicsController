@@ -1,94 +1,77 @@
 using Microsoft.Extensions.Logging;
-using System.Linq.Expressions;
-using System.Text.Json;
-using System.Threading.Tasks;
 using VmixData.Models;
-using VmixData.Models.MatchModels;
 using VmixGraphicsBusiness.Utils;
-using VmixGraphicsBusiness.vmixutils;
 
 namespace VmixGraphicsBusiness.PostMatchStats
 {
     public partial class PostMatch
     {
+        /// <summary>Stage standings across every match played -> overlay
+        /// "OverallRankingsUpdated", rendered by the shared RankingsRenderer. Same ordering as
+        /// before: total, then placement, then WWCDs, then elims.</summary>
         public async Task OverallRankings(Match matches)
         {
             await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
-                var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
+                var totalMatches = _vmix_GraphicsContext.Matches.Count(x => x.StageId == matches.StageId);
 
-                List<string> apiCalls = new List<string>();
                 var teamRankings = _vmix_GraphicsContext.TeamPoints
-    .Where(x => x.StageId == matches.StageId)
-    .GroupBy(x => x.TeamId)
-    .Select(g => new
-    {
-        TeamId = g.Key,
-        TotalPoints = g.Sum(x => x.TotalPoints),
-        PlacementPoints = g.Sum(x => x.PlacementPoints),
-        WWCD = g.Sum(x => x.WWCD),
-        KillPoints = g.Sum(x => x.KillPoints)
-    })
-    .OrderByDescending(x => x.TotalPoints)
-    .ThenByDescending(x => x.PlacementPoints)
-    .ThenByDescending(x => x.WWCD)
-    .ThenByDescending(x => x.KillPoints)
-    .ToList();
+                    .Where(x => x.StageId == matches.StageId)
+                    .GroupBy(x => x.TeamId)
+                    .Select(g => new
+                    {
+                        TeamId = g.Key,
+                        TotalPoints = g.Sum(x => x.TotalPoints),
+                        PlacementPoints = g.Sum(x => x.PlacementPoints),
+                        WWCD = g.Sum(x => x.WWCD),
+                        KillPoints = g.Sum(x => x.KillPoints),
+                        MatchesPlayed = g.Count()
+                    })
+                    .OrderByDescending(x => x.TotalPoints)
+                    .ThenByDescending(x => x.PlacementPoints)
+                    .ThenByDescending(x => x.WWCD)
+                    .ThenByDescending(x => x.KillPoints)
+                    .ToList();
                 var teamsdata = _vmix_GraphicsContext.Teams.Where(x => x.StageId == matches.StageId).ToList();
-                
-                var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
+
+                var rows = new List<object>();
                 int rankNum = 1;
-                var rankingGuids = new List<string>
-                {
-                    vmixdata.OverAllRankingGUID,
-                    vmixdata.OverAllRankingGUID1,
-                    vmixdata.OverAllRankingGUID2,
-                    vmixdata.OverAllRankingGUID3
-                };
-                var matchCountsPerTeam = _vmix_GraphicsContext.TeamPoints
-    .Where(x => x.StageId == matches.StageId)
-    .GroupBy(x => x.TeamId)
-    .ToDictionary(g => g.Key.ToString(), g => g
-        .Select(tp => tp.MatchId )
-        .Count());
                 foreach (var team in teamRankings)
                 {
-                    
-                    var chicken = _vmix_GraphicsContext.TeamPoints
-                        .Where(x => x.TeamId == team.TeamId)
-                        .Select(x => x.WWCD)
-                        .Sum();
-
                     var teamData = teamsdata.FirstOrDefault(x => x.TeamId == team.TeamId.ToString());
                     if (teamData == null)
                         continue;
-                    int matchCount = matchCountsPerTeam.TryGetValue(teamData.TeamId, out var count) ? count : 0;
 
-                    foreach (var guid in rankingGuids)
+                    // WWCD is now counted within this stage. It used to sum the team's WWCDs
+                    // across every stage in the database.
+                    rows.Add(new
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"TAGT{rankNum}", teamData.TeamName.ToUpper()));
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"PMNUM", totalMatches.Count().ToString()));
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"WWCD{rankNum}", chicken == 0 ? "" : chicken.ToString()));
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"MATCHT{rankNum}", matchCount.ToString()));
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"ELIMST{rankNum}", team.KillPoints.ToString()));
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"PLACET{rankNum}", team.PlacementPoints.ToString()));
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(guid, $"TOTALT{rankNum}", team.TotalPoints.ToString()));
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(guid, $"LOGOT{rankNum}", $"{ConfigGlobal.LogosImages}\\0.png"));
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(guid, $"LOGOT{rankNum}", $"{ConfigGlobal.LogosImages}\\{teamData.TeamId}.png"));
-                    }
-
+                        rank = rankNum,
+                        teamId = team.TeamId,
+                        teamName = teamData.TeamName.ToUpper(),
+                        logoUrl = MediaUrls.TeamLogo(team.TeamId),
+                        wins = team.WWCD,
+                        matchesPlayed = team.MatchesPlayed,
+                        placementPts = team.PlacementPoints,
+                        elimPts = team.KillPoints,
+                        total = team.TotalPoints,
+                    });
                     rankNum++;
                 }
 
-                SetTexts setTexts = new SetTexts();
-                await setTexts.CallMultipleApiAsync(apiCalls);
-                var OverAllRankingGUID = vmixdata.OverAllRankingGUID;
-                //await vmi_layerSetOnOff.PushAnimationAsync(OverAllRankingGUID, 4, true, 1);
+                PublishGraphic(GraphicEvents.OverallRankingsUpdated, new
+                {
+                    title = "OVERALL RANKINGS",
+                    subtitle = $"AFTER MATCH {matches.MatchId} / {totalMatches}",
+                    matchNumber = matches.MatchId,
+                    totalMatches,
+                    rows,
+                });
             }
             catch (Exception e)
             {
-                logger.LogError("error in OverAllRankings:", e);
+                logger.LogError(e, "error in OverallRankings");
             }
         }
     }

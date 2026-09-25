@@ -32,7 +32,12 @@ namespace Pubg_Ranking_System
         string? TeamInfoJson,
         string? SessionId = null,
         long? Seq = null,
-        string? KillInfoJson = null);
+        string? KillInfoJson = null,
+        // Newer agents also forward the zone and the observed team's backpack, so agent mode
+        // drives the Circle bar and the Last 4 throwables exactly like direct polling. Older
+        // agents omit them and those two graphics just stay as they are.
+        string? CircleJson = null,
+        string? BackpackJson = null);
 
     /// <summary>
     /// Receives live match data from VmixIngestAgent when this application isn't running on the
@@ -142,14 +147,11 @@ namespace Pubg_Ranking_System
                 {
                     Console.WriteLine($"[killfeed] first getkillinfo payload this match: {tick.KillInfoJson}");
                 }
-                foreach (var kill in coordinator.KillFeed.GetNewKills(tick.KillInfoJson))
-                {
-                    matchState.PublishKill(new LiveKillEvent(
-                        kill.KillerName ?? "Unknown",
-                        kill.VictimName ?? "an opponent",
-                        kill.Distance,
-                        KillFeedTracker.IsLongRange(kill)));
-                }
+                // Before the stats run, so this tick's FIRST BLOOD banner can already name the
+                // victim and the Last 4 cards carry fresh throwables (same order as GetLiveData).
+                KillFeedPublisher.Apply(matchState, coordinator.KillFeed, tick.KillInfoJson);
+                matchState.Inventory.Update(tick.BackpackJson);
+                CirclePayload.Publish(matchState, tick.CircleJson);
 
                 var published = true;
                 try

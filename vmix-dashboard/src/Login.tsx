@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? "http://localhost:5050";
+// Same rule as lib/api.ts: same-origin in the served build, local app on :5050 under `npm run dev`.
+const API_BASE: string = (import.meta as any).env?.VITE_API_BASE ?? ((import.meta as any).env?.DEV ? "http://localhost:5050" : "");
 
 // sessionStorage (not localStorage) so it clears when the tab/browser closes, mirroring the
 // WinForms app asking for the key again each time it starts - not a "remember me forever" login.

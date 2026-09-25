@@ -37,8 +37,8 @@ export default function EliminatedSidebarPage() {
           <>
             <div style={{ width: "100%", maxWidth: 560, aspectRatio: "16/9", borderRadius: theme.radius, overflow: "hidden", background: chromaKey, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(255,255,255,0.12)", position: "relative" }}>
               <div style={{ position: "absolute", fontSize: 11, color: "rgba(0,0,0,0.4)", top: 8, left: 10 }}>keyed out by vMix in production</div>
-              <div style={{ width: "72%" }}>
-                <EliminatedBannerRenderer theme={theme} bannerBg={bannerBg} teamName={eliminatedTeam.teamName} visible={visible} />
+              <div style={{ width: "58%" }}>
+                <EliminatedBannerRenderer theme={theme} bannerBg={bannerBg} teamName={eliminatedTeam.teamName} rank={14} eliminations={eliminatedTeam.kills} visible={visible} />
               </div>
             </div>
             <button onClick={() => setPlayKey((k) => k + 1)} style={{ ...btnGhost, marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}><Play size={13} /> Replay animation</button>
@@ -55,7 +55,7 @@ export default function EliminatedSidebarPage() {
       </div>
 
       <EditorPanel tabs={[{ id: "banner", label: "Banner", icon: Palette }]} activeTab={tab} setActiveTab={setTab}>
-        <div style={{ fontSize: 12, color: "#8a8a94", marginBottom: 10, lineHeight: 1.5 }}>The "TEAM ELIMINATED" background, capped at 3 gradient stops.</div>
+        <div style={{ fontSize: 12, color: "#8a8a94", marginBottom: 10, lineHeight: 1.5 }}>Accent of the ELIMINATED card: the edge slash and the "ELIMINATED" lettering. Capped at 3 gradient stops.</div>
         <BgEditor bg={bannerBg} setBg={setBannerBgOverride} maxStops={3} />
         {bannerBgOverride && <ResetToThemeButton onClick={() => setBannerBgOverride(null)} />}
       </EditorPanel>

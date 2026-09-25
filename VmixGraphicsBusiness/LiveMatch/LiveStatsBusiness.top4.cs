@@ -7,7 +7,6 @@ using static Google.Apis.Sheets.v4.SheetsService;
 using VmixData.Models.MatchModels;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
-using VmixGraphicsBusiness.vmixutils;
 using VmixData.Models;
 using Hangfire;
 using Microsoft.Extensions.Logging;
@@ -28,6 +27,9 @@ namespace VmixGraphicsBusiness.LiveMatch
             public int LiveMemberCount { get; set; }
             public double WinProbability { get; set; }
             public List<PlayerHealthInfo> PlayersHealth { get; set; } = new List<PlayerHealthInfo>();
+            /// <summary>Carried frag/smoke/molotov/stun as last seen by the observer (null until
+            /// the observer has watched this team this match).</summary>
+            public TeamThrowables? Throwables { get; set; }
         }
 
         public class PlayerHealthInfo
@@ -47,25 +49,24 @@ namespace VmixGraphicsBusiness.LiveMatch
         public async Task<object> CreateDynamicLiveStats(Match match, LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats)
         {
             // Check if we should show Top 4 ranking
+            // Top 4 win-probability board, computed inline in tick order (it used to be a separate
+            // Hangfire job per tick, which could run late or out of order). It publishes itself to
+            // the overlay via MatchStateStore.PublishTop4Rankings; a failure here never blocks
+            // the main standings board below.
             if (ShouldShowTop4Ranking(liveTeamInfos))
             {
-                _logger.LogInformation("Switching to Top 4 live ranking display");
-                // CreateTop4LiveRanking(playerInfo, liveTeamInfos, pastMatchStats);
-                backgroundJobClient.Enqueue(HangfireQueues.HighPriority, () => CreateTop4LiveRanking(playerInfo, liveTeamInfos, pastMatchStats));
-
+                await CreateTop4LiveRanking(playerInfo, liveTeamInfos, pastMatchStats);
             }
-            _logger.LogInformation("Using standard live ranking display");
             return await CreateLiveStats(match, playerInfo, liveTeamInfos, pastMatchStats);
 
         }
 
+        [Queue(HangfireQueues.HighPriority)]
         [AutomaticRetry(Attempts = 0), DisableConcurrentExecution(timeoutInSeconds: 2)]
         public async Task<List<Top4TeamStats>> CreateTop4LiveRanking(LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats)
         {
             using var scope = serviceProvider.CreateScope();
             var redis = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
-            List<string> apiCalls = new List<string>();
-            var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
 
             try
             {
@@ -85,17 +86,6 @@ namespace VmixGraphicsBusiness.LiveMatch
                 {
                     _logger.LogInformation($"Live teams count is {liveTeamsCount}, not suitable for Top 4 display");
                     return null;
-                }
-
-                // Use the Top 4 GUID
-                string top4RankingGuid = vmixdata.LiverankingGuid4;
-
-                var oldguid = redis.StringGet("Top4RankingGuid");
-                if (oldguid != top4RankingGuid)
-                {
-                    await redis.StringSetAsync("Top4RankingGuid", top4RankingGuid);
-                    apiCalls.Add($"function=OverlayInput{4}Out&input={oldguid}");
-                    apiCalls.Add($"function=OverlayInput{4}In&input={top4RankingGuid}");
                 }
 
                 string HeatlhImages = ConfigGlobal.Images!;
@@ -165,7 +155,10 @@ namespace VmixGraphicsBusiness.LiveMatch
                             continue;
                         }
 
-                        var teamPlayers = groupedByTeam[teamInfo.teamId].Where(p => p.LiveState != 5).ToList(); // Exclude dead
+                        // Every roster slot is shown on the card (dead players as a grey helmet), but
+                        // only players still in the fight count towards the win probability.
+                        var rosterPlayers = groupedByTeam[teamInfo.teamId].Take(4).ToList();
+                        var teamPlayers = rosterPlayers.Where(p => p.LiveState != 5).ToList(); // Exclude dead
                         var teamData = pastMatchStats.FirstOrDefault(x => x.teamid == teamInfo.teamId);
 
                         if (teamData == null)
@@ -181,8 +174,9 @@ namespace VmixGraphicsBusiness.LiveMatch
                         {
                             TeamId = teamInfo.teamId,
                             TeamName = teamData.teamName,
-                            TeamLogo = $"{ConfigGlobal.LogosImages}\\{teamInfo.teamId}.png",
-                            LiveMemberCount = teamInfo.liveMemberNum
+                            TeamLogo = MediaUrls.TeamLogo(teamInfo.teamId),
+                            LiveMemberCount = teamInfo.liveMemberNum,
+                            Throwables = redis.Inventory.Get(teamInfo.teamId)
                         };
 
                         // Calculate team health. Every non-dead player contributes to the average
@@ -197,7 +191,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                         double teamHealthWeighted = 0;
                         int countedPlayerCount = 0;
 
-                        foreach (var player in teamPlayers.Take(4)) // Max 4 players
+                        foreach (var player in rosterPlayers) // Max 4 players, dead included
                         {
                             var healthInfo = EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax);
                             float healthPercent = player.HealthMax > 0 ? (player.Health / (float)player.HealthMax * 100) : 0;
@@ -282,92 +276,15 @@ namespace VmixGraphicsBusiness.LiveMatch
                     }
                 }
 
-                // ✅ SORT BY FIXED POSITION (NOT by win probability)
+                // ✅ SORT BY FIXED POSITION (NOT by win probability) - a team keeps its card slot
+                // for the rest of the match instead of the cards reshuffling every tick.
                 var sortedTeams = teamScoresTemp.OrderBy(t => t.position).ToList();
 
-                // ✅ UPDATE VMIX FOR EACH TEAM IN THEIR FIXED POSITIONS
-                foreach (var (team, rawScore, position) in sortedTeams)
-                {
-                    var teamData = pastMatchStats.FirstOrDefault(x => x.teamid == team.TeamId);
-                    var teamInfo = allRelevantTeams.FirstOrDefault(x => x.teamId == team.TeamId);
-                    var teamPlayers = groupedByTeam[team.TeamId].Where(p => p.LiveState != 5).ToList();
-
-                    bool isEliminated = teamInfo.liveMemberNum == 0;
-                    bool isInBlue = teamPlayers.Any(p => p.IsOutsideBlueCircle);
-
-                    // Set vMix elements using FIXED position
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(top4RankingGuid, $"TAGT{position}", teamData.teamName.ToUpper()));
-
-                    // Show percentage even if 0.00% for eliminated teams
-                    if (isEliminated)
-                    {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(top4RankingGuid, $"PERCENTAGE{position}", ""));
-                    }
-                    else if (team.WinProbability >= 5)
-                    {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(top4RankingGuid, $"PERCENTAGE{position}", $"{team.WinProbability:F1}%"));
-                    }
-                    else
-                    {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(top4RankingGuid, $"PERCENTAGE{position}", $""));
-                    }
-
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"LOGOT{position}", $"{ConfigGlobal.LogosImages}\\{teamData.teamid}.png"));
-
-                    // Zone status background
-                    if (isEliminated)
-                    {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"EliminatedBGT{position}", HeatlhImages + "\\EliminatedBG\\Team Dead4.png"));
-                    }
-                    else if (isInBlue)
-                    {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"EliminatedBGT{position}", HeatlhImages + "\\EliminatedBG\\Team In Zone4.png"));
-                    }
-                    else
-                    {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"EliminatedBGT{position}", HeatlhImages + "\\EliminatedBG\\Team Out Zone.png"));
-                    }
-
-                    // Set player health images
-                    for (int playerIndex = 0; playerIndex < 4; playerIndex++)
-                    {
-                        if (playerIndex < team.PlayersHealth.Count)
-                        {
-                            apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"T{position}P{playerIndex + 1}", team.PlayersHealth[playerIndex].HealthImage));
-                        }
-                        else
-                        {
-                            apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"T{position}P{playerIndex + 1}", HeatlhImages + "\\Dead\\0.png"));
-                        }
-                    }
-                }
-
-                // Hide unused team slots (if less than 4 teams)
-                var usedPositions = sortedTeams.Select(t => t.position).ToList();
-                for (int i = 1; i <= 4; i++)
-                {
-                    if (!usedPositions.Contains(i))
-                    {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(top4RankingGuid, $"TEAMNAME{i}", ""));
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(top4RankingGuid, $"PERCENTAGE{i}", ""));
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"LOGO{i}", ""));
-
-                        for (int playerIndex = 1; playerIndex <= 4; playerIndex++)
-                        {
-                            apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"T{i}P{playerIndex}", ""));
-                        }
-                    }
-                }
-
-                // Enqueue API calls
-                backgroundJobClient.Enqueue<ApiCallProcessor>(HangfireQueues.Default, processor => processor.ProcessApiCalls(apiCalls));
-
-                _logger.LogInformation($"Top 4 live ranking updated. Positions: {string.Join(", ", sortedTeams.Select(t => $"T{t.position}={t.team.TeamName}({t.team.WinProbability:F1}%)"))}");
+                _logger.LogDebug("Top 4 updated: {Positions}", string.Join(", ", sortedTeams.Select(t => $"T{t.position}={t.team.TeamName}({t.team.WinProbability:F1}%)")));
 
                 var finalTeams = sortedTeams.Select(t => t.team).ToList();
 
-                // Same real WinProbability numbers ApiCallProcessor just pushed to vMix, now also
-                // reaching the web overlay - see MatchStateStore.PublishTop4Rankings.
+                // The overlay's Top 4 / WWCD panel - see MatchStateStore.PublishTop4Rankings.
                 using (var pubScope = serviceProvider.CreateScope())
                 {
                     var matchState = pubScope.ServiceProvider.GetRequiredService<MatchStateStore>();

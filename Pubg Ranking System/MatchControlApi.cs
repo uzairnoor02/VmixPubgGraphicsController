@@ -313,8 +313,15 @@ namespace Pubg_Ranking_System
 
         private static async Task EnqueueStartAsync(IServiceScope scope, IBackgroundJobClient backgroundJobClient, Match match)
         {
-            backgroundJobClient.Enqueue<GetLiveData>(HangfireQueues.HighPriority, gld => gld.FetchAndPostData(match));
-            await Task.CompletedTask;
+            try
+            {
+                backgroundJobClient.Enqueue<GetLiveData>(gld => gld.FetchAndPostData(match));
+                await Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
         }
 
         /// <summary>"agent" mode equivalent of EnqueueStartAsync - instead of this app polling

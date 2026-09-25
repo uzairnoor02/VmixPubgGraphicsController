@@ -67,25 +67,55 @@ logos/photos). **This has not been verified to build in this session** - see REP
 
 ## Recording and replaying a real match (test PC only)
 
-FakePcob can sit between a real vMix PC and a real PCOB server during an actual test match, log
-every response, and replay that exact capture later with no PCOB running at all.
+`record` captures **all 31 endpoints** the PCOB client's local API server (`ObToolsNew/ob.js`,
+build 4.6.0.21520) exposes - not just the 5 the app reads. Two capture paths write into one folder:
 
-**Only do this on a machine you don't mind pointing at a live PCOB feed for real** - `record` is a
-pass-through proxy: every request the app makes goes straight to the real server and the exact
-response is both returned to the app and saved to disk, so a live test match's data flows through
-this tool unmodified.
+- **Poller** (every `--poll` ms, default 2000): fetches every ob.js endpoint itself and saves a
+  body only when it changed since the last save. This is what picks up revives/recalls, mortars,
+  pickups, weapon detail, team/player report data, `getgameglobalinfo`, etc.
+- **Proxy**: the app polls the recorder, which forwards to real PCOB and returns the body
+  byte-for-byte (any endpoint name is forwarded now). Saves every call the app makes.
 
+On the PC running PCOB, **the safest option is `--poll-only`**. The app keeps talking straight to
+PCOB, `appsettings.json` stays unchanged, and the recorder just reads alongside it:
 ```
-dotnet run --project tools/FakePcob -- record --upstream http://<real-pcob-ip>:10086/ --out tools/FakePcob/recordings
+REM 1. PCOB client running, ObToolsNew\launch.bat open, "API Enable" clicked
+dotnet run --project tools/FakePcob -- record --upstream http://127.0.0.1:10086/ --poll-only
 ```
-Point `appsettings.json`'s `pcobUrl` at `record`'s own address (default `http://127.0.0.1:10086/`)
-instead of the real PCOB directly, so every poll goes through the recorder. It writes
-`recordings/<timestamp>/<endpoint>/<seq>_<unixMs>.json` plus an `index.ndjson` per session.
+
+To also capture exactly what the app saw, run the proxy on a **different port** (PCOB already
+owns 10086 on that PC) and point `appsettings.json`'s `pcobUrl` at it:
+```
+dotnet run --project tools/FakePcob -- record --upstream http://127.0.0.1:10086/ --port 10087
+```
+Options: `--poll 1000` (faster), `--poll 0` (proxy only, old behaviour), `--out <folder>`.
+
+Output: one folder per recording session, one sub-folder per endpoint, and in each sub-folder
+one file per new response, numbered in save order:
+```
+recordings/20260925-181500/
+  index.ndjson                      every saved file, in save order (Source = poll | proxy)
+  gettotalplayerlist/000001_<unixMs>.json, 000002_..., 000003_...
+  getkillinfo/000001_<unixMs>.json, ...
+  getreviveplayer/...               (a folder appears once that endpoint returns data)
+```
+000001 is the first file saved for that endpoint and the highest number is the last. Keep it running ~60s after the match ends: the
+end-of-match fields (heal, assists, knockouts, survivalTime) only arrive then. Stop with Ctrl+C.
+
+Notes:
+- ob.js logs every response it serves to `ObToolsNew/log/`. Polling 31 endpoints adds to that
+  log, so check free disk on the PCOB PC over a long event day.
+- ob.js keeps event lists (kills, revives, pickups...) for its whole lifetime and never clears
+  them between matches. Restart `launch.bat` between matches if you want each recording to hold
+  one match only.
 
 To replay a capture later with no PCOB or network involved:
 ```
 dotnet run --project tools/FakePcob -- serve --replay tools/FakePcob/recordings/<timestamp>
 ```
+Replay builds frames from `gettotalplayerlist`, using the proxy copies if there are any and the
+poller copies otherwise, so no tick plays twice. The other 30 endpoints are saved for analysis
+but are not replayed yet.
 
 ## Restoring the real PCOB address
 

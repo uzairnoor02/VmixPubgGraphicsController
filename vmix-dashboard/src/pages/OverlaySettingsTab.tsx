@@ -3,6 +3,31 @@ import { API_BASE, api } from "../lib/api";
 import type { OverlayConfig } from "../lib/api";
 import { GRAPHICS } from "../lib/graphics";
 import { getConfigElement } from "../studio/configAccess";
+import { getAuthKey } from "../Login";
+import { CANVAS_H, CANVAS_W, DEFAULT_LAYOUT, GraphicLayout, layoutFor } from "../lib/overlayLayout";
+
+// Graphics whose position can be edited here (Overlay Settings > Positions). Achievements share
+// one slot.
+const POSITIONED: { id: string; label: string }[] = [
+  { id: "leaderboard", label: "Live rankings" },
+  { id: "top4", label: "Last 4 teams" },
+  { id: "circle", label: "Circle status bar" },
+  { id: "achievement", label: "Achievement banner (all types)" },
+  { id: "teamEliminatedBanner", label: "ELIMINATED banner" },
+  { id: "eliminationFeed", label: "Elimination feed" },
+  { id: "sidebar", label: "Live sidebar leaderboard" },
+  { id: "spectatorMap", label: "Spectator map" },
+  { id: "matchRankings", label: "Match rankings" },
+  { id: "overallRankings", label: "Overall rankings" },
+  { id: "mvpRankings", label: "MVP rankings" },
+  { id: "teamsToWatch", label: "Teams to watch" },
+  { id: "mapPerformers", label: "Map performers" },
+  { id: "champions", label: "Champions / WWCD" },
+  { id: "playerHighlight", label: "Player highlight" },
+  { id: "topPlayers", label: "Top players" },
+  { id: "teamIntro", label: "Team intro" },
+  { id: "headToHead", label: "Head to head" },
+];
 
 // Element list comes from the shared catalogue in lib/graphics.ts - this tab and the Director
 // tab previously kept separate hand-maintained lists, which drifted every time a graphic was
@@ -53,10 +78,15 @@ export default function OverlaySettingsTab() {
   }
 
   async function previewEvent(type: string, title: string, subtitle: string) {
+    // Admin endpoint: needs the dashboard key (it silently 401'd without it before).
+    const authKey = getAuthKey();
+    const data = type === "teamEliminated"
+      ? { rank: "14", eliminations: "3" }
+      : type.startsWith("achievement.") ? { playerName: "PREVIEW PLAYER", teamName: "TEAM", victimName: "OPPONENT" } : undefined;
     await fetch(`${API_BASE}/api/overlay/event`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, title, subtitle }),
+      headers: { "Content-Type": "application/json", ...(authKey ? { Authorization: `Bearer ${authKey}` } : {}) },
+      body: JSON.stringify({ type, title, subtitle, data }),
     }).catch(() => {});
   }
 
@@ -147,6 +177,38 @@ export default function OverlaySettingsTab() {
               onChange={(e) => save({ ...config, elementSettings: { ...config.elementSettings, ["canvas.solidColor"]: e.target.value } })}
             />
           )}
+        </div>
+      </div>
+
+      <div className="panel">
+        <h2>Positions</h2>
+        <p className="panel-hint">
+          Where each graphic sits on the {CANVAS_W}x{CANVAS_H} frame, in pixels. The defaults follow the PMGO
+          broadcast layout: live rankings under the in-game minimap, Last 4 cards across the top,
+          achievements on the left below the in-game team panel. X "center" centres horizontally.
+          Changes go live on the overlay as you type.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(160px, 1.4fr) repeat(3, minmax(70px, 1fr)) auto", gap: "6px 10px", alignItems: "center", fontSize: 13 }}>
+          <div style={{ color: "var(--muted, #8a8a94)" }}>Graphic</div><div style={{ color: "var(--muted, #8a8a94)" }}>X</div><div style={{ color: "var(--muted, #8a8a94)" }}>Y</div><div style={{ color: "var(--muted, #8a8a94)" }}>Width</div><div />
+          {POSITIONED.map((g) => {
+            const l = layoutFor(config, g.id);
+            const custom = config.elementSettings?.[`layout.${g.id}`] !== undefined;
+            const setLayout = (next: GraphicLayout | undefined) => {
+              const settings = { ...config.elementSettings };
+              if (next === undefined) delete settings[`layout.${g.id}`]; else settings[`layout.${g.id}`] = next;
+              save({ ...config, elementSettings: settings });
+            };
+            const num = (v: string, fallback: number) => { const n = Number(v); return Number.isFinite(n) ? n : fallback; };
+            return (
+              <div key={g.id} style={{ display: "contents" }}>
+                <div>{g.label}{custom && <span style={{ color: "#F4C430", marginLeft: 6, fontSize: 11 }}>custom</span>}</div>
+                <input value={l.x === "center" ? "center" : String(l.x)} onChange={(e) => setLayout({ ...l, x: e.target.value.trim().toLowerCase().startsWith("c") ? "center" : num(e.target.value, 0) })} />
+                <input type="number" value={l.y} onChange={(e) => setLayout({ ...l, y: num(e.target.value, l.y) })} />
+                <input type="number" value={l.w} onChange={(e) => setLayout({ ...l, w: num(e.target.value, l.w) })} />
+                <button className="secondary" disabled={!custom} onClick={() => setLayout(undefined)} title={`Default: x ${DEFAULT_LAYOUT[g.id]?.x}, y ${DEFAULT_LAYOUT[g.id]?.y}, w ${DEFAULT_LAYOUT[g.id]?.w}`}>Reset</button>
+              </div>
+            );
+          })}
         </div>
       </div>
 

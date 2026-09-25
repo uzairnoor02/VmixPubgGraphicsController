@@ -1,24 +1,18 @@
 using Microsoft.Extensions.Logging;
-using System;
-using System.Text.Json;
-using System.Threading.Tasks;
 using VmixData.Models;
-using VmixData.Models.MatchModels;
 using VmixGraphicsBusiness.Utils;
-using VmixGraphicsBusiness.vmixutils;
 
 namespace VmixGraphicsBusiness.PostMatchStats
 {
     public partial class PostMatch
     {
+        /// <summary>The top 4 teams of this match with their supporting numbers -> overlay
+        /// "TeamsToWatchUpdated" (TeamsToWatchRenderer's TeamToWatchEntry shape).</summary>
         public async Task TeamsToWatch(Match matches)
         {
             await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
-                var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
-
-                List<string> apiCalls = new List<string>();
                 var teamsPoints = _vmix_GraphicsContext.TeamPoints
                     .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId)
                     .OrderByDescending(x => x.TotalPoints)
@@ -26,63 +20,53 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     .ToList();
                 var teamsdata = _vmix_GraphicsContext.Teams.Where(x => x.StageId == matches.StageId).ToList();
 
-
-
-                var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
+                var entries = new List<object>();
                 int teamnum = 1;
                 foreach (var team in teamsPoints)
                 {
-                    var players  = _vmix_GraphicsContext.PlayerStats
-                        .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.TeamId==team.TeamId)
-                        .ToList();
-                    var teamData = teamsdata.Where(x => x.TeamId == team.TeamId.ToString()).FirstOrDefault();
+                    var teamData = teamsdata.FirstOrDefault(x => x.TeamId == team.TeamId.ToString());
                     if (teamData == null)
-                    {
                         continue;
-                    }
-                    
 
-                    int totalDistance = 0;
-                    int totalSmokeGrenades = 0;
-                    int totalFragGrenades = 0;
-                    int totalBurnGrenades = 0;
-                    int totalSurvivalTime = 0;
-                    int playerCount = players.Count;
+                    var players = _vmix_GraphicsContext.PlayerStats
+                        .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.TeamId == team.TeamId)
+                        .ToList();
 
-                    foreach (var player in players)
+                    int totalDistance = players.Sum(p => p.MarchDistance + p.DriveDistance);
+                    int totalSmoke = players.Sum(p => p.UseSmokeGrenadeNum);
+                    int totalFrag = players.Sum(p => p.UseFragGrenadeNum);
+                    int totalBurn = players.Sum(p => p.useBurnGrenadeNum);
+                    // Guarded: a team with no saved player rows used to divide by zero here and
+                    // abort the whole graphic.
+                    double avgSurvival = players.Count > 0 ? players.Average(p => p.SurvivalTime) : 0;
+
+                    entries.Add(new
                     {
-                        totalDistance += player.MarchDistance+player.DriveDistance;
-                        totalSmokeGrenades += player.UseSmokeGrenadeNum;
-                        totalFragGrenades += player.UseFragGrenadeNum;
-                        totalBurnGrenades += player.useBurnGrenadeNum;
-                        totalSurvivalTime += player.SurvivalTime;
-                    }
-                    totalSurvivalTime = totalSurvivalTime / playerCount;
-                    var survivalTime = TimeSpan.FromSeconds(totalSurvivalTime);
-                    var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"TAGT{teamnum}", teamData.TeamName));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"PMNUM", totalMatches.Count().ToString()));
-
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"MOLIUSEDT{teamnum}", totalBurnGrenades.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"SURVIVALT{teamnum}", survivalTimeString));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"MATCHN", matches.MatchId.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"BUMUSEDT{teamnum}", totalFragGrenades.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"SMOKEUSEDT{teamnum}", totalSmokeGrenades.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"TRAVELDIST{teamnum}", totalDistance+"M"));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TeamsToWatchGUID, $"MATCHNumber", matches.MatchId.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.TeamsToWatchGUID, $"LOGOTEAM{teamnum}", $"{ConfigGlobal.LogosImages}\\0.png"));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.TeamsToWatchGUID, $"LOGOTEAM{teamnum}", $"{ConfigGlobal.LogosImages}\\{teamData.TeamId}.png"));
-
+                        key = team.TeamId,
+                        rank = teamnum,
+                        teamName = teamData.TeamName,
+                        logoUrl = MediaUrls.TeamLogo(team.TeamId),
+                        reason = $"#{teamnum} in match {matches.MatchId} - {team.TotalPoints} pts",
+                        stats = new object[]
+                        {
+                            new { label = "ELIMS", value = team.KillPoints },
+                            new { label = "AVG SURVIVAL", value = FormatSurvival(avgSurvival) },
+                            new { label = "TRAVELLED", value = $"{totalDistance}M" },
+                            new { label = "THROWABLES", value = totalFrag + totalSmoke + totalBurn },
+                        },
+                        // Full breakdown the old vMix Title showed, for a custom layout.
+                        fragsUsed = totalFrag,
+                        smokesUsed = totalSmoke,
+                        molotovsUsed = totalBurn,
+                    });
                     teamnum++;
                 }
-                SetTexts setTexts = new SetTexts();
-                await setTexts.CallMultipleApiAsync(apiCalls);
-                var TeamsToWatchGUID = vmixdata.TeamsToWatchGUID;
-                //await vmi_layerSetOnOff.PushAnimationAsync(TeamsToWatchGUID, 4, true, 1);
+
+                PublishGraphic(GraphicEvents.TeamsToWatchUpdated, entries);
             }
-            catch(Exception e)
+            catch (Exception e)
             {
-                logger.LogError("error in Team to watch:", e);
+                logger.LogError(e, "error in TeamsToWatch");
             }
         }
     }

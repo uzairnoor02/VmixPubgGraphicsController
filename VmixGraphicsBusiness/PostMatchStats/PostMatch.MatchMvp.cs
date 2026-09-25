@@ -1,25 +1,18 @@
-﻿using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using VmixData.Models;
-using VmixData.Models.MatchModels;
 using VmixGraphicsBusiness.Utils;
-using VmixGraphicsBusiness.vmixutils;
 
 namespace VmixGraphicsBusiness.PostMatchStats
 {
     partial class PostMatch
     {
+        /// <summary>MVP of this match -> overlay "PlayerHighlightUpdated" (the MVP / Star
+        /// Player card). Score unchanged: survival 40%, damage 40%, kills 20%.</summary>
         public async Task MatchMvp(Match matches)
         {
             await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
-                var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
                 var mvpPlayer = _vmix_GraphicsContext.PlayerStats
                     .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId)
                     .Select(p => new
@@ -30,59 +23,42 @@ namespace VmixGraphicsBusiness.PostMatchStats
                     .OrderByDescending(p => p.Score)
                     .FirstOrDefault();
 
-                //var mvpPlayer = playerStats
-                //    .Select(p => new
-                //    {
-                //        Player = p,
-                //        Score = (p.SurvivalTime * 0.4) + (p.Damage * 0.4) + (p.KillNum * 0.2)
-                //    })
-                //    .OrderByDescending(p => p.Score)
-                //    .FirstOrDefault();
-
                 if (mvpPlayer == null)
                 {
-                    throw new InvalidOperationException("MVP could not be determined.");
+                    logger.LogWarning("MatchMvp: no player stats saved for match {MatchId}.", matches.MatchId);
+                    return;
                 }
-                var teamdata = _vmix_GraphicsContext.Teams.Where(x => x.TeamId == mvpPlayer.Player.TeamId.ToString()).FirstOrDefault();
-                var player = mvpPlayer.Player;
-                var survivalTime = TimeSpan.FromSeconds(player.SurvivalTime);
-                var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
 
-                var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
+                var player = mvpPlayer.Player;
+                var teamdata = _vmix_GraphicsContext.Teams.FirstOrDefault(x => x.TeamId == player.TeamId.ToString());
                 var totalTeamKills = _vmix_GraphicsContext.PlayerStats
                     .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.TeamId == player.TeamId)
                     .Sum(x => x.KillNum ?? 0);
+                var contribution = totalTeamKills > 0 ? Math.Round((double)(player.KillNum ?? 0) / totalTeamKills * 100, 1) : 0;
 
-                var playerContribution = totalTeamKills > 0
-                    ? (double)player.KillNum / totalTeamKills * 100
-                    : 0;
-                //var playerContribution = teamdata != null && teamdata.KillPoints > 0
-                //    ? (double)player.KillNum / 
-                //    : 0;
-
-                List<string> apiCalls = new List<string>();
-
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"PMNUM", totalMatches.Count().ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"TEAMTAGP{1}", teamdata.TeamName.ToUpper()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"MATCHN", matches.MatchId.ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"NAMEP{1}", player.PlayerName));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"ELIMSP{1}", player.KillNum.ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"SURVP{1}", survivalTimeString));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"DAMAGEP{1}", player.Damage.ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"ASSISTSP{1}", player.Assists.ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"KNOCKP{1}", player.Knockouts.ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.MVPGUID, $"CONTP{1}", playerContribution.ToString("0.0")));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"LOGOP{1}", $"{ConfigGlobal.LogosImages}\\{teamdata.TeamId}.png"));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"IMAGEP{1}", $"{ConfigGlobal.PlayerImages}\\0.png"));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.MVPGUID, $"IMAGEP{1}", $"{ConfigGlobal.PlayerImages}\\{player.PlayerUId}.png"));
-
-                SetTexts setTexts = new SetTexts();
-                await setTexts.CallMultipleApiAsync(apiCalls);
-            }catch(Exception ex)
+                PublishGraphic(GraphicEvents.PlayerHighlightUpdated, new
+                {
+                    label = "MVP OF THE MATCH",
+                    matchNumber = matches.MatchId,
+                    playerName = player.PlayerName,
+                    teamName = (teamdata?.TeamName ?? player.TeamId.ToString()).ToUpper(),
+                    photoUrl = MediaUrls.PlayerPhoto(player.PlayerUId),
+                    teamLogoUrl = MediaUrls.TeamLogo(player.TeamId),
+                    stats = new object[]
+                    {
+                        new { label = "ELIMS", value = player.KillNum ?? 0 },
+                        new { label = "DAMAGE", value = player.Damage ?? 0 },
+                        new { label = "SURVIVAL", value = FormatSurvival(player.SurvivalTime) },
+                        new { label = "ASSISTS", value = player.Assists ?? 0 },
+                        new { label = "KNOCKS", value = player.Knockouts ?? 0 },
+                        new { label = "CONTRIBUTION", value = $"{contribution:0.#}%" },
+                    },
+                });
+            }
+            catch (Exception ex)
             {
-                logger.LogError("error in MatchMvp:", ex);
+                logger.LogError(ex, "error in MatchMvp");
             }
         }
-
     }
 }

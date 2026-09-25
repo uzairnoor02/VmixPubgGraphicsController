@@ -1,110 +1,80 @@
-﻿using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using VmixData.Models;
-using VmixGraphicsBusiness.vmixutils;
+using VmixGraphicsBusiness.Utils;
 
 namespace VmixGraphicsBusiness.PreMatch
 {
     public partial class PreMatch
     {
-        public async Task MapTopPerformers(Match matches,string mapName)
+        /// <summary>Top 4 teams on the given map this stage -> overlay "MapPerformersUpdated",
+        /// in the same TeamToWatchEntry shape so it renders with TeamsToWatchRenderer.</summary>
+        public async Task MapTopPerformers(Match matches, string mapName)
         {
-
             try
             {
-                List<string> apiCalls = new List<string>();
                 var topMapPerformers = _vmix_GraphicsContext.TeamPoints
-                    .Where(x => x.StageId == matches.StageId && x.Map == mapName) // Replace dynamically
+                    .Where(x => x.StageId == matches.StageId && x.Map == mapName)
                     .GroupBy(x => x.TeamId)
                     .Select(g => new
                     {
                         TeamId = g.Key,
-                        MatchIds = g.Select(x => x.MatchId).Distinct().ToList(),  // Collects all unique match IDs
+                        MatchIds = g.Select(x => x.MatchId).Distinct().ToList(),
                         PlacementPoints = g.Sum(x => x.PlacementPoints),
                         KillPoints = g.Sum(x => x.KillPoints),
-                        TotalPoints = g.Sum(x => x.PlacementPoints) + g.Sum(x => x.KillPoints) // Sum of both points
+                        TotalPoints = g.Sum(x => x.PlacementPoints) + g.Sum(x => x.KillPoints)
                     })
-                    .OrderByDescending(x => x.TotalPoints) // Order by combined points
+                    .OrderByDescending(x => x.TotalPoints)
                     .Take(4)
                     .ToList();
 
-
                 var teamsdata = _vmix_GraphicsContext.Teams.Where(x => x.StageId == matches.StageId).ToList();
 
-                var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
+                var entries = new List<object>();
                 int rankNum = 1;
                 foreach (var team in topMapPerformers)
                 {
+                    var teamData = teamsdata.FirstOrDefault(x => x.TeamId == team.TeamId.ToString());
+                    if (teamData == null)
+                        continue;
 
                     var players = _vmix_GraphicsContext.PlayerStats
-                        .Where(x => team.MatchIds.Contains(x.MatchId) && x.StageId == matches.StageId  && x.TeamId == team.TeamId)
+                        .Where(x => team.MatchIds.Contains(x.MatchId) && x.StageId == matches.StageId && x.TeamId == team.TeamId)
                         .ToList();
-                    var MatchesCount=players.GroupBy(x => new { x.MatchId, x.DayId }) // Grouping by MatchId & DayId
-    .Select(g => new
-    {
-        MatchId = g.Key.MatchId,
-        DayId = g.Key.DayId,
-        PlayerCount = g.Count() // Count players in each group
-    })
-    .ToList();
-                    var teamData = teamsdata.Where(x => x.TeamId == team.TeamId.ToString()).FirstOrDefault();
-                    if (teamData == null)
+
+                    double avgSurvival = players.Count > 0 ? players.Average(p => p.SurvivalTime) : 0;
+                    int totalDamage = players.Sum(p => p.Damage ?? 0);
+                    var survival = TimeSpan.FromSeconds(avgSurvival);
+
+                    entries.Add(new
                     {
-                        continue;
-                    }
-
-
-                    int totalDistance = 0;
-                    int totalSmokeGrenades = 0;
-                    int totalFragGrenades = 0;
-                    int totalBurnGrenades = 0;
-                    int totalSurvivalTime = 0;
-                    int TotalDamage = 0;
-                    int playerCount = players.Count;
-
-                    foreach (var player in players)
-                    {
-                        totalDistance += player.MarchDistance + player.DriveDistance;
-                        totalSmokeGrenades += player.UseSmokeGrenadeNum;
-                        totalFragGrenades += player.UseFragGrenadeNum;
-                        totalBurnGrenades += player.useBurnGrenadeNum;
-                        totalSurvivalTime += player.SurvivalTime;
-                        TotalDamage += (int)player.Damage;
-                    }
-                    
-                    totalSurvivalTime = totalSurvivalTime / playerCount;
-                    
-                    var survivalTime = TimeSpan.FromSeconds(totalSurvivalTime);
-                    var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
-                    var title = $"TOP {mapName.ToUpper()} PERFORMERS";
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TopMapPerformers, $"MAPTITLE", $"{title}"));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TopMapPerformers, $"TAGT{rankNum}", teamData.TeamName));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TopMapPerformers, $"SURVT{rankNum}", survivalTimeString));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TopMapPerformers, $"DAMAGET{rankNum}", TotalDamage.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TopMapPerformers, $"ELIMST{rankNum}", team.KillPoints.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TopMapPerformers, $"PLACET{rankNum}", team.PlacementPoints.ToString()));
-                   // apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.TopMapPerformers, $"TOTALT{rankNum}", team.TotalPoints.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.TopMapPerformers, $"LOGOT{rankNum}", $"{ConfigGlobal.LogosImages}\\0.png"));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.TopMapPerformers, $"LOGOT{rankNum}", $"{ConfigGlobal.LogosImages}\\{teamData.TeamId}.png"));
+                        key = team.TeamId,
+                        rank = rankNum,
+                        teamName = teamData.TeamName,
+                        logoUrl = MediaUrls.TeamLogo(team.TeamId),
+                        reason = $"{team.TotalPoints} pts on {mapName}",
+                        stats = new object[]
+                        {
+                            new { label = "PLACEMENT", value = team.PlacementPoints },
+                            new { label = "ELIMS", value = team.KillPoints },
+                            new { label = "DAMAGE", value = totalDamage },
+                            new { label = "AVG SURVIVAL", value = $"{(int)survival.TotalMinutes:D2}:{survival.Seconds:D2}" },
+                        },
+                    });
                     rankNum++;
                 }
-                SetTexts setTexts = new SetTexts();
-                await setTexts.CallMultipleApiAsync(apiCalls);
-                var TopMapPerformers = vmixdata.TopMapPerformers;
-                //await vmi_layerSetOnOff.PushAnimationAsync(TopMapPerformers, 4, true, 1);
+
+                matchState.PublishGraphic(GraphicEvents.MapPerformersUpdated, new
+                {
+                    title = $"TOP {mapName.ToUpper()} PERFORMERS",
+                    map = mapName,
+                    teams = entries,
+                });
+                await Task.CompletedTask;
             }
             catch (Exception e)
             {
-                logger.LogError("error in Mapperfromers",e);
+                logger.LogError(e, "error in MapTopPerformers");
             }
-
-
-
-
         }
     }
 }

@@ -203,7 +203,7 @@ public static class FeedResponses
         },
     }.ToJsonString();
 
-    public static string BuildIsInGameJson(bool inGame) => new JsonObject { ["IsInGame"] = inGame }.ToJsonString();
+    public static string BuildIsInGameJson(bool inGame) => new JsonObject { ["isInGame"] = inGame } /* same casing as real pcob */.ToJsonString();
 
     /// A valid but empty envelope, per B0 rule 5: this tool implements no `getkillinfo` logic
     /// (the app doesn't use it - kills come from the per-player killNum counters) - it exists only

@@ -59,12 +59,37 @@ export const SAMPLE_SIDEBAR_TEAMS: SampleSidebarTeam[] = [
   { teamId: 20, teamName: "RPG", rank: 4, kills: 4 }, { teamId: 19, teamName: "Seventh Elements", rank: 5, kills: 4 }, { teamId: 16, teamName: "TOGxUZ", rank: 6, kills: 3 }, { teamId: 17, teamName: "Team Chronicles", rank: 7, kills: 2 },
 ];
 
-export interface SampleTop4Team { overallRank: number; tag: string; wwcd: number; players: SamplePlayer[] }
+// A mid-match live table (PMGO-style preview): 16 teams, mixed health, knocked players, a 3-man
+// roster, and wiped-out teams further down. Tags are invented.
+export interface SampleLiveTeam { teamId: number; tag: string; points: number; kills: number; players: SamplePlayer[]; eliminated?: boolean }
+const P = (health: number, liveState = 0): SamplePlayer => ({ playerName: "", health, liveState });
+const DEAD = (): SamplePlayer => P(0, 5);
+export const SAMPLE_LIVE_STANDINGS: SampleLiveTeam[] = [
+  { teamId: 5, tag: "NOVA", points: 109, kills: 3, players: [P(100), P(100), P(82), P(100)] },
+  { teamId: 6, tag: "APEX", points: 88, kills: 9, players: [P(100), P(64), P(0, 5), P(35, 4)] },
+  { teamId: 7, tag: "RAVN", points: 74, kills: 0, players: [P(100), P(100), P(100), P(100)] },
+  { teamId: 8, tag: "KAIZ", points: 71, kills: 0, players: [P(90), P(100), DEAD(), P(100)] },
+  { teamId: 9, tag: "TITN", points: 67, kills: 2, players: [P(48), P(100), P(100), P(12)] },
+  { teamId: 10, tag: "ORCA", points: 57, kills: 3, players: [P(100), P(100), P(100), P(76)] },
+  { teamId: 11, tag: "VIPR", points: 55, kills: 1, players: [DEAD(), DEAD(), DEAD(), DEAD()], eliminated: true },
+  { teamId: 12, tag: "ZENX", points: 53, kills: 0, players: [P(100), P(70, 4), P(100), P(100)] },
+  { teamId: 13, tag: "BOLT", points: 51, kills: 1, players: [P(100), P(100), P(55)] },
+  { teamId: 14, tag: "FURY", points: 49, kills: 0, players: [DEAD(), DEAD(), DEAD(), DEAD()], eliminated: true },
+  { teamId: 15, tag: "HAWK", points: 49, kills: 4, players: [P(100), P(22), P(100), P(100)] },
+  { teamId: 16, tag: "ONYX", points: 46, kills: 1, players: [P(100), P(100), DEAD(), DEAD()] },
+  { teamId: 17, tag: "PYRO", points: 46, kills: 0, players: [P(81), P(100), P(100), P(100)] },
+  { teamId: 18, tag: "SAGE", points: 42, kills: 2, players: [P(100), P(90, 4), P(100), P(100)] },
+  { teamId: 19, tag: "WOLF", points: 36, kills: 0, players: [DEAD(), DEAD(), DEAD(), DEAD()], eliminated: true },
+  { teamId: 20, tag: "ECHO", points: 18, kills: 2, players: [P(100), P(100), P(60), P(100)] },
+];
+
+export interface SampleThrowables { frag: number; smoke: number; molotov: number; stun: number }
+export interface SampleTop4Team { overallRank: number; tag: string; wwcd: number; players: SamplePlayer[]; throwables?: SampleThrowables }
 export const SAMPLE_TOP4: SampleTop4Team[] = [
-  { overallRank: 9, tag: "FL", wwcd: 25.7, players: [{ playerName: "", health: 80, liveState: 0 }, { playerName: "", health: 45, liveState: 0 }, { playerName: "", health: 100, liveState: 0 }, { playerName: "", health: 0, liveState: 5 }] },
-  { overallRank: 12, tag: "HORAA", wwcd: 27.6, players: [{ playerName: "", health: 60, liveState: 0 }, { playerName: "", health: 20, liveState: 4 }, { playerName: "", health: 90, liveState: 0 }, { playerName: "", health: 0, liveState: 5 }] },
-  { overallRank: 14, tag: "VIT", wwcd: 22.8, players: [{ playerName: "", health: 100, liveState: 0 }, { playerName: "", health: 0, liveState: 5 }, { playerName: "", health: 0, liveState: 5 }, { playerName: "", health: 55, liveState: 0 }] },
-  { overallRank: 16, tag: "ULA", wwcd: 23.9, players: [{ playerName: "", health: 100, liveState: 0 }, { playerName: "", health: 100, liveState: 0 }, { playerName: "", health: 70, liveState: 0 }, { playerName: "", health: 0, liveState: 5 }] },
+  { overallRank: 9, tag: "ULF", wwcd: 25.7, players: [{ playerName: "", health: 80, liveState: 0 }, { playerName: "", health: 45, liveState: 0 }, { playerName: "", health: 100, liveState: 0 }, { playerName: "", health: 0, liveState: 5 }], throwables: { frag: 7, smoke: 7, molotov: 3, stun: 0 } },
+  { overallRank: 12, tag: "GOAT", wwcd: 27.6, players: [{ playerName: "", health: 60, liveState: 0 }, { playerName: "", health: 20, liveState: 4 }, { playerName: "", health: 90, liveState: 0 }, { playerName: "", health: 0, liveState: 5 }], throwables: { frag: 6, smoke: 5, molotov: 2, stun: 0 } },
+  { overallRank: 14, tag: "BOOM", wwcd: 22.8, players: [{ playerName: "", health: 100, liveState: 0 }, { playerName: "", health: 0, liveState: 5 }, { playerName: "", health: 0, liveState: 5 }, { playerName: "", health: 55, liveState: 0 }], throwables: { frag: 9, smoke: 19, molotov: 1, stun: 3 } },
+  { overallRank: 16, tag: "FLARE", wwcd: 23.9, players: [{ playerName: "", health: 100, liveState: 0 }, { playerName: "", health: 100, liveState: 0 }, { playerName: "", health: 70, liveState: 0 }, { playerName: "", health: 0, liveState: 5 }] },
 ];
 
 export interface AchievementTypeDef { id: string; label: string; dataSource: "real" | "partial"; note: string }

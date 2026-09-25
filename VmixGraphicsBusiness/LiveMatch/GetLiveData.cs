@@ -10,7 +10,6 @@ using VmixData.Models.MatchModels;
 using VmixGraphicsBusiness;
 using VmixGraphicsBusiness.PostMatchStats;
 using VmixGraphicsBusiness.Utils;
-using VmixGraphicsBusiness.vmixutils;
 
 namespace VmixGraphicsBusiness.LiveMatch
 {
@@ -18,7 +17,6 @@ namespace VmixGraphicsBusiness.LiveMatch
     {
         private readonly LiveStatsBusiness _liveStatsBusiness;
         private readonly PostMatch _dbBusiness;
-        private readonly IBackgroundJobClient _backgroundJobClient;
         private readonly MatchStateStore _matchState;
         private readonly string _pcobUrl;
         private readonly IServiceProvider serviceProvider1;
@@ -39,13 +37,15 @@ namespace VmixGraphicsBusiness.LiveMatch
         // so this stays comfortably ahead of that instead of chasing it.
         private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
 
-        int zonemoving = 0;
+        private static readonly JsonSerializerOptions CaseInsensitiveJson = new() { PropertyNameCaseInsensitive = true };
 
-        public GetLiveData(LiveStatsBusiness liveStatsBusiness, PostMatch dbBusiness, IBackgroundJobClient backgroundJobClient, MatchStateStore matchState, IServiceProvider serviceProvider)
+        // How long "start match" waits for pcob to report isInGame before giving up.
+        private static readonly TimeSpan MaxWaitForGameStart = TimeSpan.FromMinutes(10);
+
+        public GetLiveData(LiveStatsBusiness liveStatsBusiness, PostMatch dbBusiness, MatchStateStore matchState, IServiceProvider serviceProvider)
         {
             _liveStatsBusiness = liveStatsBusiness;
             _dbBusiness = dbBusiness;
-            _backgroundJobClient = backgroundJobClient;
             _pcobUrl = ConfigGlobal.PcobUrl;
             _matchState = matchState;
             serviceProvider1 = serviceProvider;
@@ -59,7 +59,10 @@ namespace VmixGraphicsBusiness.LiveMatch
                 if (response.IsSuccessStatusCode)
                 {
                     var data = await response.Content.ReadAsStringAsync();
-                    var isInGameResponse = JsonSerializer.Deserialize<IsInGameResponse>(data);
+                    // Case-insensitive: real pcob sends "isInGame", but a field name that differs
+                    // only by case (as FakePcob's "IsInGame" did) must never read as "not in game"
+                    // and silently block the whole match from starting.
+                    var isInGameResponse = JsonSerializer.Deserialize<IsInGameResponse>(data, CaseInsensitiveJson);
                     return isInGameResponse?.IsInGame ?? false;
                 }
                 else
@@ -76,6 +79,7 @@ namespace VmixGraphicsBusiness.LiveMatch
             }
         }
 
+        [Queue(HangfireQueues.HighPriority)]
         [AutomaticRetry(Attempts = 0, DelaysInSeconds = new[] { 2 })]
         [DisableConcurrentExecution(timeoutInSeconds: 1)]
         public async Task FetchAndPostData(Match match)
@@ -96,12 +100,36 @@ namespace VmixGraphicsBusiness.LiveMatch
             // would re-announce on the first tick.
             _killFeed.Reset();
 
+            // Wait (bounded) for PUBG to actually be in a match. Previously, starting a match
+            // while pcob was still in the lobby fell straight through the loop below and went on
+            // to save the lobby's empty numbers as this match's final results.
+            var waitDeadline = DateTime.UtcNow + MaxWaitForGameStart;
+            var inGame = await IsInGame();
+            if (!inGame)
+            {
+                _matchState.PublishMatchStatus($"Match {match.MatchId}: waiting for PUBG to go in-game...");
+                while (!inGame && DateTime.UtcNow < waitDeadline)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2));
+                    inGame = await IsInGame();
+                }
+            }
+            if (!inGame)
+            {
+                _matchState.PublishMatchStatus($"Match {match.MatchId}: PUBG never went in-game within {MaxWaitForGameStart.TotalMinutes:0} minutes - nothing was recorded. Start the match again once the game is live.");
+                return;
+            }
+
             _matchState.PublishMatchStatus($"Match {match.MatchId} started successfully!");
 
             while (await IsInGame())
             {
                 var tickStopwatch = System.Diagnostics.Stopwatch.StartNew();
-                GetCircleInfo();
+                await GetCircleInfo();
+                // Kill names and team inventories first, so this tick's banners (FIRST BLOOD's
+                // victim) and Last 4 cards (throwables) can already use them.
+                await PollKillFeedAsync();
+                await PollBackpackAsync();
                 try
                 {
                     var responsegetplayerData = await _httpClient.GetAsync(_pcobUrl + "gettotalplayerlist");
@@ -130,7 +158,6 @@ namespace VmixGraphicsBusiness.LiveMatch
                                 // Feeds the SignalR hub for the web dashboard - see LiveDashboardHub.
                                 _matchState.PublishLiveTeams(teamLiveStatsList);
                             }
-                            await PollKillFeedAsync();
                             previousData = PlayerData;
                             await _matchState.StringSetAsync(HelperRedis.PlayerInfolist, PlayerData);
                             await _matchState.StringSetAsync(HelperRedis.TeamInfoList, teamdata);
@@ -162,55 +189,52 @@ namespace VmixGraphicsBusiness.LiveMatch
                 }
             }
 
-            var a = await VmixDataUtils.SetVMIXDataoperations();
-            var liverakiingguid16 = a.LiverankingGuid16;
-            var liverakiingguid18 = a.LiverankingGuid18;
-            var liverakiingguid20 = a.LiverankingGuid20;
-            var liverakiingguid4 = a.LiverankingGuid4;
-            _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid16, 1, false, 3000));
+            // Match over. The live graphics (circle bar, Top 4) are cleared from the overlay here -
+            // this replaces the old vMix "overlay out" animation calls, which made the whole
+            // match depend on vMix being reachable at this exact moment. What's on air after this
+            // is decided on the overlay/Director side, never by this loop.
+            _matchState.ClearLiveGraphics();
+            _matchState.PublishMatchStatus($"Match {match.MatchId} finished - computing results...");
 
-            _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid16, 4, false, 3000));
-            _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid4, 4, false, 3400));
-
+            // pcob keeps final numbers settling for a few seconds after isingame flips false.
             await Task.Delay(5000);
-            var responsegetplayerDatapost = await _httpClient.GetAsync(_pcobUrl + "gettotalplayerlist");
-            var responseTeamInfoListpost = await _httpClient.GetAsync(_pcobUrl + "getteaminfolist");
-            string PlayerDatapost, teamdatapost;
-
-            LivePlayersList livePlayerInfoPost = new();
-            TeamInfoList TeamInfoListPost = new();
-            if (responsegetplayerDatapost.IsSuccessStatusCode)
+            try
             {
-                PlayerDatapost = await responsegetplayerDatapost.Content.ReadAsStringAsync();
-                teamdatapost = await responseTeamInfoListpost.Content.ReadAsStringAsync();
-                LivePlayersList livePlayerInfo = JsonSerializer.Deserialize<LivePlayersList>(PlayerDatapost)!;
-                TeamInfoList TeamInfoList = JsonSerializer.Deserialize<TeamInfoList>(teamdatapost)!;
+                var responsegetplayerDatapost = await _httpClient.GetAsync(_pcobUrl + "gettotalplayerlist");
+                var responseTeamInfoListpost = await _httpClient.GetAsync(_pcobUrl + "getteaminfolist");
 
-                try
+                if (responsegetplayerDatapost.IsSuccessStatusCode && responseTeamInfoListpost.IsSuccessStatusCode)
                 {
+                    var PlayerDatapost = await responsegetplayerDatapost.Content.ReadAsStringAsync();
+                    var teamdatapost = await responseTeamInfoListpost.Content.ReadAsStringAsync();
+                    LivePlayersList livePlayerInfo = JsonSerializer.Deserialize<LivePlayersList>(PlayerDatapost)!;
+                    TeamInfoList TeamInfoList = JsonSerializer.Deserialize<TeamInfoList>(teamdatapost)!;
+
+                    // Saves the match to the DB, then computes and publishes every post-match
+                    // graphic (match/overall rankings, MVP, champions, teams to watch) to the
+                    // overlay - see PostMatch.createPostMtachStats.
                     await _dbBusiness.createPostMtachStats(livePlayerInfo!, match, TeamInfoList!);
+                    _matchState.PublishMatchStatus($"Match {match.MatchId} results saved - post-match graphics are ready.");
                 }
-                catch (Exception ex)
+                else
                 {
-                    // Post-match processing must never take the app down with it - log and leave the
-                    // raw match state recoverable rather than throwing out of FetchAndPostData.
-                    Console.WriteLine($"Post-match processing failed: {ex.Message}");
-                    _matchState.PublishMatchStatus($"Post-match processing error: {ex.Message}");
+                    _matchState.PublishMatchStatus($"Match {match.MatchId}: could not read final results from pcob ({responsegetplayerDatapost.StatusCode}/{responseTeamInfoListpost.StatusCode}).");
                 }
             }
-
-            _matchState.PublishMatchStatus("");
+            catch (Exception ex)
+            {
+                // Post-match processing must never take the app down with it - log and leave the
+                // raw match state recoverable rather than throwing out of FetchAndPostData.
+                Console.WriteLine($"Post-match processing failed: {ex.Message}");
+                _matchState.PublishMatchStatus($"Post-match processing error: {ex.Message}");
+            }
         }
 
         /// <summary>
-        /// Polls pcob's getkillinfo and publishes only eliminations not seen yet this match, so
-        /// the overlay's kill feed shows real "X eliminated Y" lines instead of the derived
-        /// "a team's elimination count went up" fallback.
-        ///
-        /// Entirely best-effort: getkillinfo is a newer PC-OB endpoint that may not exist on
-        /// every pcob build, and its exact response shape is unconfirmed (see KillInfo). Any
-        /// failure here must not disturb the stats tick that just succeeded, so everything is
-        /// swallowed and the feed simply stays empty.
+        /// Polls pcob's getkillinfo: new eliminations go to the overlay's kill feed, and each
+        /// killer -> victim pair is remembered for the achievement banners (see KillFeedPublisher).
+        /// Names only - kill counts keep coming from the player list. Best-effort: a pcob without
+        /// this endpoint just leaves the feed on its derived fallback.
         /// </summary>
         private async Task PollKillFeedAsync()
         {
@@ -220,21 +244,12 @@ namespace VmixGraphicsBusiness.LiveMatch
                 if (!response.IsSuccessStatusCode) return;
                 var raw = await response.Content.ReadAsStringAsync();
 
-                // One sample per match, so the assumed field names can be confirmed against a
-                // real pcob from a single test match rather than guessed at forever.
                 if (_killFeed.ShouldLogRawSample())
                 {
                     Console.WriteLine($"[killfeed] first getkillinfo payload this match: {raw}");
                 }
 
-                foreach (var kill in _killFeed.GetNewKills(raw))
-                {
-                    _matchState.PublishKill(new VmixGraphicsBusiness.Utils.LiveKillEvent(
-                        kill.KillerName ?? "Unknown",
-                        kill.VictimName ?? "an opponent",
-                        kill.Distance,
-                        VmixGraphicsBusiness.Utils.KillFeedTracker.IsLongRange(kill)));
-                }
+                KillFeedPublisher.Apply(_matchState, _killFeed, raw);
             }
             catch
             {
@@ -242,36 +257,39 @@ namespace VmixGraphicsBusiness.LiveMatch
             }
         }
 
+        /// <summary>
+        /// Polls pcob's getteambackpackinfo - the inventory of the team the observer is watching -
+        /// and keeps per-team throwable counts for the Last 4 cards (see TeamInventoryTracker).
+        /// Best-effort, like the kill feed.
+        /// </summary>
+        private async Task PollBackpackAsync()
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync(_pcobUrl + "getteambackpackinfo");
+                if (!response.IsSuccessStatusCode) return;
+                _matchState.Inventory.Update(await response.Content.ReadAsStringAsync());
+            }
+            catch
+            {
+                // optional endpoint
+            }
+        }
+
+        /// <summary>Polls pcob's getcircleinfo and publishes it to the overlay's Circle bar
+        /// ("CircleUpdated") - see CirclePayload for the normalisation.</summary>
         public async Task<int> GetCircleInfo()
         {
             try
             {
                 var response = await _httpClient.GetAsync(_pcobUrl + "getcircleinfo");
-                if (response.IsSuccessStatusCode)
-                {
-                    var data = await response.Content.ReadAsStringAsync();
-
-                    var circleInfoDaTA = JsonSerializer.Deserialize<CircleDataWrapper>(data);
-                    var circleInfo = circleInfoDaTA.CircleInfo;
-                    vmixguidsclass vmixguids = await VmixDataUtils.SetVMIXDataoperations();
-                    string circleClosingGtzip = vmixguids.CircleClosing;
-                    if (circleInfo.CircleStatus == "2" && zonemoving == 0 && int.Parse(circleInfo.CircleIndex) < 6 && (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter)) <= 17)
-                    {
-                        Console.WriteLine("maxtime:" + circleInfo.MaxTime + "shrinkprogress=" + circleInfo.Counter);
-                        zonemoving = 1;
-                        _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushCircleAnimationAsync(circleClosingGtzip, 2, true, (int.Parse(circleInfo.MaxTime) - int.Parse(circleInfo.Counter) - 3)));
-                        zonemoving = 1;
-                    }
-                    if (circleInfo.CircleStatus == "0" && zonemoving == 1)
-                    {
-                        zonemoving = 0;
-                    }
-                    return int.Parse(circleInfo.CircleIndex);
-                }
+                if (!response.IsSuccessStatusCode) return 0;
+                return CirclePayload.Publish(_matchState, await response.Content.ReadAsStringAsync());
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                // The zone bar is optional - never let it break the stats tick.
+                Console.WriteLine($"getcircleinfo failed: {ex.Message}");
             }
             return 0;
         }

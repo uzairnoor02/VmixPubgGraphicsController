@@ -101,10 +101,33 @@ public static class ServeCommand
         {
             lock (state.Lock)
             {
-                return Results.Content(FeedResponses.BuildCircleInfoJson(state.Scenario.Circle.At(state.Tick)), "application/json");
+                var recorded = RecordedBody(state, "getcircleinfo");
+                return Results.Content(recorded ?? FeedResponses.BuildCircleInfoJson(state.Scenario.Circle.At(state.Tick)), "application/json");
             }
         });
-        app.MapGet("/getkillinfo", () => Results.Content(FeedResponses.BuildEmptyKillInfoJson(), "application/json"));
+        // Replays of a real capture serve the recorded kill feed / backpack / observer in step
+        // with the clock; built matches keep the old empty responses.
+        app.MapGet("/getkillinfo", () =>
+        {
+            lock (state.Lock)
+            {
+                return Results.Content(RecordedBody(state, "getkillinfo") ?? "{\"killInfo\":[]}", "application/json");
+            }
+        });
+        app.MapGet("/getteambackpackinfo", () =>
+        {
+            lock (state.Lock)
+            {
+                return Results.Content(RecordedBody(state, "getteambackpackinfo") ?? "{\"teambackpackinfo\":{\"TeamBackPackList\":[]}}", "application/json");
+            }
+        });
+        app.MapGet("/getobservingplayer", () =>
+        {
+            lock (state.Lock)
+            {
+                return Results.Content(RecordedBody(state, "getobservingplayer") ?? "{\"observingPlayer\":{}}", "application/json");
+            }
+        });
         app.MapGet("/isingame", () =>
         {
             lock (state.Lock)
@@ -112,6 +135,16 @@ public static class ServeCommand
                 return Results.Content(FeedResponses.BuildIsInGameJson(state.InGame), "application/json");
             }
         });
+    }
+
+    /// Recorded body for this replay tick, or null (built match, or nothing recorded yet).
+    /// Caller holds state.Lock.
+    private static string? RecordedBody(SimState state, string endpoint)
+    {
+        var match = state.Scenario.Match;
+        if (match.Recorded is null || match.FrameUnixMs is null || match.FrameUnixMs.Count == 0) return null;
+        var i = Math.Clamp(state.Tick, 0, match.FrameUnixMs.Count - 1);
+        return match.Recorded.BodyAt(endpoint, match.FrameUnixMs[i]);
     }
 
     private static void MapControlRoutes(WebApplication app, SimState state)

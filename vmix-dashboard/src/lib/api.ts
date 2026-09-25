@@ -4,7 +4,13 @@
 
 import { clearAuthed, getAuthKey } from "../Login";
 
-export const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? "http://localhost:5050";
+// Production build (served by LiveDashboardHost itself): same origin, i.e. relative URLs. This
+// matters for the whole "website -> vMix pulls it" model: a vMix PC that loads
+// http://<server>:5050/overlay must fetch data from <server>, not from its own localhost - the old
+// hardcoded "http://localhost:5050" only worked when vMix ran on the same machine as this app.
+// `npm run dev` (Vite on :5173) still talks to the local app on :5050; VITE_API_BASE overrides both.
+const env = (import.meta as any).env ?? {};
+export const API_BASE: string = env.VITE_API_BASE ?? (env.DEV ? "http://localhost:5050" : "");
 
 export interface OverlayConfig {
   chromaKeyColor: string;

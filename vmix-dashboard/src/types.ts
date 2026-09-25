@@ -27,6 +27,9 @@ export interface TeamLiveStats {
   player2HealthPercent: number;
   player3HealthPercent: number;
   player4HealthPercent: number;
+  /** Players on the roster (3 for a 3-man team). Optional: older backends don't send it, and the
+   *  overlay then shows 4 slots as before. */
+  playerCount?: number;
 }
 
 /** true for liveState values EvaluateLiveStatus treats as "alive" (0 Normal through 3 OnVehicle);

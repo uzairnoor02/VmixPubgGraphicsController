@@ -60,7 +60,78 @@ namespace VmixGraphicsBusiness.Utils
 
         public void PublishTop4Rankings(List<VmixGraphicsBusiness.LiveMatch.LiveStatsBusiness.Top4TeamStats> teams)
         {
+            _lastGraphics[GraphicEvents.Top4Updated] = teams;
             try { Top4RankingsUpdated?.Invoke(teams); } catch { /* subscriber's problem, never ours */ }
+        }
+
+        /// <summary>
+        /// The single output of the whole pipeline. Every graphic's data (circle status, match /
+        /// overall rankings, MVP table, teams to watch, champions, ...) is handed over here as a
+        /// named JSON payload; the web host forwards it to the overlay over SignalR under that
+        /// same event name. Nothing in this app talks to vMix any more - vMix only ever loads the
+        /// /overlay page as a Browser Source, so the app runs identically whether vMix is open,
+        /// closed, or restarting.
+        ///
+        /// The last payload per event is also kept, so an overlay that (re)loads mid-match - vMix
+        /// refreshing a Browser Source, an operator opening a second preview - is hydrated with
+        /// the current state from GET /api/overlay/snapshot instead of sitting blank until the
+        /// next update of each graphic.
+        /// </summary>
+        public event Action<string, object?>? GraphicPublished;
+
+        /// <summary>Carried throwables per team, from getteambackpackinfo (Last 4 cards).</summary>
+        public TeamInventoryTracker Inventory { get; } = new();
+
+        // Who each player most recently eliminated, from getkillinfo - lets the FIRST BLOOD /
+        // grenade / vehicle banners say "PLAYER >> VICTIM". Keyed by UID, and by name as a
+        // fallback for rows without a UID.
+        private readonly ConcurrentDictionary<string, string> _lastVictimByKiller = new(StringComparer.Ordinal);
+        private volatile bool _killFeedActive;
+
+        /// <summary>True once getkillinfo has answered this match - i.e. victim names can be
+        /// expected, so an achievement banner may wait a tick or two for one.</summary>
+        public bool KillFeedActive => _killFeedActive;
+
+        public void MarkKillFeedAvailable() => _killFeedActive = true;
+
+        public void RecordKill(string? killerUid, string? killerName, string? victimName)
+        {
+            _killFeedActive = true;
+            if (string.IsNullOrWhiteSpace(victimName)) return;
+            if (!string.IsNullOrWhiteSpace(killerUid)) _lastVictimByKiller[killerUid] = victimName;
+            if (!string.IsNullOrWhiteSpace(killerName)) _lastVictimByKiller["name:" + killerName] = victimName;
+        }
+
+        public string? LastVictimOf(string? killerUid, string? killerName)
+        {
+            if (!string.IsNullOrWhiteSpace(killerUid) && _lastVictimByKiller.TryGetValue(killerUid, out var byUid)) return byUid;
+            if (!string.IsNullOrWhiteSpace(killerName) && _lastVictimByKiller.TryGetValue("name:" + killerName, out var byName)) return byName;
+            return null;
+        }
+
+        private readonly ConcurrentDictionary<string, object?> _lastGraphics = new();
+
+        public void PublishGraphic(string eventName, object? payload)
+        {
+            _lastGraphics[eventName] = payload;
+            try { GraphicPublished?.Invoke(eventName, payload); } catch { /* subscriber's problem, never ours */ }
+        }
+
+        /// <summary>Latest payload of every graphic published since startup (or since the last
+        /// ClearLiveGraphics), keyed by SignalR event name.</summary>
+        public Dictionary<string, object?> GetGraphicsSnapshot() => new(_lastGraphics);
+
+        /// <summary>Drops the match-scoped graphics (circle, Top 4, live map) so a new match or a
+        /// reset doesn't re-hydrate an overlay with the previous match's zone timer. Post-match
+        /// graphics (rankings, MVP, champions...) are kept on purpose - they're shown between
+        /// matches, which is exactly when a reset happens.</summary>
+        public void ClearLiveGraphics()
+        {
+            foreach (var name in GraphicEvents.LiveOnly)
+            {
+                _lastGraphics.TryRemove(name, out _);
+                try { GraphicPublished?.Invoke(name, null); } catch { /* never ours */ }
+            }
         }
 
         /// <summary>Raised whenever a player achievement (grenade elim, vehicle kill, airdrop
@@ -202,6 +273,13 @@ namespace VmixGraphicsBusiness.Utils
             foreach (var key in _entries.Keys)
             {
                 if (key.StartsWith(HelperRedis.isEliminated, StringComparison.Ordinal) ||
+                    // Achievement "already announced" markers - otherwise first blood, and every
+                    // player's first grenade/vehicle/airdrop, would stay suppressed next match.
+                    key == HelperRedis.FirstBloodKey ||
+                    key == "FirstBloodWait" ||
+                    key.StartsWith(HelperRedis.GrenadeEliminationsKey + ":", StringComparison.Ordinal) ||
+                    key.StartsWith(HelperRedis.VehicleEliminationsKey + ":", StringComparison.Ordinal) ||
+                    key.StartsWith(HelperRedis.AirDropLootedKey + ":", StringComparison.Ordinal) ||
                     key == "Top4TeamPositions" ||
                     key == "Top4RankingGuid" ||
                     key == "LiveRankingGuid" ||
@@ -213,6 +291,10 @@ namespace VmixGraphicsBusiness.Utils
                 }
             }
             _dirty = true;
+            Inventory.Reset();
+            _lastVictimByKiller.Clear();
+            _killFeedActive = false;
+            ClearLiveGraphics();
         }
 
         public void PublishMatchStatus(string status)
@@ -292,7 +374,9 @@ namespace VmixGraphicsBusiness.Utils
     /// <summary>PlayerUid is optional and defaults to null purely so existing call sites keep
     /// compiling; when supplied, the overlay can show that player's real photo (served over HTTP
     /// from the PlayerImages folder) instead of falling back to a generic icon.</summary>
-    public record LiveAchievementEvent(string Type, string PlayerName, string? TeamTag, string? PlayerUid = null);
+    /// <summary>VictimName (from getkillinfo) and TeamId are optional: the banner shows
+    /// "PLAYER >> VICTIM" and the team logo when they're known, and just the player otherwise.</summary>
+    public record LiveAchievementEvent(string Type, string PlayerName, string? TeamTag, string? PlayerUid = null, string? VictimName = null, int? TeamId = null);
 
     /// <summary>One newly-detected elimination from pcob's getkillinfo, handed to the web overlay's
     /// kill feed. Distance is null when pcob didn't report one.</summary>
@@ -302,4 +386,33 @@ namespace VmixGraphicsBusiness.Utils
     /// LiveStatsBusiness.IsEliminatedAsync to MatchStateStore.PublishTeamEliminated and on to the
     /// web overlay's full-screen banner.</summary>
     public record LiveTeamEliminatedEvent(string TeamName, int TeamId, int TotalEliminations, int Rank);
+
+    /// <summary>SignalR event names the overlay (vmix-dashboard/src/Overlay.tsx) listens for.
+    /// One place so the C# publish side and the TS subscribe side can't drift by a typo.</summary>
+    public static class GraphicEvents
+    {
+        public const string Top4Updated = "Top4Updated";
+        public const string CircleUpdated = "CircleUpdated";
+        public const string MatchRankingsUpdated = "MatchRankingsUpdated";
+        public const string OverallRankingsUpdated = "OverallRankingsUpdated";
+        public const string MvpRankingsUpdated = "MvpRankingsUpdated";
+        public const string TeamsToWatchUpdated = "TeamsToWatchUpdated";
+        public const string ChampionsUpdated = "ChampionsUpdated";
+        public const string PlayerHighlightUpdated = "PlayerHighlightUpdated";
+        public const string TopPlayersUpdated = "TopPlayersUpdated";
+        public const string MatchSummaryUpdated = "MatchSummaryUpdated";
+        public const string MapPerformersUpdated = "MapPerformersUpdated";
+
+        /// <summary>Graphics that only mean something while a match is being played.</summary>
+        public static readonly string[] LiveOnly = { Top4Updated, CircleUpdated };
+    }
+
+    /// <summary>Relative URLs the web host serves images on (see LiveDashboardHost). Relative on
+    /// purpose: the overlay is served from the same host, so these keep working whether vMix
+    /// opened it as localhost, a LAN IP or a hostname.</summary>
+    public static class MediaUrls
+    {
+        public static string TeamLogo(object teamId) => $"/team-logos/{teamId}.png";
+        public static string PlayerPhoto(object playerUid) => $"/player-images/{playerUid}.png";
+    }
 }

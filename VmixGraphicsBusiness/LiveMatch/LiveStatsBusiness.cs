@@ -7,7 +7,6 @@ using static Google.Apis.Sheets.v4.SheetsService;
 using VmixData.Models.MatchModels;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
-using VmixGraphicsBusiness.vmixutils;
 using VmixData.Models;
 using Hangfire;
 using Microsoft.Extensions.Logging;
@@ -19,14 +18,10 @@ using Microsoft.EntityFrameworkCore;
 namespace VmixGraphicsBusiness.LiveMatch;
 public partial class LiveStatsBusiness(
         IConfiguration config,
-        IBackgroundJobClient backgroundJobClient,
         IServiceProvider serviceProvider,
         ILogger<LiveStatsBusiness> _logger,
         vmix_graphicsContext vmix_GraphicsContext)
 {
-    VmixData.Models.MatchModels.VmixData VMIXData;
-    string LiverankingGuid;
-    string TeamEliminatedGuid;
     static string ApplicationName = "Vmix GT titles";
     static string SpreadsheetId = "16hpBeXg_3PX_eyPEwk5pV0jPa07RgKCgKbxPvr0avpQ"; // Replace with your spreadsheet ID
     static string SheetName = "Live ranking"; // Replace with your sheet name
@@ -71,38 +66,14 @@ public partial class LiveStatsBusiness(
     {
         using var scope = serviceProvider.CreateScope();
         var redis = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
-        List<string> apiCalls = new List<string>();
-        var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
-        var liveteams = liveTeamInfos.teamInfoList.Where(x => x.liveMemberNum > 0).Count();
 
-        if (liveteams < 5)
-        {
-            LiverankingGuid = vmixdata.LiverankingGuid4;
-        }
-        if (liveTeamInfos.teamInfoList.Count() < 17)
-        {
-            LiverankingGuid = vmixdata.LiverankingGuid16;
-        }
-        else if (liveTeamInfos.teamInfoList.Count() < 19)
-        {
-            LiverankingGuid = vmixdata.LiverankingGuid16;
-        }
-        else if (liveTeamInfos.teamInfoList.Count() >= 19)
-        {
-            LiverankingGuid = vmixdata.LiverankingGuid16;
-        }
-
-        var oldguid = redis.StringGet("LiveRankingGuid");
-        if (oldguid != LiverankingGuid)
-        {
-            await redis.StringSetAsync("LiveRankingGuid", LiverankingGuid);
-            apiCalls.Add($"function=OverlayInput{4}Out&input={oldguid}");
-            apiCalls.Add($"function=OverlayInput{4}In&input={LiverankingGuid}");
-        }
-
+        // Computes the live standings board and returns it; GetLiveData / IngestApi hand it to
+        // MatchStateStore.PublishLiveTeams, which is what the overlay renders. This method used
+        // to also build ~200 vMix Title-field API calls per tick (text/image per team slot) and
+        // read vMix's input list first - which is why the whole live pipeline died whenever
+        // vMix wasn't running. None of that exists any more.
         try
         {
-            string folderPath = _config["SaveToFolder"]!;
             string HeatlhImages = ConfigGlobal.Images!;
             List<TeamLiveStats> teamLiveStats = new List<TeamLiveStats>();
 
@@ -189,7 +160,9 @@ public partial class LiveStatsBusiness(
                         if (string.IsNullOrEmpty(await redis.StringGetAsync($"{HelperRedis.isEliminated}:{teamId}")))
                         {
                             await redis.StringSetAsync($"{HelperRedis.isEliminated}:{teamId}", "abc");
-                            await IsEliminatedAsync(currentTeamInfo.teamName, teamId, true, teamGroup.Sum(x => x.KillNumBeforeDie), teamGroup.FirstOrDefault()!.Rank, liveTeamInfos.teamInfoList.Count());
+                            // killNum, not KillNumBeforeDie: a knock that bleeds out after the knocker
+                            // died counts for the team (matches getteaminfolist's killNum).
+                            await IsEliminatedAsync(currentTeamInfo.teamName, teamId, true, teamGroup.Sum(x => x.KillNum), teamGroup.FirstOrDefault()?.Rank ?? 0, liveTeamInfos.teamInfoList.Count());
                             _logger.LogInformation($"All players in Team {teamId} are dead.");
                         }
                     }
@@ -212,7 +185,6 @@ public partial class LiveStatsBusiness(
                                     teamStats.Player1Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
                                     teamStats.Player1LiveState = player.LiveState;
                                     teamStats.Player1HealthPercent = HealthPercent(player.Health, player.HealthMax);
-                                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P1", teamStats.Player1Health));
                                     if (player.IsOutsideBlueCircle)
                                         isinBlue = true;
                                     break;
@@ -220,7 +192,6 @@ public partial class LiveStatsBusiness(
                                     teamStats.Player2Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
                                     teamStats.Player2LiveState = player.LiveState;
                                     teamStats.Player2HealthPercent = HealthPercent(player.Health, player.HealthMax);
-                                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P2", teamStats.Player2Health));
                                     if (player.IsOutsideBlueCircle)
                                         isinBlue = true;
                                     break;
@@ -228,7 +199,6 @@ public partial class LiveStatsBusiness(
                                     teamStats.Player3Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
                                     teamStats.Player3LiveState = player.LiveState;
                                     teamStats.Player3HealthPercent = HealthPercent(player.Health, player.HealthMax);
-                                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P3", teamStats.Player3Health));
                                     if (player.IsOutsideBlueCircle)
                                         isinBlue = true;
                                     break;
@@ -236,7 +206,6 @@ public partial class LiveStatsBusiness(
                                     teamStats.Player4Health = HeatlhImages + EvaluateLiveStatus(player.LiveState, player.Health, player.HealthMax).HealthImage;
                                     teamStats.Player4LiveState = player.LiveState;
                                     teamStats.Player4HealthPercent = HealthPercent(player.Health, player.HealthMax);
-                                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"T{uiPosition}P4", teamStats.Player4Health));
                                     if (player.IsOutsideBlueCircle)
                                         isinBlue = true;
                                     break;
@@ -246,38 +215,23 @@ public partial class LiveStatsBusiness(
                             teamStats.TotalPoints += player.KillNum;
                         }
                     }
-                    var score = allTeamRanks.Where(x => x.TeamId == currentTeamInfo.teamid).Select(x => x.TotalPoints).First().ToString();
                     teamStats.Eliminations = eliminations;
                     teamStats.Tag = currentTeamInfo.teamName;
                     teamStats.TeamName = currentTeamInfo.teamName;
-                    _logger.LogInformation($"Team: {currentTeamInfo.teamName}, Team ID: {teamId}, Overall Rank: {overallRank}, UI Position: {uiPosition}, Score: {currentTeamInfo.score}");
 
-                    // Use uiPosition for UI elements layout but display overallRank as the actual rank
-                    // So if team is 16th in display order but ranked 24th overall, it shows:
-                    // RANKT16 = "24", TAGT16 = "SLAY", etc.
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"ELIMST{uiPosition}", teamStats.Eliminations.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TOTALT{uiPosition}", score));
-                    //apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TOTALT{uiPosition}", "-"));//score));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"TAGT{uiPosition}", currentTeamInfo.teamName.ToUpper()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"RANKT{uiPosition}", overallRank.ToString())); // Display actual database rank
-                    if (match.MatchId == 1 && match.MatchDayId == 1)
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"RANKT{uiPosition}", uiPosition.ToString())); // Display actual database rank
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{uiPosition}", $"{ConfigGlobal.LogosImages}" + $"\\{currentTeamInfo.teamid}.png"));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{uiPosition}", $"{ConfigGlobal.LogosImages}" + $"\\0.png"));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{uiPosition}", $"{ConfigGlobal.LogosImages}" + $"\\{currentTeamInfo.teamid}.png"));
-
-                    if (isEliminated)
-                    {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{uiPosition}", HeatlhImages + "\\EliminatedBG\\Team Dead.png"));
-                    }
-                    else if (isinBlue)
-                    {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{uiPosition}", HeatlhImages + "\\EliminatedBG\\Team In Zone.png"));
-                    }
-                    else
-                    {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{uiPosition}", HeatlhImages + "\\EliminatedBG\\Team Out Zone.png"));
-                    }
+                    // Rank = display order (overall standing incl. this match's kills so far,
+                    // ties broken by team id) - unique and gap-free, which is what the overlay
+                    // sorts on. These three were never set before (TeamRank stayed 0, Logo "",
+                    // TotalPoints only this match's kills) because the real values only went to
+                    // vMix Title fields; the web board is now the only output, so they're filled.
+                    teamStats.TeamRank = uiPosition;
+                    teamStats.PlayerCount = playerCount;
+                    teamStats.TotalPoints = currentTeamInfo.totalScore;
+                    teamStats.TeamEliminated = isEliminated;
+                    teamStats.Logo = MediaUrls.TeamLogo(teamId);
+                    teamStats.TeamBackground = isEliminated ? "dead" : isinBlue ? "outsideZone" : "insideZone";
+                    _logger.LogDebug("Team {TeamName} ({TeamId}): overall rank {OverallRank}, position {Position}, points {Points}",
+                        currentTeamInfo.teamName, teamId, overallRank, uiPosition, currentTeamInfo.totalScore);
 
                     teamLiveStats.Add(teamStats);
                 }
@@ -287,11 +241,18 @@ public partial class LiveStatsBusiness(
                 }
             }
 
-            // Enqueue API calls to Hangfire
-            backgroundJobClient.Enqueue<ApiCallProcessor>(HangfireQueues.Default, processor => processor.ProcessApiCalls(apiCalls));
-
-            // Enqueue the GetAllAchievements call to Hangfire
-            backgroundJobClient.Enqueue<SetPlayerAchievements>(job => job.GetAllAchievements(playerInfo, pastMatchStats));
+            // Achievements run inline, in tick order, instead of as four Hangfire jobs per tick.
+            // They're in-memory counter diffs - far cheaper than the queue hop - and running them
+            // here means a slow tick can no longer have achievement jobs pile up and fire late.
+            try
+            {
+                var achievements = serviceProvider.GetRequiredService<SetPlayerAchievements>();
+                await achievements.GetAllAchievements(playerInfo, pastMatchStats);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Achievement detection failed this tick: {Message}", ex.Message);
+            }
 
             return teamLiveStats;
         }
@@ -417,41 +378,26 @@ public partial class LiveStatsBusiness(
         await request.ExecuteAsync();
     }
 
+    /// <summary>Fires once per team, the tick it's confirmed fully eliminated: publishes the
+    /// "TEAM ELIMINATED" banner event to the overlay. (Used to fill and animate the vMix
+    /// eliminated.gtzip Title, and fetched vMix's input list outside any try/catch first - so
+    /// with vMix closed the banner never reached the web either.)</summary>
     public async Task IsEliminatedAsync(string teamName, int teamId, bool isEliminated, int totalEliminations, int rank, int totalTeams)
     {
         using var scope = serviceProvider.CreateScope();
-
         var redis = scope.ServiceProvider.GetRequiredService<MatchStateStore>();
 
-        LiveTeamInfo team;
-        var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
-        TeamEliminatedGuid = vmixdata.TeamEliminatedGuid;
-        List<string> apiCalls = new List<string>();
-        int ranknum = totalTeams;
         try
         {
-            // Retrieve existing data from the in-process match state store
-            string existingData = await redis.StringGetAsync($"{HelperRedis.isEliminated}:{teamId}");
-
-            string currentrank = await redis.StringGetAsync($"{HelperRedis.isEliminated}:{teamId}");
-            if (string.IsNullOrEmpty(currentrank))
+            string currentrank = await redis.StringGetAsync($"{HelperRedis.isEliminated}:rank");
+            if (string.IsNullOrEmpty(currentrank) || !int.TryParse(currentrank, out _))
             {
-                currentrank = ranknum.ToString();
+                currentrank = totalTeams.ToString();
             }
-            team = new LiveTeamInfo { TeamName = teamName, TeamId = teamId, IsEliminated = isEliminated };
 
-            apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(TeamEliminatedGuid, $"elims", totalEliminations.ToString()));
-            apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(TeamEliminatedGuid, $"teamname", teamName));
-            apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(TeamEliminatedGuid, $"rank", "#" + rank));
-            apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(TeamEliminatedGuid, $"logo", ConfigGlobal.LogosImages + "\\0.png"));
-            apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(TeamEliminatedGuid, $"logo", ConfigGlobal.LogosImages + $"\\{teamId}.png"));
-            SetTexts setTexts = new SetTexts();
-            backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(TeamEliminatedGuid, 3, true, 10000, apiCalls));
             redis.PublishTeamEliminated(new LiveTeamEliminatedEvent(teamName, teamId, totalEliminations, rank));
 
-            // Save updated data to Redis
             await redis.StringSetAsync($"{HelperRedis.isEliminated}:{teamId}", rank.ToString());
-            _logger.LogInformation($"Team information successfully saved to Redis.");
             await redis.StringSetAsync($"{HelperRedis.isEliminated}:rank", (int.Parse(currentrank) - 1).ToString());
         }
         catch (Exception ex)

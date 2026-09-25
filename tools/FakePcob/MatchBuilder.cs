@@ -51,6 +51,10 @@ public sealed class BuiltMatch
     public List<MatchFrameData> Frames = new(); // index 0..TickCount inclusive; TickCount == final/real end state
     public int TickCount;
     public List<SimEvent> Events = new();
+    /// Replay only: recorded wall-clock time of each frame, and the recorded bodies of the
+    /// endpoints the replay doesn't rebuild (see RecordedFeeds). Null for built (non-replay) matches.
+    public List<long>? FrameUnixMs;
+    public RecordedFeeds? Recorded;
 
     public MatchFrameData FinalFrame => Frames[TickCount];
 }

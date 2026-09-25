@@ -9,7 +9,6 @@ using Microsoft.Extensions.Hosting;
 using Hangfire;
 using VmixData.Models;
 using VmixGraphicsBusiness;
-using VmixGraphicsBusiness.vmixutils;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using VmixGraphicsBusiness.Utils;
@@ -307,7 +306,6 @@ namespace Pubg_Ranking_System
                 loggingBuilder.SetMinimumLevel(LogLevel.Information);
             });
 
-            services.AddScoped<VMIXDataoperations>();
             services.AddTransient<LiveStatsBusiness>();
             services.AddScoped<TournamentBusiness>();
             services.AddTransient<Add_tournament>();
@@ -316,7 +314,6 @@ namespace Pubg_Ranking_System
             services.AddTransient<SetPlayerAchievements>();
             services.AddScoped<GetLiveData>();
             services.AddSingleton<Form1>();
-            services.AddScoped<ApiCallProcessor>();
             services.AddScoped<Reset>();
             services.AddTransient<DatabaseInitializer>(); 
             services.AddScoped<TournamentDataBackupService>();

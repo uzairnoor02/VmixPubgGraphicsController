@@ -4,7 +4,8 @@ import { useTheme } from "../ThemeContext";
 import { useChromaKey, useStudioElement } from "../StudioConfigContext";
 import { Bg, DEFAULT_HEALTH_STOPS, HealthStop, RowRule } from "../theme";
 import { BgEditor, ColumnStyleEditor, ColumnStyle, EditorPanel, PageShell, ResetToThemeButton, RowRuleItem, addRowRule, btnGhost, pill } from "../StudioControls";
-import { SAMPLE_STANDINGS } from "../sampleData";
+import { SAMPLE_LIVE_STANDINGS } from "../sampleData";
+import { HealthStyleEditor, useHealthStyle } from "../HealthStyleEditor";
 import { HealthGradientEditor } from "../HealthGradientEditor";
 import { StandingsRenderer } from "../renderers/StandingsRenderer";
 
@@ -24,13 +25,16 @@ export default function StandingsPage() {
   const [rowRules, setRowRules] = useStudioElement<RowRule[]>("standings.rowRules", []);
   const [headerBgOverride, setHeaderBgOverride] = useStudioElement<Bg | null>("standings.headerBg", null);
   const [tab, setTab] = useState("header");
+  const [healthStyle] = useHealthStyle();
+  const [showPoints, setShowPoints] = useStudioElement<boolean>("standings.showPoints", true);
+  const [showElims, setShowElims] = useStudioElement<boolean>("standings.showElims", true);
 
   const headerBg = headerBgOverride || theme.headerBg;
   const setCol = (key: string) => (next: ColumnStyle) => setColumns((prev) => ({ ...prev, [key]: next }));
-  const rows = SAMPLE_STANDINGS.map((t) => ({ key: t.teamId, rank: t.rank, name: t.teamName, kills: t.kills, players: t.players }));
+  const rows = SAMPLE_LIVE_STANDINGS.map((t, i) => ({ key: t.teamId, rank: i + 1, name: t.tag, kills: t.kills, points: t.points, eliminated: t.eliminated, players: t.players }));
 
   return (
-    <PageShell title="Standings" subtitle="Live team standings with per-player health bars">
+    <PageShell title="Standings" subtitle="Live team rankings: logo, per-player health bars, points and elims">
       <div style={{ flex: "1 1 420px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
           <Eye size={13} color="#8a8a94" /><span style={{ fontSize: 12, color: "#8a8a94" }}>Preview (sample data)</span>
@@ -39,8 +43,9 @@ export default function StandingsPage() {
             <button onClick={() => setMode("top4")} style={{ ...pill(mode === "top4"), padding: "4px 10px", fontSize: 11 }}>Top 4</button>
           </div>
         </div>
-        <div style={{ width: "100%", maxWidth: 460, borderRadius: theme.radius + 4, overflow: "hidden", background: chromaKey, padding: 14 }}>
-          <StandingsRenderer theme={theme} mode={mode} healthStops={healthStops} columns={columns} rowRules={rowRules} headerBg={headerBg} rows={rows} />
+        <div style={{ width: "100%", maxWidth: 360, borderRadius: theme.radius + 4, overflow: "hidden", background: chromaKey, padding: 14 }}>
+          <StandingsRenderer theme={theme} mode={mode} healthStops={healthStops} healthStyle={healthStyle} columns={columns} rowRules={rowRules} headerBg={headerBg} rows={rows}
+            showPoints={showPoints} showElims={showElims} />
         </div>
       </div>
 
@@ -55,6 +60,11 @@ export default function StandingsPage() {
           <div>
             <ColumnStyleEditor label="Rank number" col={columns.rank} setCol={setCol("rank")} />
             <ColumnStyleEditor label="Team name" col={columns.teamName} setCol={setCol("teamName")} />
+            <div style={{ display: "flex", gap: 14, marginBottom: 10 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, cursor: "pointer" }}><input type="checkbox" checked={showPoints} onChange={(e) => setShowPoints(e.target.checked)} />PTS column</label>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, cursor: "pointer" }}><input type="checkbox" checked={showElims} onChange={(e) => setShowElims(e.target.checked)} />ELIMS column</label>
+            </div>
+            <ColumnStyleEditor label="Points" col={columns.points ?? { mode: "default", custom: {} }} setCol={setCol("points")} />
             <ColumnStyleEditor label="Elims stat" col={columns.kills} setCol={setCol("kills")} />
             <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: 10 }}>
               <div style={{ fontSize: 12, color: "#d8d8e0", marginBottom: 8 }}>Team logo size</div>
@@ -78,7 +88,12 @@ export default function StandingsPage() {
             <button onClick={() => addRowRule(setRowRules)} style={{ ...btnGhost, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Plus size={13} /> Add row rule</button>
           </div>
         )}
-        {tab === "health" && <HealthGradientEditor stops={healthStops} setStops={setHealthStops} />}
+        {tab === "health" && (
+          <div>
+            <HealthStyleEditor stops={healthStops} />
+            {healthStyle.fill === "gradient" && <HealthGradientEditor stops={healthStops} setStops={setHealthStops} />}
+          </div>
+        )}
       </EditorPanel>
     </PageShell>
   );

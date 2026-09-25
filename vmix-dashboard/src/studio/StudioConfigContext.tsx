@@ -26,7 +26,8 @@ interface StudioConfigContextValue {
   activeThemeId: string;
   setActiveThemeId: (id: string) => void;
   getElement: <T,>(key: string, defaultValue: T) => T;
-  setElement: <T,>(key: string, value: T) => void;
+  /** Pass a function to update from the latest stored value (falls back to defaultValue). */
+  setElement: <T,>(key: string, value: T | ((prev: T) => T), defaultValue?: T) => void;
 }
 
 const StudioConfigContext = createContext<StudioConfigContextValue | null>(null);
@@ -48,11 +49,16 @@ export function useChromaKey(): [string, (hex: string) => void] {
 export function useStudioElement<T>(key: string, defaultValue: T): [T, (value: T | ((prev: T) => T)) => void] {
   const { getElement, setElement } = useStudioConfig();
   const value = getElement(key, defaultValue);
+  // Keep the default in a ref so callers can pass inline literals without re-creating the setter.
+  const defaultRef = useRef(defaultValue);
+  defaultRef.current = defaultValue;
+  // Functional updates are resolved INSIDE the provider's setConfig updater, against the latest
+  // config - not against a value captured when this callback was created. The old version
+  // memoized on [key] only, so `prev` was frozen at the first render (e.g. rowRules = []) and
+  // every edit silently overwrote the slice with stale data (editing a row rule deleted it).
   const setValue = useCallback((next: T | ((prev: T) => T)) => {
-    const resolved = typeof next === "function" ? (next as (prev: T) => T)(getElement(key, defaultValue)) : next;
-    setElement(key, resolved);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+    setElement<T>(key, next, defaultRef.current);
+  }, [key, setElement]);
   return [value, setValue];
 }
 
@@ -82,10 +88,14 @@ export function StudioConfigProvider({ children }: { children: ReactNode }) {
     return raw === undefined ? defaultValue : (raw as T);
   }, [config]);
 
-  const setElement = useCallback(<T,>(key: string, value: T) => {
+  const setElement = useCallback(<T,>(key: string, value: T | ((prev: T) => T), defaultValue?: T) => {
     setConfig((prev) => {
       const base: OverlayConfig = prev ?? { chromaKeyColor: "#00FF00", elementVisibility: {}, elementSettings: {} };
-      const next: OverlayConfig = { ...base, elementSettings: { ...base.elementSettings, [key]: value } };
+      const current = base.elementSettings?.[key];
+      const resolved = typeof value === "function"
+        ? (value as (p: T) => T)(current === undefined ? (defaultValue as T) : (current as T))
+        : value;
+      const next: OverlayConfig = { ...base, elementSettings: { ...base.elementSettings, [key]: resolved } };
       scheduleSave(next);
       return next;
     });

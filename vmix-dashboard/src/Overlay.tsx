@@ -19,6 +19,11 @@ import { ChampionPlayer, ChampionsRenderer } from "./studio/renderers/ChampionsR
 import { HeadToHeadRenderer, HeadToHeadStat, HeadToHeadTeam } from "./studio/renderers/HeadToHeadRenderer";
 import { TeamIntroPlayer, TeamIntroRenderer } from "./studio/renderers/TeamIntroRenderer";
 import { MapPlayerMarker, SpectatorMapRenderer, DEFAULT_WORLD_SIZE } from "./studio/renderers/SpectatorMapRenderer";
+import { RankingColumns, RankingRow, RankingsRenderer, totalRankingPages } from "./studio/renderers/RankingsRenderer";
+import { HealthStyle, Throwables, resolveHealthStyle } from "./studio/renderers/healthGlyphs";
+import { Bg as StudioBg } from "./studio/theme";
+import { OverlayStage, layoutFor, layoutStyle } from "./lib/overlayLayout";
+import { useBannerQueue } from "./lib/useBannerQueue";
 
 // This is the page you paste into vMix as a Web Browser source - it has no login, no nav, no
 // buttons, nothing but the graphics themselves on a solid chroma-key background. Everything about
@@ -59,23 +64,31 @@ const DEFAULT_CONFIG: OverlayConfig = {
     headToHead: false,
     teamIntro: false,
     spectatorMap: false,
+    matchRankings: false,
+    overallRankings: false,
+    mapPerformers: false,
   },
   elementSettings: {},
 };
+
+// The feed sits between the achievement banner and the bottom HUD on the left; 4 lines fit.
+const FEED_MAX = 4;
 
 const ACHIEVEMENT_LABELS: Record<string, string> = {
   "achievement.grenadeElim": "GRENADE ELIM",
   "achievement.vehicleKill": "VEHICLE KILL",
   "achievement.airdropLoot": "AIRDROP LOOT",
-  "achievement.firstKill": "FIRST KILL",
+  "achievement.firstKill": "FIRST BLOOD",
   "achievement.knockout": "KNOCKOUT",
   "achievement.chickenDinner": "WINNER WINNER CHICKEN DINNER",
 };
 
-// Pushed over a "TopPlayersUpdated" SignalR event. Nothing broadcasts this yet - the backing
-// data exists in PostMatchStats (Top5MatchMVP / TopGrenadiers) but is not published live - so the
-// slot simply renders nothing until that C# side lands. Wiring it now means the graphic goes live
-// the moment the event starts firing, with no further frontend change.
+// Every graphic below is fed by a SignalR event of the same name, published by the backend
+// (MatchStateStore.PublishGraphic) - the backend never talks to vMix; vMix only loads this page.
+// On load, GET /api/overlay/snapshot supplies the latest payload of each, so a Browser Source
+// that refreshes mid-show comes back with what it had instead of blank panels.
+
+// "TopPlayersUpdated" - PostMatch.TopGrenadiers.
 interface RawTopPlayer {
   rank: number;
   playerName: string;
@@ -84,10 +97,9 @@ interface RawTopPlayer {
   photoUrl?: string;
 }
 
-// Pushed over a "CircleUpdated" SignalR event. pcob's getcircleinfo is already polled by
-// GetLiveData but its value isn't broadcast yet, so this slot stays empty until that lands.
-// Every field arrives as a string (see CircleInfo in VmixData) - parseCircleNumber handles that
-// without throwing on an unexpected value.
+// "CircleUpdated" - GetLiveData.GetCircleInfo, every tick. Normalised server-side: circleStatus is
+// "closing" | "waiting" and counter is SECONDS REMAINING in the phase (pcob's own Counter counts
+// up). Values stay strings; parseCircleNumber handles that without throwing.
 interface RawCircleInfo {
   gameTime?: string;
   circleStatus?: string;
@@ -96,9 +108,7 @@ interface RawCircleInfo {
   maxTime?: string;
 }
 
-// Pushed over a "PlayerHighlightUpdated" SignalR event - the MVP / Star Player card. The numbers
-// exist in PostMatch.MatchMvp but aren't broadcast live yet. Post-match only: survivalTime and
-// assists read 0 until a match ends.
+// "PlayerHighlightUpdated" - PostMatch.MatchMvp / StageMVP, the MVP / Star Player card.
 interface RawPlayerHighlight {
   label?: string;
   playerName: string;
@@ -106,6 +116,19 @@ interface RawPlayerHighlight {
   photoUrl?: string;
   teamLogoUrl?: string;
   stats?: { label: string; value: string | number }[];
+}
+
+// "MatchRankingsUpdated" / "OverallRankingsUpdated" - PostMatch.MatchRankings / OverallRankings.
+interface RawRankings {
+  title?: string;
+  subtitle?: string;
+  rows: (RankingRow & { logoUrl?: string })[];
+}
+
+// "MapPerformersUpdated" - PreMatch.MapTopPerformers, rendered with the Teams to Watch card.
+interface RawMapPerformers {
+  title?: string;
+  teams: TeamToWatchEntry[];
 }
 
 interface FeedEntry {
@@ -122,7 +145,20 @@ interface Banner {
   subtitle?: string;
   imageUrl?: string;
   accentColor?: string;
+  /** Structured fields the backend sends with the event (rank, eliminations, playerName,
+   *  teamName, teamId, victimName ...). All optional - a banner must still render from title /
+   *  subtitle alone, e.g. one fired by hand from Overlay Settings. */
+  data?: Record<string, string>;
+  dedupeKey?: string;
 }
+
+/** Parses an optional numeric field from an event's data, e.g. "14" -> 14. */
+const dataNumber = (b: Banner, key: string): number | undefined => {
+  const raw = b.data?.[key];
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : undefined;
+};
 
 // Mirrors VmixGraphicsBusiness.LiveMatch.LiveStatsBusiness.Top4TeamStats - pushed over the
 // "Top4Updated" SignalR event (see MatchStateStore.PublishTop4Rankings), real win-probability
@@ -130,8 +166,12 @@ interface Banner {
 interface RawTop4Team {
   teamId: number;
   teamName: string;
+  teamLogo?: string;
   winProbability: number;
+  liveMemberCount?: number;
   playersHealth: { healthPercent: number; liveState: number }[];
+  /** Carried frag/smoke/molotov/stun, from getteambackpackinfo. null = not seen yet this match. */
+  throwables?: Throwables | null;
 }
 
 export default function Overlay() {
@@ -139,25 +179,31 @@ export default function Overlay() {
   const [teams, setTeams] = useState<TeamLiveStats[]>([]);
   const [rawTop4, setRawTop4] = useState<RawTop4Team[] | null>(null);
   const [feed, setFeed] = useState<FeedEntry[]>([]);
-  const [teamEliminatedBanner, setTeamEliminatedBanner] = useState<Banner | null>(null);
-  const [achievementBanner, setAchievementBanner] = useState<Banner | null>(null);
+  // ELIMINATED and achievement banners play one at a time, in order (see useBannerQueue).
+  const elimQueue = useBannerQueue<Banner>(4200);
+  const achievementQueue = useBannerQueue<Banner>(5000);
+  const teamEliminatedBanner = elimQueue.current;
+  const achievementBanner = achievementQueue.current;
   const [topPlayers, setTopPlayers] = useState<RawTopPlayer[]>([]);
   const [circle, setCircle] = useState<RawCircleInfo | null>(null);
   // Three more post-match graphics whose numbers already exist in PostMatchStats but aren't
   // broadcast yet. Wired now so each lights up the moment its C# publish side lands.
   const [mvpRows, setMvpRows] = useState<MvpRow[]>([]);
   const [teamsToWatch, setTeamsToWatch] = useState<TeamToWatchEntry[]>([]);
-  const [champions, setChampions] = useState<{ teamName: string; teamLogoUrl?: string; players?: ChampionPlayer[]; stats?: { label: string; value: string | number }[] } | null>(null);
+  const [champions, setChampions] = useState<{ label?: string; teamName: string; teamLogoUrl?: string; players?: ChampionPlayer[]; stats?: { label: string; value: string | number }[] } | null>(null);
   const [headToHead, setHeadToHead] = useState<{ left: HeadToHeadTeam; right: HeadToHeadTeam; stats: HeadToHeadStat[] } | null>(null);
   const [teamIntro, setTeamIntro] = useState<{ teamName: string; teamLogoUrl?: string; wwcd: number | null; players: TeamIntroPlayer[]; stats?: { label: string; value: string | number }[] } | null>(null);
   const [mapPlayers, setMapPlayers] = useState<MapPlayerMarker[]>([]);
   const [mapFocusTeamId, setMapFocusTeamId] = useState<number | undefined>(undefined);
   const [highlight, setHighlight] = useState<RawPlayerHighlight | null>(null);
-  // Entrance animations are driven by a boolean the renderers take, flipped one tick after the
-  // banner lands so the browser has a frame to paint the "before" state - otherwise the element
-  // mounts already-visible and the slide-in never plays.
-  const [teamElimVisible, setTeamElimVisible] = useState(false);
-  const [achievementVisible, setAchievementVisible] = useState(false);
+  const [matchRankings, setMatchRankings] = useState<RawRankings | null>(null);
+  const [overallRankings, setOverallRankings] = useState<RawRankings | null>(null);
+  const [mapPerformers, setMapPerformers] = useState<RawMapPerformers | null>(null);
+  // Rankings always run as 2 pages (see RankingsRenderer); on air nobody can click a pager, so
+  // the page flips on a timer instead.
+  const [rankingsPage, setRankingsPage] = useState(0);
+  const teamElimVisible = elimQueue.visible;
+  const achievementVisible = achievementQueue.visible;
   const prevTeamsRef = useRef<TeamLiveStats[]>([]);
   // Once a real per-kill event arrives from getkillinfo, the derived "a team's elimination count
   // went up" fallback must stop, or every elimination would appear in the feed twice - once with
@@ -194,40 +240,67 @@ export default function Overlay() {
       .build();
 
     connection.on("TeamsUpdated", (updated: TeamLiveStats[]) => setTeams(updated));
-    connection.on("Top4Updated", (updated: RawTop4Team[]) => setRawTop4(updated));
-    connection.on("TopPlayersUpdated", (updated: RawTopPlayer[]) => setTopPlayers(updated ?? []));
-    connection.on("CircleUpdated", (updated: RawCircleInfo | null) => setCircle(updated));
-    connection.on("MvpRankingsUpdated", (updated: MvpRow[]) => setMvpRows(updated ?? []));
-    connection.on("TeamsToWatchUpdated", (updated: TeamToWatchEntry[]) => setTeamsToWatch(updated ?? []));
-    connection.on("ChampionsUpdated", (updated: typeof champions) => setChampions(updated));
-    connection.on("HeadToHeadUpdated", (updated: typeof headToHead) => setHeadToHead(updated));
-    connection.on("TeamIntroUpdated", (updated: typeof teamIntro) => setTeamIntro(updated));
-    connection.on("MapPositionsUpdated", (updated: { players?: MapPlayerMarker[]; focusTeamId?: number } | null) => {
-      setMapPlayers(updated?.players ?? []);
-      setMapFocusTeamId(updated?.focusTeamId);
-    });
-    connection.on("PlayerHighlightUpdated", (updated: RawPlayerHighlight | null) => setHighlight(updated));
+
+    // One handler per graphic event, shared by the live SignalR subscription and the snapshot
+    // hydration below, so both paths apply a payload identically.
+    const graphicHandlers: Record<string, (payload: any) => void> = {
+      Top4Updated: (updated: RawTop4Team[] | null) => setRawTop4(updated),
+      TopPlayersUpdated: (updated: RawTopPlayer[] | null) => setTopPlayers(updated ?? []),
+      CircleUpdated: (updated: RawCircleInfo | null) => setCircle(updated),
+      MvpRankingsUpdated: (updated: MvpRow[] | null) => setMvpRows(updated ?? []),
+      TeamsToWatchUpdated: (updated: TeamToWatchEntry[] | null) => setTeamsToWatch(updated ?? []),
+      ChampionsUpdated: (updated: typeof champions) => setChampions(updated),
+      HeadToHeadUpdated: (updated: typeof headToHead) => setHeadToHead(updated),
+      TeamIntroUpdated: (updated: typeof teamIntro) => setTeamIntro(updated),
+      MapPositionsUpdated: (updated: { players?: MapPlayerMarker[]; focusTeamId?: number } | null) => {
+        setMapPlayers(updated?.players ?? []);
+        setMapFocusTeamId(updated?.focusTeamId);
+      },
+      PlayerHighlightUpdated: (updated: RawPlayerHighlight | null) => setHighlight(updated),
+      MatchRankingsUpdated: (updated: RawRankings | null) => { setMatchRankings(updated); setRankingsPage(0); },
+      OverallRankingsUpdated: (updated: RawRankings | null) => { setOverallRankings(updated); setRankingsPage(0); },
+      MapPerformersUpdated: (updated: RawMapPerformers | null) => setMapPerformers(updated),
+    };
+    // Events that arrived live before the snapshot response - the snapshot must not overwrite
+    // them with an older value.
+    const receivedLive = new Set<string>();
+    for (const [eventName, handler] of Object.entries(graphicHandlers)) {
+      connection.on(eventName, (payload: unknown) => {
+        receivedLive.add(eventName);
+        handler(payload);
+      });
+    }
+    fetch(`${API_BASE}/api/overlay/snapshot`, { headers: tokenHeaders })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((snapshot: Record<string, unknown>) => {
+        for (const [eventName, payload] of Object.entries(snapshot ?? {})) {
+          if (!receivedLive.has(eventName)) graphicHandlers[eventName]?.(payload);
+        }
+      })
+      .catch(() => {});
     connection.on("OverlayConfigChanged", (updated: OverlayConfig) => setConfig(updated));
-    connection.on("OverlayEvent", (evt: { type: string; title?: string; subtitle?: string; imageUrl?: string; accentColor?: string }) => {
+    connection.on("OverlayEvent", (evt: { type: string; title?: string; subtitle?: string; imageUrl?: string; accentColor?: string; data?: Record<string, string> | null }) => {
       const id = `${evt.type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const data = evt.data ?? undefined;
 
       if (evt.type === "elimination") {
         hasRealKillFeedRef.current = true;
-        setFeed((prev) => [{ id, title: evt.title ?? "", subtitle: evt.subtitle, receivedAt: Date.now() }, ...prev].slice(0, 8));
+        setFeed((prev) => [{ id, title: evt.title ?? "", subtitle: evt.subtitle, receivedAt: Date.now() }, ...prev].slice(0, FEED_MAX));
         return;
       }
 
       if (evt.type === "teamEliminated") {
-        const banner: Banner = { id, type: evt.type, title: evt.title ?? "TEAM ELIMINATED", subtitle: evt.subtitle, imageUrl: evt.imageUrl, accentColor: evt.accentColor };
-        setTeamEliminatedBanner(banner);
-        window.setTimeout(() => setTeamEliminatedBanner((cur) => (cur?.id === id ? null : cur)), 5000);
+        elimQueue.push({
+          id, type: evt.type, title: evt.title ?? "ELIMINATED", subtitle: evt.subtitle, imageUrl: evt.imageUrl, accentColor: evt.accentColor, data,
+          dedupeKey: evt.subtitle ? `elim:${evt.subtitle}` : undefined,
+        });
         return;
       }
 
-      // Everything else ("achievement.*") is an achievement popup.
-      const banner: Banner = { id, type: evt.type, title: evt.title ?? ACHIEVEMENT_LABELS[evt.type] ?? evt.type, subtitle: evt.subtitle, imageUrl: evt.imageUrl, accentColor: evt.accentColor };
-      setAchievementBanner(banner);
-      window.setTimeout(() => setAchievementBanner((cur) => (cur?.id === id ? null : cur)), 5500);
+      // Everything else ("achievement.*") is an achievement banner.
+      achievementQueue.push({
+        id, type: evt.type, title: evt.title ?? ACHIEVEMENT_LABELS[evt.type] ?? evt.type, subtitle: evt.subtitle, imageUrl: evt.imageUrl, accentColor: evt.accentColor, data,
+      });
     });
 
     connection.start().catch(() => {});
@@ -235,18 +308,6 @@ export default function Overlay() {
       connection.stop();
     };
   }, []);
-
-  useEffect(() => {
-    if (!teamEliminatedBanner) { setTeamElimVisible(false); return; }
-    const t = window.setTimeout(() => setTeamElimVisible(true), 30);
-    return () => window.clearTimeout(t);
-  }, [teamEliminatedBanner]);
-
-  useEffect(() => {
-    if (!achievementBanner) { setAchievementVisible(false); return; }
-    const t = window.setTimeout(() => setAchievementVisible(true), 30);
-    return () => window.clearTimeout(t);
-  }, [achievementBanner]);
 
   // Fallback kill-feed derivation from the data we do reliably have: a team's elimination count
   // going up, or a team flipping to eliminated. Used only until real per-elimination events (see
@@ -260,18 +321,34 @@ export default function Overlay() {
         const before = prev.find((t) => t.tag === team.tag);
         if (before && team.eliminations > before.eliminations && !hasRealKillFeedRef.current) {
           const id = `derived-elim-${team.tag}-${Date.now()}`;
-          setFeed((f) => [{ id, title: `${team.tag} scored an elimination`, subtitle: `${team.eliminations} total`, receivedAt: Date.now() }, ...f].slice(0, 8));
+          setFeed((f) => [{ id, title: `${team.tag} scored an elimination`, subtitle: `${team.eliminations} total`, receivedAt: Date.now() }, ...f].slice(0, FEED_MAX));
         }
         if (before && !before.teamEliminated && team.teamEliminated && config.elementVisibility.teamEliminatedBanner) {
+          // Fallback only: the backend's real teamEliminated event (with rank and elims) normally
+          // arrives first for the same wipe, and the shared dedupe key drops this one.
           const id = `derived-team-elim-${team.tag}-${Date.now()}`;
-          setTeamEliminatedBanner({ id, type: "teamEliminated", title: "TEAM ELIMINATED", subtitle: displayNameRef.current(team) });
-          window.setTimeout(() => setTeamEliminatedBanner((cur) => (cur?.id === id ? null : cur)), 5000);
+          const name = displayNameRef.current(team);
+          elimQueue.push({ id, type: "teamEliminated", title: "ELIMINATED", subtitle: name, imageUrl: team.logo || undefined,
+            data: { eliminations: String(team.eliminations) }, dedupeKey: `elim:${name}` });
         }
       }
     }
     prevTeamsRef.current = teams;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teams]);
+
+  // Flip Match/Overall Rankings between their two pages while either is on air.
+  const rankingsOnAir =
+    (config.elementVisibility["matchRankings"] === true && (matchRankings?.rows.length ?? 0) > 1) ||
+    (config.elementVisibility["overallRankings"] === true && (overallRankings?.rows.length ?? 0) > 1);
+  const rankingsPageSecondsCfg = getConfigElement<number>(config, "rankings.pageSeconds", 8);
+  useEffect(() => {
+    if (!rankingsOnAir) { setRankingsPage(0); return; }
+    const rowCount = Math.max(matchRankings?.rows.length ?? 0, overallRankings?.rows.length ?? 0);
+    const pages = totalRankingPages(rowCount);
+    const t = window.setInterval(() => setRankingsPage((p) => (p + 1) % pages), Math.max(3, rankingsPageSecondsCfg) * 1000);
+    return () => window.clearInterval(t);
+  }, [rankingsOnAir, rankingsPageSecondsCfg, matchRankings, overallRankings]);
 
   const sortedTeams = useMemo(() => [...teams].sort((a, b) => a.teamRank - b.teamRank), [teams]);
   const visible = (id: string, fallback = true) => config.elementVisibility[id] ?? fallback;
@@ -305,18 +382,36 @@ export default function Overlay() {
   // image paths (see VmixGraphicsBusiness/TeamLiveStats.cs).
   const displayName = (team: TeamLiveStats) => team.teamName || team.tag;
 
+  // PlayerCount (newer backends) trims a 3-man roster to 3 bars instead of showing a phantom
+  // dead 4th player.
+  const teamPlayers = (team: TeamLiveStats) => [
+    { health: team.player1HealthPercent, liveState: team.player1LiveState },
+    { health: team.player2HealthPercent, liveState: team.player2LiveState },
+    { health: team.player3HealthPercent, liveState: team.player3LiveState },
+    { health: team.player4HealthPercent, liveState: team.player4LiveState },
+  ].slice(0, team.playerCount && team.playerCount > 0 ? Math.min(4, team.playerCount) : 4);
+
   const standingsRows: StandingsRow[] = sortedTeams.map((team) => ({
     key: team.tag + team.teamRank,
     rank: team.teamRank,
-    name: displayName(team),
+    name: team.tag || displayName(team),
     kills: team.eliminations,
-    players: [
-      { health: team.player1HealthPercent, liveState: team.player1LiveState },
-      { health: team.player2HealthPercent, liveState: team.player2LiveState },
-      { health: team.player3HealthPercent, liveState: team.player3LiveState },
-      { health: team.player4HealthPercent, liveState: team.player4LiveState },
-    ],
+    players: teamPlayers(team),
+    logoUrl: team.logo || undefined,
+    points: team.totalPoints,
+    eliminated: team.teamEliminated,
   }));
+
+  // One health look for every live graphic (Standings bars, Last 4 helmets) - set in the Studio's
+  // Standings > Health tab.
+  const healthStyle: HealthStyle = resolveHealthStyle(getConfigElement<Partial<HealthStyle> | null>(config, "health.style", null));
+  const standingsShowPoints = getConfigElement<boolean>(config, "standings.showPoints", true);
+  const standingsShowElims = getConfigElement<boolean>(config, "standings.showElims", true);
+  const top4ShowWwcd = getConfigElement<boolean>(config, "top4.showWwcd", true);
+  const top4ShowThrowables = getConfigElement<boolean>(config, "top4.showThrowables", true);
+  const top4ShowRank = getConfigElement<boolean>(config, "top4.showRank", false);
+  const achievementBodyBg = getConfigElement<StudioBg | null>(config, "achievement.bodyBg", null) ?? undefined;
+  const L = (id: string, extra?: React.CSSProperties) => layoutStyle(layoutFor(config, id), extra);
 
   // Top4Page.tsx (Graphics Studio) writes these same keys - see useStudioElement calls there.
   const wwcdBarOverride = getConfigElement<Bg | null>(config, "top4.wwcdBar", null);
@@ -386,7 +481,16 @@ export default function Overlay() {
   const champCanvasBg = getConfigElement<Bg | null>(config, "champions.canvasBg", null) || studioTheme.headerBg;
   const champAccentBg = getConfigElement<Bg | null>(config, "champions.accentBg", null) || studioTheme.headerBg;
   const champFields = getConfigElement<Record<string, ColumnStyle>>(config, "champions.fields", {});
-  const champLabel = getConfigElement<string>(config, "champions.label", "CHAMPIONS");
+  // An operator-set label wins; otherwise the payload's own ("WINNER WINNER CHICKEN DINNER" for a
+  // per-match WWCD), otherwise the Studio default.
+  const champLabel = getConfigElement<string>(config, "champions.label", champions?.label ?? "CHAMPIONS");
+
+  // RankingsPage.tsx (Graphics Studio) writes these same keys; Match and Overall share one look.
+  const rankingsCanvasBg = getConfigElement<Bg | null>(config, "rankings.canvasBg", null) || studioTheme.headerBg;
+  const rankingsHeaderBg = getConfigElement<Bg | null>(config, "rankings.headerBg", null) || studioTheme.headerBg;
+  const rankingsColumns = getConfigElement<RankingColumns>(config, "rankings.columns", { wins: true, placement: true, elim: true });
+  const rankingsColumnStyles = getConfigElement<Record<string, ColumnStyle>>(config, "rankings.columnStyles", {});
+  const rankingsRowRules = getConfigElement<RowRule[]>(config, "rankings.rowRules", []);
 
   // HeadToHeadPage.tsx / TeamIntroPage.tsx / SpectatorMapPage.tsx write these same keys.
   const h2hCanvasBg = getConfigElement<Bg | null>(config, "h2h.canvasBg", null) || studioTheme.headerBg;
@@ -420,51 +524,56 @@ export default function Overlay() {
         overallRank: sortedTeams.find((t) => t.tag === team.teamName)?.teamRank ?? 0,
         tag: team.teamName,
         wwcd: Math.round(team.winProbability * 10) / 10,
-        logoUrl: sortedTeams.find((t) => t.tag === team.teamName)?.logo || undefined,
+        logoUrl: team.teamLogo || sortedTeams.find((t) => t.tag === team.teamName)?.logo || undefined,
         players: team.playersHealth.slice(0, 4).map((p) => ({ health: p.healthPercent, liveState: p.liveState })),
+        throwables: team.throwables ?? null,
+        eliminated: team.liveMemberCount === 0,
       }))
+    // Fallback only in the final four (same <= 4 rule as the backend's ShouldShowTop4Ranking) -
+    // otherwise the Last 4 cards sat on screen all match with the current top 4 of 16 teams.
+    : sortedTeams.filter((t) => !t.teamEliminated).length > 4 ? []
     : sortedTeams.filter((t) => !t.teamEliminated).slice(0, 4).map((team) => ({
         key: team.tag + team.teamRank,
         overallRank: team.teamRank,
         tag: team.tag,
         wwcd: NaN,
         logoUrl: team.logo || undefined,
-        players: [
-          { health: team.player1HealthPercent, liveState: team.player1LiveState },
-          { health: team.player2HealthPercent, liveState: team.player2LiveState },
-          { health: team.player3HealthPercent, liveState: team.player3LiveState },
-          { health: team.player4HealthPercent, liveState: team.player4LiveState },
-        ],
+        players: teamPlayers(team),
+        throwables: null,
       }));
 
   return (
     <div className="overlay-root" style={canvasBackgroundStyle}>
+     <OverlayStage>
       {visible("leaderboard") && standingsRows.length > 0 && (
-        <div style={{ position: "absolute", top: 48, right: 48, width: 420 }}>
-          <StandingsRenderer theme={studioTheme} mode="full" healthStops={healthStops} columns={columns} rowRules={rowRules} headerBg={headerBg} rows={standingsRows} maxRows={16} panelOpacity={panelOpacity("leaderboard")} />
+        <div style={L("leaderboard")}>
+          <StandingsRenderer theme={studioTheme} mode="full" healthStops={healthStops} healthStyle={healthStyle} columns={columns} rowRules={rowRules} headerBg={headerBg} rows={standingsRows} maxRows={25}
+            showPoints={standingsShowPoints} showElims={standingsShowElims} panelOpacity={panelOpacity("leaderboard")} />
         </div>
       )}
 
       {visible("top4") && top4Rows.length > 0 && (
-        <div style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", width: 720 }}>
-          <Top4Renderer theme={studioTheme} wwcdBar={wwcdBar} cardBg={top4CardBg} fields={top4Fields} teams={top4Rows} panelOpacity={panelOpacity("top4")} />
+        <div style={L("top4")}>
+          <Top4Renderer theme={studioTheme} wwcdBar={wwcdBar} cardBg={top4CardBg} fields={top4Fields} teams={top4Rows} panelOpacity={panelOpacity("top4")}
+            healthStyle={healthStyle} healthStops={healthStops} showWwcd={top4ShowWwcd} showThrowables={top4ShowThrowables} showRank={top4ShowRank} />
         </div>
       )}
 
       {visible("sidebar", false) && sidebarRows.length > 0 && (
-        <div style={{ position: "absolute", top: 48, left: 48, width: 260 }}>
+        <div style={L("sidebar")}>
           <SidebarRenderer theme={studioTheme} headerBg={studioTheme.headerBg} rows={sidebarRows} maxRows={16} panelOpacity={panelOpacity("sidebar")} />
         </div>
       )}
 
       {visible("topPlayers", false) && topPlayerEntries.length > 0 && (
-        <div style={{ position: "absolute", bottom: 48, left: "50%", transform: "translateX(-50%)", width: 560, aspectRatio: "16/9" }}>
+        <div style={L("topPlayers", { aspectRatio: "16/9" })}>
           <TopPlayersRenderer theme={studioTheme} canvasBg={topPlayersCanvasBg} labelBg={topPlayersLabelBg} cardBg={topPlayersCardBg} fields={topPlayersFields} players={topPlayerEntries} panelOpacity={panelOpacity("topPlayers")} />
         </div>
       )}
 
       {visible("circle", false) && circle && (
-        <div style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", width: 520 }}>
+        // Top centre, above the Last 4 cards - the two are both on air during the final circles.
+        <div style={L("circle")}>
           <CircleStatusRenderer
             theme={studioTheme}
             barBg={circleBarBg}
@@ -479,7 +588,7 @@ export default function Overlay() {
       )}
 
       {visible("playerHighlight", false) && highlight && (
-        <div style={{ position: "absolute", bottom: 48, right: 48, width: 560, aspectRatio: "16/9" }}>
+        <div style={L("playerHighlight", { aspectRatio: "16/9" })}>
           <PlayerHighlightRenderer
             theme={studioTheme}
             canvasBg={highlightCanvasBg}
@@ -497,7 +606,7 @@ export default function Overlay() {
       )}
 
       {visible("mvpRankings", false) && mvpRows.length > 0 && (
-        <div style={{ position: "absolute", top: "12%", left: "50%", transform: "translateX(-50%)", width: 620, aspectRatio: "16/9" }}>
+        <div style={L("mvpRankings", { aspectRatio: "16/9" })}>
           <MvpRankingsRenderer theme={studioTheme} canvasBg={mvpCanvasBg} headerBg={mvpHeaderBg}
             title={mvpTitle} subtitle={mvpSubtitle} rows={mvpRows} columns={mvpColumns}
             columnStyles={mvpColumnStyles} rowRules={mvpRowRules} panelOpacity={panelOpacity("mvpRankings")} />
@@ -505,22 +614,47 @@ export default function Overlay() {
       )}
 
       {visible("teamsToWatch", false) && teamsToWatch.length > 0 && (
-        <div style={{ position: "absolute", top: "12%", left: "50%", transform: "translateX(-50%)", width: 600, aspectRatio: "16/9" }}>
+        <div style={L("teamsToWatch", { aspectRatio: "16/9" })}>
           <TeamsToWatchRenderer theme={studioTheme} canvasBg={ttwCanvasBg} accentBg={ttwAccentBg}
             title={ttwTitle} subtitle={ttwSubtitle} teams={teamsToWatch} fields={ttwFields} panelOpacity={panelOpacity("teamsToWatch")} />
         </div>
       )}
 
       {visible("champions", false) && champions && (
-        <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", width: 680, aspectRatio: "16/9" }}>
+        <div style={L("champions", { aspectRatio: "16/9" })}>
           <ChampionsRenderer theme={studioTheme} canvasBg={champCanvasBg} accentBg={champAccentBg}
             label={champLabel} teamName={champions.teamName} teamLogoUrl={champions.teamLogoUrl}
             players={champions.players} stats={champions.stats} fields={champFields} panelOpacity={panelOpacity("champions")} />
         </div>
       )}
 
+      {visible("matchRankings", false) && matchRankings && matchRankings.rows.length > 0 && (
+        <div style={L("matchRankings", { aspectRatio: "16/9" })}>
+          <RankingsRenderer theme={studioTheme} canvasBg={rankingsCanvasBg} headerBg={rankingsHeaderBg}
+            title={matchRankings.title ?? "MATCH RANKINGS"} subtitle={matchRankings.subtitle ?? ""}
+            rows={matchRankings.rows} columns={rankingsColumns} columnStyles={rankingsColumnStyles} rowRules={rankingsRowRules}
+            page={rankingsPage} pager="indicator" panelOpacity={panelOpacity("matchRankings")} />
+        </div>
+      )}
+
+      {visible("overallRankings", false) && overallRankings && overallRankings.rows.length > 0 && (
+        <div style={L("overallRankings", { aspectRatio: "16/9" })}>
+          <RankingsRenderer theme={studioTheme} canvasBg={rankingsCanvasBg} headerBg={rankingsHeaderBg}
+            title={overallRankings.title ?? "OVERALL RANKINGS"} subtitle={overallRankings.subtitle ?? ""}
+            rows={overallRankings.rows} columns={rankingsColumns} columnStyles={rankingsColumnStyles} rowRules={rankingsRowRules}
+            page={rankingsPage} pager="indicator" panelOpacity={panelOpacity("overallRankings")} />
+        </div>
+      )}
+
+      {visible("mapPerformers", false) && mapPerformers && mapPerformers.teams.length > 0 && (
+        <div style={L("mapPerformers", { aspectRatio: "16/9" })}>
+          <TeamsToWatchRenderer theme={studioTheme} canvasBg={ttwCanvasBg} accentBg={ttwAccentBg}
+            title={mapPerformers.title ?? "TOP MAP PERFORMERS"} subtitle="" teams={mapPerformers.teams} fields={ttwFields} panelOpacity={panelOpacity("mapPerformers")} />
+        </div>
+      )}
+
       {visible("headToHead", false) && headToHead && (
-        <div style={{ position: "absolute", top: "12%", left: "50%", transform: "translateX(-50%)", width: 600, aspectRatio: "16/9" }}>
+        <div style={L("headToHead", { aspectRatio: "16/9" })}>
           <HeadToHeadRenderer theme={studioTheme} canvasBg={h2hCanvasBg} accentBg={h2hAccentBg}
             title={h2hTitle} subtitle={h2hSubtitle} left={headToHead.left} right={headToHead.right}
             stats={headToHead.stats} fields={h2hFields} panelOpacity={panelOpacity("headToHead")} />
@@ -528,7 +662,7 @@ export default function Overlay() {
       )}
 
       {visible("teamIntro", false) && teamIntro && (
-        <div style={{ position: "absolute", bottom: 48, left: 48, width: 560, aspectRatio: "16/9" }}>
+        <div style={L("teamIntro", { aspectRatio: "16/9" })}>
           <TeamIntroRenderer theme={studioTheme} canvasBg={introCanvasBg} accentBg={introAccentBg}
             label={introLabel} teamName={teamIntro.teamName} teamLogoUrl={teamIntro.teamLogoUrl}
             wwcd={teamIntro.wwcd} players={teamIntro.players} stats={teamIntro.stats}
@@ -537,7 +671,7 @@ export default function Overlay() {
       )}
 
       {visible("spectatorMap", false) && mapPlayers.length > 0 && (
-        <div style={{ position: "absolute", bottom: 48, right: 48, width: 320 }}>
+        <div style={L("spectatorMap")}>
           <SpectatorMapRenderer theme={studioTheme} canvasBg={mapCanvasBg} accentBg={mapAccentBg}
             mapImageUrl={mapImageUrl || undefined} players={mapPlayers} worldSize={mapWorldSize}
             focusTeamId={effectiveMapFocus} showLabels={mapShowLabels} />
@@ -545,7 +679,7 @@ export default function Overlay() {
       )}
 
       {visible("eliminationFeed") && feed.length > 0 && (
-        <div className="overlay-feed">
+        <div className="overlay-feed" style={L("eliminationFeed")}>
           {feed.map((entry) => (
             <div key={entry.id} className="overlay-feed-item">
               <span className="dot" />
@@ -559,12 +693,14 @@ export default function Overlay() {
       )}
 
       {teamEliminatedBanner && visible("teamEliminatedBanner") && (
-        <div key={teamEliminatedBanner.id} style={{ position: "absolute", top: "38%", left: "50%", transform: "translateX(-50%)", width: 620 }}>
+        <div key={teamEliminatedBanner.id} style={L("teamEliminatedBanner")}>
           <EliminatedBannerRenderer
             theme={studioTheme}
             bannerBg={elimBannerBg}
             teamName={teamEliminatedBanner.subtitle ?? teamEliminatedBanner.title}
             logoUrl={teamEliminatedBanner.imageUrl}
+            rank={dataNumber(teamEliminatedBanner, "rank")}
+            eliminations={dataNumber(teamEliminatedBanner, "eliminations")}
             visible={teamElimVisible}
             panelOpacity={panelOpacity("teamEliminatedBanner")}
           />
@@ -572,19 +708,24 @@ export default function Overlay() {
       )}
 
       {achievementBanner && visible(achievementBanner.type) && (
-        <div key={achievementBanner.id} style={{ position: "absolute", bottom: 48, left: 48, width: 420 }}>
+        <div key={achievementBanner.id} style={L(achievementBanner.type)}>
           <AchievementRenderer
             theme={studioTheme}
             accentBg={achievementAccentBg}
+            bodyBg={achievementBodyBg}
             label={ACHIEVEMENT_LABELS[achievementBanner.type] ?? achievementBanner.title}
-            primary={achievementBanner.subtitle ?? achievementBanner.title}
-            icon={achievementIcon(achievementBanner.type)}
+            primary={achievementBanner.data?.playerName ?? achievementBanner.subtitle ?? achievementBanner.title}
+            victim={achievementBanner.data?.victimName || undefined}
+            teamName={achievementBanner.data?.teamName || undefined}
+            teamLogoUrl={achievementBanner.data?.teamId ? `/team-logos/${achievementBanner.data.teamId}.png` : undefined}
+            icon={achievementIcon(achievementBanner.type, 40)}
             photoUrl={achievementBanner.imageUrl}
             visible={achievementVisible}
             panelOpacity={panelOpacity(achievementBanner.type)}
           />
         </div>
       )}
+     </OverlayStage>
     </div>
   );
 }

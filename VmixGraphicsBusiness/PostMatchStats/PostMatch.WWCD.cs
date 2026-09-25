@@ -1,128 +1,76 @@
-using System.Text.Json;
-using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using VmixData.Models;
-using VmixData.Models.MatchModels;
 using VmixGraphicsBusiness.Utils;
-using VmixGraphicsBusiness.vmixutils;
 
 namespace VmixGraphicsBusiness.PostMatchStats
 {
     public partial class PostMatch
     {
+        /// <summary>This match's winning team (WWCD) -> overlay "ChampionsUpdated": team name,
+        /// logo, roster with photos, team totals, and a per-player breakdown.</summary>
         public async Task WWCDStatsAsync(Match matches)
         {
             await using var _vmix_GraphicsContext = await _dbContextFactory.CreateDbContextAsync();
             try
             {
-                var totalMatches = _vmix_GraphicsContext.Matches.Where(x => x.StageId == matches.StageId);
-                var playerimges = ConfigGlobal.PlayerImages;
-                int playernum = 1;
-                var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
-                List<string> apiCalls = new List<string>();
-
-
-
                 var winnerPlayers = _vmix_GraphicsContext.PlayerStats
                     .Where(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.Rank == 1)
                     .ToList();
-                var winneerteam = _vmix_GraphicsContext.Teams
-                    .Where(x => x.TeamId == winnerPlayers.Select(x => x.TeamId).First().ToString()).First();
-
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TNAME", winneerteam.TeamName.ToUpper()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"MATCHNumber", matches.MatchId.ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"Image1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"Image1", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
-                int totalTeamKills = (int)winnerPlayers.Sum(x => x.KillNum);
-
-                int totalTeamDamage = (int)winnerPlayers.Sum(x => x.Damage);
-                foreach (var player in winnerPlayers)
+                if (winnerPlayers.Count == 0)
                 {
-                    double playerContribution = totalTeamKills > 0 ? (double)player.KillNum / totalTeamKills : 0;
-                    var TotalCont = playerContribution.ToString("P2");
-
-
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"PMNUM", totalMatches.Count().ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"NAMEP{playernum}", player.PlayerName));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"MATCHN", matches.MatchId.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"ELIMSP{playernum}", player.KillNum.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"DAMAGEP{playernum}", player.Damage.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"MATCHN", matches.MatchId.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"KNOCKSP{playernum}", player.Knockouts.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"ASSISTSP{playernum}", player.Assists.ToString()));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"DMGTAKENP{playernum}", player.InDamage.ToString())); ;
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"CONTP{playernum}", TotalCont)); ;
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"THROWABLESP{playernum}", $"{player.useBurnGrenadeNum + player.UseSmokeGrenadeNum + player.UseSmokeGrenadeNum}"));
-                    //todo: Add survival Time   
-
-                    var survivalTime = TimeSpan.FromSeconds(player.SurvivalTime);
-                    var survivalTimeString = $"{survivalTime.Minutes:D2}:{survivalTime.Seconds:D2}";
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TIMEP{playernum}", $"{survivalTimeString}")); 
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"PICP{playernum}", $"{playerimges}//0.png"));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"PICP{playernum}", $"{playerimges}//{player.PlayerUId.ToString()}.png"));
-                    #region wwcd team overlay
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"PICP{playernum}", $"{playerimges}//0.png"));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"PICP{playernum}", $"{playerimges}//{player.PlayerUId.ToString()}.png"));
-                    playernum++;
+                    logger.LogWarning("WWCD: no rank-1 players saved for match {MatchId}.", matches.MatchId);
+                    return;
                 }
 
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TAGT1", winneerteam.TeamName));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TLOGO", $"{ConfigGlobal.LogosImages}//0.png"));
-                    apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TLOGO", $"{ConfigGlobal.LogosImages}//{winneerteam.TeamId}.png"));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"ELIMST1", totalTeamKills.ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"DAMAGET1", totalTeamDamage.ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"TOTALT1", (10 + totalTeamKills).ToString()));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"RANKT1", "#01"));
-                apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(vmixdata.WWCDTEAMSTATSGuid, $"/16 OR TEAMS1", "/16"));
-                #endregion
-                SetTexts setTexts = new SetTexts();
-                await setTexts.CallMultipleApiAsync(apiCalls);
+                var winnerTeamId = winnerPlayers.First().TeamId;
+                var winnerTeam = _vmix_GraphicsContext.Teams
+                    .FirstOrDefault(x => x.TeamId == winnerTeamId.ToString() && x.StageId == matches.StageId)
+                    ?? _vmix_GraphicsContext.Teams.FirstOrDefault(x => x.TeamId == winnerTeamId.ToString());
+
+                // Real points from the saved TeamPoints row, instead of the old hardcoded
+                // "10 + kills" (which assumed a 10-point win on every scoring system).
+                var teamPoints = _vmix_GraphicsContext.TeamPoints
+                    .FirstOrDefault(x => x.MatchId == matches.MatchId && x.StageId == matches.StageId && x.DayId == matches.MatchDayId && x.TeamId == winnerTeamId);
+
+                int totalTeamKills = winnerPlayers.Sum(x => x.KillNum ?? 0);
+                int totalTeamDamage = winnerPlayers.Sum(x => x.Damage ?? 0);
+
+                var playerStats = winnerPlayers.Select(p => new
+                {
+                    playerName = p.PlayerName,
+                    photoUrl = MediaUrls.PlayerPhoto(p.PlayerUId),
+                    kills = p.KillNum ?? 0,
+                    damage = p.Damage ?? 0,
+                    knocks = p.Knockouts ?? 0,
+                    assists = p.Assists ?? 0,
+                    damageTaken = p.InDamage ?? 0,
+                    // Was Burn + Smoke + Smoke (frags never counted, smokes twice).
+                    throwables = p.useBurnGrenadeNum + p.UseSmokeGrenadeNum + p.UseFragGrenadeNum,
+                    survivalTime = FormatSurvival(p.SurvivalTime),
+                    contribution = totalTeamKills > 0 ? Math.Round((double)(p.KillNum ?? 0) / totalTeamKills * 100, 1) : 0,
+                }).ToList();
+
+                PublishGraphic(GraphicEvents.ChampionsUpdated, new
+                {
+                    label = "WINNER WINNER CHICKEN DINNER",
+                    matchNumber = matches.MatchId,
+                    teamId = winnerTeamId,
+                    teamName = (winnerTeam?.TeamName ?? winnerTeamId.ToString()).ToUpper(),
+                    teamLogoUrl = MediaUrls.TeamLogo(winnerTeamId),
+                    players = playerStats.Select(p => new { p.playerName, p.photoUrl }).ToList(),
+                    stats = new object[]
+                    {
+                        new { label = "ELIMS", value = totalTeamKills },
+                        new { label = "DAMAGE", value = totalTeamDamage },
+                        new { label = "POINTS", value = teamPoints?.TotalPoints ?? totalTeamKills },
+                    },
+                    playerStats,
+                });
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                logger.LogError(ex, "error in WWCDStatsAsync");
             }
         }
-
-
-        //public async Task WinnerTeamStats()
-        //{
-        //    var db = _redisConnection.GetDatabase();
-        //    var playerData = await db.StringGetAsync(HelperRedis.PlayerInfolist);
-        //    var teamData = await db.StringGetAsync(HelperRedis.TeamInfoList);
-        //    if (playerData.IsNullOrEmpty)
-        //    {
-        //        Console.WriteLine("No player data found in Redis.");
-        //        return;
-        //    }
-
-        //    var livePlayersList = JsonSerializer.Deserialize<LivePlayersList>(playerData)!;
-
-        //    // Create a lookup on team
-        //    var teamLookup = livePlayersList.PlayerInfoList
-        //        .GroupBy(p => p.TeamId)
-        //        .ToDictionary(g => g.Key, g => g.ToList());
-
-        //    // Check which team members are alive
-        //    var winningTeam = teamLookup.Values
-        //        .FirstOrDefault(team => team.All(player => player.Health > 0));
-
-        //    if (winningTeam == null)
-        //    {
-        //        Console.WriteLine("No winning team found.");
-        //        return;
-        //    }
-
-        //    // Generate stats for the winning team
-        //    foreach (var player in winningTeam)
-        //    {
-        //        Console.WriteLine($"Player {player.Character} Stats:");
-        //        Console.WriteLine($"Eliminations: {player.Knockouts}");
-        //        Console.WriteLine($"Total Damage: {player.Damage}");
-        //        Console.WriteLine($"Assists: {player.Assists}"); // Assuming assists as throwables used
-        //        Console.WriteLine($"Damage Taken: {player.Health}");
-        //        Console.WriteLine($"Knocks: {player.Knockouts}");
-        //        Console.WriteLine($"Throwables Used: {player.UseBurnGrenadeNum + player.UseFlashGrenadeNum + player.UseSmokeGrenadeNum}");
-        //    }
-        //}
     }
 }
