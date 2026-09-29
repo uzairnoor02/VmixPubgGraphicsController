@@ -1,4 +1,4 @@
-﻿
+
 using Google.Apis.Sheets.v4.Data;
 using Hangfire;
 using Microsoft.Extensions.Configuration;
@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using VmixData.Models;
 using VmixData.Models.MatchModels;
+using VmixGraphicsBusiness;
 using VmixGraphicsBusiness.PostMatchStats;
 using VmixGraphicsBusiness.Utils;
 using VmixGraphicsBusiness.vmixutils;
@@ -80,69 +81,251 @@ namespace VmixGraphicsBusiness.LiveMatch
             {
                 teampoints = await _dbBusiness.fetchTeamPointsAsync(match);
             }
-            using (var client = new HttpClient())
+
+            await db.StringSetAsync(HelperRedis.MatchStatus, $"Match {match.MatchId} started successfully!");
+            await subscriber.PublishAsync("match-status-channel", "Started");
+            while (await IsInGame())
             {
-
-                await db.StringSetAsync(HelperRedis.MatchStatus, $"Match {match.MatchId} started successfully!");
-                await subscriber.PublishAsync("match-status-channel", "Started");
-                while (await IsInGame())
+                GetCircleInfo();
+                try
                 {
-                    GetCircleInfo();
-                    try
+                    // getallinfo replaces separate gettotalplayerlist + getteaminfolist calls --
+                    // it's a superset (same player/team fields, confirmed identical casing against
+                    // the 20260923-232832 capture) plus GameID and the match clock. Fetched
+                    // together with getkillinfo via Task.WhenAll, not sequentially.
+                    var allInfoTask = AllInfoClient.FetchAsync(_pcobUrl);
+                    var killInfoTask = KillFeedTracker.FetchAsync(_pcobUrl);
+
+                    await Task.WhenAll(allInfoTask, killInfoTask);
+                    var allInfo = await allInfoTask;
+                    var allKillRowsOldestFirst = await killInfoTask;
+
+                    if (allInfo != null)
                     {
-                        var responsegetplayerData = await client.GetAsync(_pcobUrl + "gettotalplayerlist");
-                        var responseTeamInfoList = await client.GetAsync(_pcobUrl + "getteaminfolist");
+                        // Turns the cumulative getkillinfo feed into "what's new since last poll",
+                        // scoped to this match. See KillFeedTracker for why this is cheap.
+                        var newKillEvents = await KillFeedTracker.GetNewRowsAsync(db, match.Id, allKillRowsOldestFirst);
 
-                        if (responsegetplayerData.IsSuccessStatusCode)
+                        var PlayerData = JsonSerializer.Serialize(allInfo.TotalPlayerList);
+                        var teamdata = JsonSerializer.Serialize(allInfo.TeamInfoList);
+
+                        if (true||(PlayerData != null && PlayerData != previousData))// PlayerData != previousData &&
                         {
-                            var PlayerData = await responsegetplayerData.Content.ReadAsStringAsync();
-                            var teamdata = await responseTeamInfoList.Content.ReadAsStringAsync();
-                            if (true||(PlayerData != null && PlayerData != previousData))// PlayerData != previousData &&
+                            var filteredPlayerInfo = new LivePlayersList
                             {
-                                LivePlayersList livePlayerInfo = JsonSerializer.Deserialize<LivePlayersList>(PlayerData)!;
-                                TeamInfoList TeamInfoList = JsonSerializer.Deserialize<TeamInfoList>(teamdata)!;
-                                var filteredPlayerInfo = new LivePlayersList
+                                PlayerInfoList = allInfo.TotalPlayerList.Select(player => new LivePlayerInfo
                                 {
-                                    PlayerInfoList = livePlayerInfo.PlayerInfoList.Select(player => new LivePlayerInfo
-                                    {
-                                        UId = player.UId,
-                                        PlayerName = player.PlayerName,
-                                        TeamId = player.TeamId,
-                                        TeamName = player.TeamName,
-                                        Health = player.Health,
-                                        HealthMax = player.HealthMax,
-                                        LiveState = player.LiveState,
-                                        KillNum = player.KillNum,
-                                        KillNumByGrenade = player.KillNumByGrenade,
-                                        KillNumInVehicle = player.KillNumInVehicle,
-                                        GotAirDropNum = player.GotAirDropNum,
-                                        UseFragGrenadeNum = player.UseFragGrenadeNum,
-                                        UseSmokeGrenadeNum = player.UseSmokeGrenadeNum,
-                                        UseBurnGrenadeNum = player.UseBurnGrenadeNum,
-                                        BHasDied = player.BHasDied,
-                                        IsOutsideBlueCircle = player.IsOutsideBlueCircle,
-                                        Rank = player.Rank,
-                                        Assists = player.Assists,
-                                        KillNumBeforeDie = player.KillNumBeforeDie,
+                                    UId = player.UId,
+                                    PlayerName = player.PlayerName,
+                                    TeamId = player.TeamId,
+                                    TeamName = player.TeamName,
+                                    Health = player.Health,
+                                    HealthMax = player.HealthMax,
+                                    LiveState = player.LiveState,
+                                    KillNum = player.KillNum,
+                                    KillNumByGrenade = player.KillNumByGrenade,
+                                    KillNumInVehicle = player.KillNumInVehicle,
+                                    GotAirDropNum = player.GotAirDropNum,
+                                    UseFragGrenadeNum = player.UseFragGrenadeNum,
+                                    UseSmokeGrenadeNum = player.UseSmokeGrenadeNum,
+                                    UseBurnGrenadeNum = player.UseBurnGrenadeNum,
+                                    BHasDied = player.BHasDied,
+                                    IsOutsideBlueCircle = player.IsOutsideBlueCircle,
+                                    Rank = player.Rank,
+                                    Assists = player.Assists,
+                                    KillNumBeforeDie = player.KillNumBeforeDie,
 
-                                    }).ToList()
-                                };
+                                }).ToList()
+                            };
+                            TeamInfoList TeamInfoList = new TeamInfoList { teamInfoList = allInfo.TeamInfoList };
 
-                                _backgroundJobClient.Enqueue(HangfireQueues.HighPriority, () => _liveStatsBusiness.CreateDynamicLiveStats(match, filteredPlayerInfo, TeamInfoList, teampoints));
-                                previousData = PlayerData;
-                                await db.StringSetAsync(HelperRedis.PlayerInfolist, PlayerData);
-                                await db.StringSetAsync(HelperRedis.TeamInfoList, teamdata);
-                            }
-                            else
-                            {
-                                Console.WriteLine("No change in PlayerData.");
-                            }
+                            _backgroundJobClient.Enqueue(HangfireQueues.HighPriority, () => _liveStatsBusiness.CreateDynamicLiveStats(match, filteredPlayerInfo, TeamInfoList, teampoints, newKillEvents, allInfo.CurrentTime));
+                            previousData = PlayerData;
+                            await db.StringSetAsync(HelperRedis.PlayerInfolist, PlayerData);
+                            await db.StringSetAsync(HelperRedis.TeamInfoList, teamdata);
                         }
                         else
                         {
-                            Console.WriteLine($"Failed to fetch PlayerData. Status code: {responsegetplayerData.StatusCode}");
+                            Console.WriteLine("No change in PlayerData.");
                         }
-                        await Task.Delay(1000);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Failed to fetch getallinfo (unreachable or bad response).");
+                    }
+                    await Task.Delay(1000);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"An error occurred: {e.Message}");
+                    await db.StringSetAsync(HelperRedis.MatchStatus, $"{e.Message}");
+                    await subscriber.PublishAsync("match-status-channel", "Exception");
+                }
+            }
+
+
+            var a = await VmixDataUtils.SetVMIXDataoperations();
+            var liverakiingguid16 = a.LiverankingGuid16;
+            var liverakiingguid18 = a.LiverankingGuid18;
+            var liverakiingguid20 = a.LiverankingGuid20;
+            var liverakiingguid4 = a.LiverankingGuid4;
+            _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid16, 1, false, 3000));
+
+            _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid16, 4, false, 3000));
+            _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid4, 4, false, 3400));
+
+            await Task.Delay(5000);
+            var allInfoPost = await AllInfoClient.FetchAsync(_pcobUrl);
+
+            if (allInfoPost != null)
+            {
+                LivePlayersList livePlayerInfo = new LivePlayersList { PlayerInfoList = allInfoPost.TotalPlayerList };
+                TeamInfoList TeamInfoList = new TeamInfoList { teamInfoList = allInfoPost.TeamInfoList };
+                await _dbBusiness.createPostMtachStats(livePlayerInfo!, match, TeamInfoList!);
+
+                // Final live-checked ended state for this pcob GameID, so the next time Start
+                // is pressed for the same game, EvaluateStartAsync's fresh getallinfo check
+                // still finds a record here (its own HasEnded check is what actually decides).
+                if (!string.IsNullOrEmpty(allInfoPost.GameID))
+                    await GameTracker.RegisterOrResumeAsync(db, allInfoPost.GameID, match.Id);
+            }
+
+            await db.StringSetAsync(HelperRedis.MatchStatus, $"");
+            await subscriber.PublishAsync("match-status-channel", "Ended");
+
+        }
+
+        /// <summary>
+        /// Continuous replacement for the manual "pick Day/Match, press Start, restart for the
+        /// next match" flow. The operator picks Tournament + Stage once; everything else --
+        /// which match is live, when one ends, when the next one begins -- is driven off pcob's
+        /// own getallinfo (GameID + HasEnded), never IsInGame(). Runs until the process is
+        /// stopped (this codebase's existing "stop" is restarting the whole app, same as
+        /// FetchAndPostData's loop above -- there's no separate cancellation path here either).
+        /// </summary>
+        [AutomaticRetry(Attempts = 0, DelaysInSeconds = new[] { 2 })]
+        [DisableConcurrentExecution(timeoutInSeconds: 1)]
+        public async Task RunAutoTrackingAsync(int tournamentId, int stageId)
+        {
+            // Deliberately NOT resolved once here: this loop can run for days across many
+            // matches, and holding one EF Core context open that long lets its change tracker
+            // grow unbounded. Every DB touch below opens its own short-lived scope instead.
+            Match activeMatch = null;
+            List<LiveTeamPointStats> teampointsForActiveMatch = null;
+
+            await db.StringSetAsync(HelperRedis.MatchStatus, "Waiting for match data...");
+            await subscriber.PublishAsync("match-status-channel", "AutoTrackingStarted");
+
+            while (true)
+            {
+                AllInfo allInfo;
+                try
+                {
+                    allInfo = await AllInfoClient.FetchAsync(_pcobUrl);
+                }
+                catch
+                {
+                    allInfo = null;
+                }
+
+                if (allInfo == null || string.IsNullOrEmpty(allInfo.GameID))
+                {
+                    // pcob has no live game data yet (or is unreachable) -- the operator pressed
+                    // Start before the game actually began. Nothing to do until real data flows.
+                    await Task.Delay(2000);
+                    continue;
+                }
+
+                // A GameID we haven't resolved to a Match yet: either the very first game seen
+                // this session, or the previous one ended and a new one has begun. Resolve it
+                // fresh every time the GameID changes, never only once at Start.
+                if (activeMatch == null || activeMatch.GameId != allInfo.GameID)
+                {
+                    var trackedMatchDbId = await GameTracker.GetTrackedMatchDbIdAsync(db, allInfo.GameID);
+                    if (trackedMatchDbId.HasValue)
+                    {
+                        using var lookupScope = serviceProvider1.CreateScope();
+                        var context = lookupScope.ServiceProvider.GetRequiredService<vmix_graphicsContext>();
+                        activeMatch = await context.Matches.FindAsync(trackedMatchDbId.Value);
+                    }
+
+                    if (activeMatch == null)
+                    {
+                        using var createScope = serviceProvider1.CreateScope();
+                        var tournamentBusinessForCreate = createScope.ServiceProvider.GetRequiredService<TournamentBusiness>();
+
+                        // Never seen this GameID before. Before treating it as the next match,
+                        // check whether today's most recent match never actually concluded (no
+                        // results saved) -- a crash, or pcob/ob.js restarted mid-match, can leave
+                        // one behind. If so, ask the operator whether this new game is that same
+                        // match starting over, or the next match should be started instead of
+                        // silently guessing either way.
+                        var incomplete = await tournamentBusinessForCreate.FindIncompleteMatchAsync(tournamentId, stageId, DateTime.UtcNow);
+                        if (incomplete != null)
+                        {
+                            var decision = await AskOperatorIncompleteMatchDecisionAsync(incomplete, allInfo.GameID);
+                            if (decision == IncompleteMatchDecision.ContinueExisting)
+                            {
+                                activeMatch = await tournamentBusinessForCreate.ReassignGameIdAsync(incomplete, allInfo.GameID);
+                            }
+                        }
+
+                        if (activeMatch == null)
+                        {
+                            // Either no incomplete match was pending, or the operator chose to
+                            // start fresh -- Day/MatchId are derived (today's date, next slot); the
+                            // operator never enters them.
+                            activeMatch = await tournamentBusinessForCreate.GetOrCreateMatchByGameIdAsync(tournamentId, stageId, allInfo.GameID, DateTime.UtcNow);
+                        }
+                    }
+
+                    await GameTracker.RegisterOrResumeAsync(db, allInfo.GameID, activeMatch.Id);
+                    teampointsForActiveMatch = await _dbBusiness.fetchTeamPointsAsync(activeMatch);
+                    await db.StringSetAsync(HelperRedis.MatchStatus, $"Tracking GameID {allInfo.GameID} as Match {activeMatch.MatchId} (Day {activeMatch.MatchDayId})");
+                    Console.WriteLine($"Now tracking GameID {allInfo.GameID} as Match {activeMatch.MatchId}, Day {activeMatch.MatchDayId}.");
+                }
+
+                if (!allInfo.HasEnded)
+                {
+                    // Match still in progress -- same per-tick work as FetchAndPostData's loop:
+                    // circle timer, live stats push, achievements off the real getkillinfo feed.
+                    GetCircleInfo();
+                    try
+                    {
+                        var allKillRowsOldestFirst = await KillFeedTracker.FetchAsync(_pcobUrl);
+                        var newKillEvents = await KillFeedTracker.GetNewRowsAsync(db, activeMatch.Id, allKillRowsOldestFirst);
+
+                        var filteredPlayerInfo = new LivePlayersList
+                        {
+                            PlayerInfoList = allInfo.TotalPlayerList.Select(player => new LivePlayerInfo
+                            {
+                                UId = player.UId,
+                                PlayerName = player.PlayerName,
+                                TeamId = player.TeamId,
+                                TeamName = player.TeamName,
+                                Health = player.Health,
+                                HealthMax = player.HealthMax,
+                                LiveState = player.LiveState,
+                                KillNum = player.KillNum,
+                                KillNumByGrenade = player.KillNumByGrenade,
+                                KillNumInVehicle = player.KillNumInVehicle,
+                                GotAirDropNum = player.GotAirDropNum,
+                                UseFragGrenadeNum = player.UseFragGrenadeNum,
+                                UseSmokeGrenadeNum = player.UseSmokeGrenadeNum,
+                                UseBurnGrenadeNum = player.UseBurnGrenadeNum,
+                                BHasDied = player.BHasDied,
+                                IsOutsideBlueCircle = player.IsOutsideBlueCircle,
+                                Rank = player.Rank,
+                                Assists = player.Assists,
+                                KillNumBeforeDie = player.KillNumBeforeDie,
+                            }).ToList()
+                        };
+                        var teamInfoList = new TeamInfoList { teamInfoList = allInfo.TeamInfoList };
+
+                        _backgroundJobClient.Enqueue(HangfireQueues.HighPriority, () => _liveStatsBusiness.CreateDynamicLiveStats(activeMatch, filteredPlayerInfo, teamInfoList, teampointsForActiveMatch, newKillEvents, allInfo.CurrentTime));
+
+                        await db.StringSetAsync(HelperRedis.PlayerInfolist, JsonSerializer.Serialize(allInfo.TotalPlayerList));
+                        await db.StringSetAsync(HelperRedis.TeamInfoList, JsonSerializer.Serialize(allInfo.TeamInfoList));
                     }
                     catch (Exception e)
                     {
@@ -150,40 +333,75 @@ namespace VmixGraphicsBusiness.LiveMatch
                         await db.StringSetAsync(HelperRedis.MatchStatus, $"{e.Message}");
                         await subscriber.PublishAsync("match-status-channel", "Exception");
                     }
+
+                    await Task.Delay(1000);
                 }
-
-
-                var a = await VmixDataUtils.SetVMIXDataoperations();
-                var liverakiingguid16 = a.LiverankingGuid16;
-                var liverakiingguid18 = a.LiverankingGuid18;
-                var liverakiingguid20 = a.LiverankingGuid20;
-                var liverakiingguid4 = a.LiverankingGuid4;
-                _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid16, 1, false, 3000));
-
-                _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid16, 4, false, 3000));
-                _backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(liverakiingguid4, 4, false, 3400));
-
-                await Task.Delay(5000);
-                var responsegetplayerDatapost = await client.GetAsync(_pcobUrl + "gettotalplayerlist");
-                var responseTeamInfoListpost = await client.GetAsync(_pcobUrl + "getteaminfolist");
-                string PlayerDatapost, teamdatapost;
-
-                LivePlayersList livePlayerInfoPost = new();
-                TeamInfoList TeamInfoListPost = new();
-                if (responsegetplayerDatapost.IsSuccessStatusCode)
+                else
                 {
-                    PlayerDatapost = await responsegetplayerDatapost.Content.ReadAsStringAsync();
-                    teamdatapost = await responseTeamInfoListpost.Content.ReadAsStringAsync();
-                    LivePlayersList livePlayerInfo = JsonSerializer.Deserialize<LivePlayersList>(PlayerDatapost)!;
-                    TeamInfoList TeamInfoList = JsonSerializer.Deserialize<TeamInfoList>(teamdatapost)!;
-                    await _dbBusiness.createPostMtachStats(livePlayerInfo!, match, TeamInfoList!);
+                    // pcob says this GameID has ended. Only ever call CreateDynamicLiveStats
+                    // while a match is live (branch above) -- once it's finished, save final
+                    // results straight from this same getallinfo response via
+                    // createPostMtachStats, and only the first time: if PlayerStats/TeamPoints
+                    // already exist for this match, an earlier poll already captured it, so skip
+                    // straight past instead of saving again.
+                    using var endedScope = serviceProvider1.CreateScope();
+                    var tournamentBusinessForCheck = endedScope.ServiceProvider.GetRequiredService<TournamentBusiness>();
+                    bool alreadyHasResults = await tournamentBusinessForCheck.HasResultsAsync(activeMatch);
+                    if (!alreadyHasResults)
+                    {
+                        var livePlayerInfo = new LivePlayersList { PlayerInfoList = allInfo.TotalPlayerList };
+                        var teamInfoList = new TeamInfoList { teamInfoList = allInfo.TeamInfoList };
+                        await _dbBusiness.createPostMtachStats(livePlayerInfo, activeMatch, teamInfoList);
+                        Console.WriteLine($"Saved final results for GameID {allInfo.GameID} (Match {activeMatch.MatchId}, Day {activeMatch.MatchDayId}).");
 
+                        await db.StringSetAsync(HelperRedis.MatchStatus, "");
+                        await subscriber.PublishAsync("match-status-channel", $"GameEnded:{activeMatch.Id}");
+                    }
+
+                    // Keep polling -- the next GameID change (a new match starting) is what moves
+                    // this loop forward, not a manual restart.
+                    await Task.Delay(3000);
                 }
-
-                await db.StringSetAsync(HelperRedis.MatchStatus, $"");
-                await subscriber.PublishAsync("match-status-channel", "Ended");
             }
+        }
 
+        private enum IncompleteMatchDecision
+        {
+            ContinueExisting,
+            StartNew
+        }
+
+        /// <summary>
+        /// Publishes a decision request on match-status-channel and blocks (this loop only, not
+        /// the app) until Form1's subscriber writes an answer to
+        /// HelperRedis.PendingMatchDecisionResponseKey. There's exactly one auto-tracking loop
+        /// running at a time in this app, so a single pending-decision slot is enough -- no
+        /// per-request id needed.
+        /// </summary>
+        private async Task<IncompleteMatchDecision> AskOperatorIncompleteMatchDecisionAsync(Match incompleteMatch, string newGameId)
+        {
+            var payload = JsonSerializer.Serialize(new PendingMatchDecisionInfo
+            {
+                MatchDbId = incompleteMatch.Id,
+                MatchNumber = incompleteMatch.MatchId,
+                DayId = incompleteMatch.MatchDayId,
+                NewGameId = newGameId
+            });
+
+            await db.KeyDeleteAsync(HelperRedis.PendingMatchDecisionResponseKey);
+            await db.StringSetAsync(HelperRedis.PendingMatchDecisionKey, payload);
+            await subscriber.PublishAsync("match-status-channel", "IncompleteMatchNeedsDecision");
+
+            while (true)
+            {
+                var response = await db.StringGetAsync(HelperRedis.PendingMatchDecisionResponseKey);
+                if (!response.IsNullOrEmpty)
+                {
+                    await db.KeyDeleteAsync(HelperRedis.PendingMatchDecisionResponseKey);
+                    return response == "Continue" ? IncompleteMatchDecision.ContinueExisting : IncompleteMatchDecision.StartNew;
+                }
+                await Task.Delay(1000);
+            }
         }
 
         public async Task<int> GetCircleInfo()

@@ -22,4 +22,11 @@ public partial class Match
     public DateTime? EndTime { get; set; }
 
     public int StageId { get; set; }
+
+    /// pcob's own GameID (from getallinfo), e.g. "2379307504209016213". Uniquely identifies one
+    /// real PUBG game -- lets the app tell "same match, still going" apart from "new match
+    /// started" without the operator picking Day/Match number by hand. Nullable: rows created
+    /// before this column existed, or via the old manual Day/Match flow, won't have one.
+    /// Requires the `game_id` column added by VmixData/Migrations/manual/2026-09-25_add_game_id_to_matches.sql.
+    public string GameId { get; set; }
 }

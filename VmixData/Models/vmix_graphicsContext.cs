@@ -48,6 +48,9 @@ public partial class vmix_graphicsContext : DbContext
             entity.Property(e => e.EndTime)
                 .HasColumnType("datetime")
                 .HasColumnName("end_time");
+            entity.Property(e => e.GameId)
+                .HasMaxLength(64)
+                .HasColumnName("game_id");
             entity.Property(e => e.MatchDayId).HasColumnName("match_day_id");
             entity.Property(e => e.MatchId).HasColumnName("match_id");
             entity.Property(e => e.MatchName)

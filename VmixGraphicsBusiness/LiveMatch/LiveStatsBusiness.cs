@@ -1,4 +1,4 @@
-﻿using OfficeOpenXml;
+using OfficeOpenXml;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Services;
 using Google.Apis.Sheets.v4;
@@ -35,7 +35,7 @@ public partial class LiveStatsBusiness(
     public readonly IConfiguration _config = config;
 
     [AutomaticRetry(Attempts = 0), DisableConcurrentExecution(timeoutInSeconds: 2)]
-    public async Task<List<TeamLiveStats>> CreateLiveStats(Match match, LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats)
+    public async Task<List<TeamLiveStats>> CreateLiveStats(Match match, LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats, List<KillInfoRow> newKillEvents = null, string currentGameTime = null)
     {
         using var scope = serviceProvider.CreateScope();
         IConnectionMultiplexer redisConnection = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
@@ -155,10 +155,15 @@ public partial class LiveStatsBusiness(
                     if (liveTeamInfos.teamInfoList.First(x => x.teamId == teamId).liveMemberNum == 0)
                     {
                         isEliminated = true;
-                        if (string.IsNullOrEmpty(await redis.StringGetAsync($"{HelperRedis.isEliminated}:{teamId}")))
+                        // Scoped per match: this used to be keyed only by teamId, so a team
+                        // eliminated in one match would never re-fire the "eliminated" banner in
+                        // any later match within the same session (the key from the earlier match
+                        // was still set). Matters now that RunAutoTrackingAsync moves from match to
+                        // match without an app restart to clear it.
+                        if (string.IsNullOrEmpty(await redis.StringGetAsync($"{HelperRedis.isEliminated}:{match.Id}:{teamId}")))
                         {
-                            await redis.StringSetAsync($"{HelperRedis.isEliminated}:{teamId}", "abc");
-                            await IsEliminatedAsync(currentTeamInfo.teamName, teamId, true, teamGroup.Sum(x => x.KillNumBeforeDie), teamGroup.FirstOrDefault()!.Rank, liveTeamInfos.teamInfoList.Count());
+                            await redis.StringSetAsync($"{HelperRedis.isEliminated}:{match.Id}:{teamId}", "abc");
+                            await IsEliminatedAsync(currentTeamInfo.teamName, teamId, true, teamGroup.Sum(x => x.KillNumBeforeDie), teamGroup.FirstOrDefault()!.Rank, liveTeamInfos.teamInfoList.Count(), match.Id);
                             _logger.LogInformation($"All players in Team {teamId} are dead.");
                         }
                     }
@@ -251,7 +256,7 @@ public partial class LiveStatsBusiness(
             backgroundJobClient.Enqueue<ApiCallProcessor>(HangfireQueues.Default, processor => processor.ProcessApiCalls(apiCalls));
 
             // Enqueue the GetAllAchievements call to Hangfire
-            backgroundJobClient.Enqueue<SetPlayerAchievements>(job => job.GetAllAchievements(playerInfo, pastMatchStats));
+            backgroundJobClient.Enqueue<SetPlayerAchievements>(job => job.GetAllAchievements(playerInfo, pastMatchStats, newKillEvents, match.Id, currentGameTime));
 
             return teamLiveStats;
         }
@@ -368,7 +373,7 @@ public partial class LiveStatsBusiness(
         await request.ExecuteAsync();
     }
 
-    public async Task IsEliminatedAsync(string teamName, int teamId, bool isEliminated, int totalEliminations, int rank, int totalTeams)
+    public async Task IsEliminatedAsync(string teamName, int teamId, bool isEliminated, int totalEliminations, int rank, int totalTeams, int matchDbId)
     {
         using var scope = serviceProvider.CreateScope();
 
@@ -383,10 +388,11 @@ public partial class LiveStatsBusiness(
         {
             var redis = redisConnection.GetDatabase();
 
-            // Retrieve existing data from Redis
-            string existingData = await redis.StringGetAsync($"{HelperRedis.isEliminated}:{teamId}");
-
-            var currentrank = await redis.StringGetAsync($"{HelperRedis.isEliminated}:{teamId}");
+            // Scoped per match -- these two keys used to be shared across the whole app session
+            // (and even collided with the CreateLiveStats "already announced" guard, which also
+            // used to key on `isEliminated:{teamId}` alone), so the rank countdown from one match
+            // would leak into the next and int.Parse could throw on the guard's "abc" sentinel.
+            var currentrank = await redis.StringGetAsync($"{HelperRedis.isEliminated}:{matchDbId}:{teamId}");
             if (string.IsNullOrEmpty(currentrank))
             {
                 currentrank = ranknum;
@@ -402,9 +408,9 @@ public partial class LiveStatsBusiness(
             backgroundJobClient.Enqueue(() => vmi_layerSetOnOff.PushAnimationAsync(TeamEliminatedGuid, 3, true, 10000, apiCalls));
 
             // Save updated data to Redis
-            await redis.StringSetAsync($"{HelperRedis.isEliminated}:{teamId}", rank.ToString());
+            await redis.StringSetAsync($"{HelperRedis.isEliminated}:{matchDbId}:{teamId}", rank.ToString());
             _logger.LogInformation($"Team information successfully saved to Redis.");
-            await redis.StringSetAsync($"{HelperRedis.isEliminated}:rank", (int.Parse(currentrank) - 1).ToString());
+            await redis.StringSetAsync($"{HelperRedis.isEliminated}:rank:{matchDbId}", (int.Parse(currentrank) - 1).ToString());
         }
         catch (Exception ex)
         {

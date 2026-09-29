@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using VmixData.Models;
 using VmixGraphicsBusiness;
 using VmixGraphicsBusiness.LiveMatch;
@@ -182,78 +183,32 @@ namespace Pubg_Ranking_System
 
             try
             {
-                var result = await _tournamentBusiness.add_match(
-                    TournamentName_cmb.Text,
-                    Stage_cmb.Text,
-                    Day_cmb.Text,
-                    Match_cmb.Text
-                );
+                var tournament = _vmix_GraphicsContext.Tournaments.FirstOrDefault(x => x.Name == TournamentName_cmb.Text);
+                var stage = _vmix_GraphicsContext.Stages.FirstOrDefault(x => x.Name == Stage_cmb.Text);
 
-                switch (result.statusCode)
+                if (tournament == null || stage == null)
                 {
-                    case 0:
-                        // New match or empty match - start directly
-                        await StartMatchAsync(result.match);
-                        break;
-
-                    case 1:
-                        // In-progress match - ask to continue
-                        var continueResult = MessageBox.Show(
-                            result.message,
-                            "Continue Match?",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Question
-                        );
-
-                        if (continueResult == DialogResult.Yes)
-                        {
-                            await StartMatchAsync(result.match);
-                        }
-                        break;
-
-                    case 2:
-                        // Completed match - strong warning
-                        var restartResult = MessageBox.Show(
-                            result.message,
-                            "RESTART COMPLETED MATCH? ",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Warning,
-                            MessageBoxDefaultButton.Button2  // Default to "No"
-                        );
-
-                        if (restartResult == DialogResult.Yes)
-                        {
-                            // Show confirmation dialog again for completed matches
-                            var confirmResult = MessageBox.Show(
-                                "This action cannot be undone!\n\nType 'DELETE' to confirm:",
-                                "Final Confirmation",
-                                MessageBoxButtons.OKCancel,
-                                MessageBoxIcon.Stop
-                            );
-
-                            if (confirmResult == DialogResult.OK)
-                            {
-                                // Better: Show input dialog to type "DELETE"
-                                // For now, proceed with deletion
-                                await _tournamentBusiness.DeleteMatchHistory(result.match);
-                                await StartMatchAsync(result.match);
-
-                                _logger.LogWarning(
-                                    "COMPLETED match deleted and restarted: " +
-                                    "Tournament={Tournament}, Stage={Stage}, Day={Day}, Match={Match}",
-                                    TournamentName_cmb.Text, Stage_cmb.Text,
-                                    Day_cmb.Text, Match_cmb.Text
-                                );
-                            }
-                        }
-                        break;
+                    MessageBox.Show(
+                        "Please select a Tournament and Stage before starting.",
+                        "Missing Selection",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning
+                    );
+                    return;
                 }
+
+                // Day, match number and which pcob GameID belongs to which match are all resolved
+                // automatically from here on (GetLiveData.RunAutoTrackingAsync, keyed off
+                // getallinfo's GameID/HasEnded) -- the operator only ever picks Tournament+Stage,
+                // once, and this loop keeps running across matches without being restarted.
+                _backgroundJobManager.Enqueue(HangfireQueues.HighPriority, () => _getLiveData.RunAutoTrackingAsync(tournament.TournamentId, stage.StageId));
+                _logger.LogInformation("Auto tracking started: Tournament={Tournament}, Stage={Stage}", tournament.Name, stage.Name);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error starting match");
+                _logger.LogError(ex, "Error starting auto tracking");
                 MessageBox.Show(
-                    $"Error starting match: {ex.Message}",
+                    $"Error starting: {ex.Message}",
                     "Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
@@ -265,12 +220,6 @@ namespace Pubg_Ranking_System
             }
         }
 
-        private async Task StartMatchAsync(Match match)
-        {
-            _backgroundJobManager.Enqueue(HangfireQueues.HighPriority, () => _getLiveData.FetchAndPostData(match));
-            _logger.LogInformation("Match started: MatchId={MatchId}, Day={Day}",
-                match.MatchId, match.MatchDayId);
-        }
         private async void reload_teams_btn_Click(object sender, EventArgs e)
         {
             try
@@ -618,6 +567,64 @@ namespace Pubg_Ranking_System
                         MessageBox.Show($"Match has ended! {db.StringGet(HelperRedis.MatchStatus)}", "Match Status",
                             MessageBoxButtons.OK, MessageBoxIcon.Information);
 
+                    }
+                    else if (status == "AutoTrackingStarted")
+                    {
+                        // Auto tracking (RunAutoTrackingAsync) is now waiting for pcob data -- no
+                        // blocking dialog here, unlike "Started" above: this loop is meant to run
+                        // unattended across many matches, not just the one the operator is
+                        // watching it start.
+                        _reset.ResetAll(_backgroundJobManager);
+                        _logger.LogInformation("Auto tracking is now waiting for match data.");
+                    }
+                    else if (status.StartsWith("GameEnded:"))
+                    {
+                        // RunAutoTrackingAsync saved final results for this GameID and is already
+                        // back to polling for the next one -- generate this match's reports and
+                        // clear the overlays, but never restart the app or stop the loop the way
+                        // the old "Ended"/"Exception" handling above does.
+                        if (int.TryParse(status.Substring("GameEnded:".Length), out var finishedMatchDbId))
+                        {
+                            var finishedMatch = await _vmix_GraphicsContext.Matches.FindAsync(finishedMatchDbId);
+                            if (finishedMatch != null)
+                            {
+                                await _postMatch.WWCDStatsAsync(finishedMatch);
+                                await _postMatch.MatchMvp(finishedMatch);
+                                await _postMatch.MatchRankings(finishedMatch);
+                                await _postMatch.OverallRankings(finishedMatch);
+                                await _postMatch.DaySummary(finishedMatch);
+                                await _postMatch.MatchSummary(finishedMatch);
+                                await _postMatch.Top5MatchMVP(finishedMatch);
+                                await _postMatch.Top5StageMVP(finishedMatch);
+                                await _postMatch.StageMVP(finishedMatch);
+                                await _postMatch.TopGrenadiers(finishedMatch);
+                                await _postMatch.TeamsToWatch(finishedMatch);
+                                _logger.LogInformation("Match {MatchId} (Day {Day}) finished -- reports generated, waiting for the next match.", finishedMatch.MatchId, finishedMatch.MatchDayId);
+                            }
+                        }
+                        _backgroundJobManager.Enqueue(HangfireQueues.HighPriority, () => _reset.ResetAll(_backgroundJobManager));
+                    }
+                    else if (status == "IncompleteMatchNeedsDecision")
+                    {
+                        // RunAutoTrackingAsync is blocked waiting on this -- pcob is showing a
+                        // GameID it doesn't recognize, but the last match on record for today
+                        // never got final results saved (crash, pcob/ob.js restarted mid-match).
+                        // Nothing else in the loop proceeds until this dialog is answered.
+                        var payloadJson = db.StringGet(HelperRedis.PendingMatchDecisionKey);
+                        if (!payloadJson.IsNullOrEmpty)
+                        {
+                            var info = JsonSerializer.Deserialize<PendingMatchDecisionInfo>(payloadJson);
+                            var choice = MessageBox.Show(
+                                $"Match {info.MatchNumber} (Day {info.DayId}) never got final results, and pcob is now " +
+                                $"showing a different game (GameID {info.NewGameId}) that hasn't been tracked before.\n\n" +
+                                $"Yes = this new game IS Match {info.MatchNumber} restarting -- keep tracking it as Match {info.MatchNumber}.\n" +
+                                $"No = leave Match {info.MatchNumber} as unfinished and start the next match fresh.",
+                                "Unfinished Match Detected",
+                                MessageBoxButtons.YesNo,
+                                MessageBoxIcon.Question
+                            );
+                            db.StringSet(HelperRedis.PendingMatchDecisionResponseKey, choice == DialogResult.Yes ? "Continue" : "NewMatch");
+                        }
                     }
                     this.start_btn.Enabled = status == "Ended" || status == "Exception";
                 }));

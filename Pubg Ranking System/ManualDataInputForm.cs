@@ -22,6 +22,12 @@ namespace Pubg_Ranking_System
         private readonly vmix_graphicsContext _context;
         private readonly TournamentBusiness _tournamentBusiness;
 
+        // Set by BtnLoadGetAllInfoJson_Click. When present, GetOrCreateMatchAsync resolves the
+        // Match by GameID (creating it if needed, dated from FinishedStartTime) instead of the
+        // Day/Match dropdowns -- so a single getallinfo dump is enough to restore a match that
+        // never got its live results saved, even one played on an earlier day.
+        private AllInfo _loadedAllInfo;
+
         public ManualDataInputForm(
             ILogger<ManualDataInputForm> logger,
             PostMatch postMatch,
@@ -121,6 +127,74 @@ namespace Pubg_Ranking_System
                         MessageBox.Show($"Error loading file: {ex.Message}", "Error",
                             MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
+                }
+            }
+        }
+
+        private void BtnLoadGetAllInfoJson_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog openFileDialog = new OpenFileDialog())
+            {
+                openFileDialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+                openFileDialog.Title = "Load getallinfo JSON";
+
+                if (openFileDialog.ShowDialog() != DialogResult.OK)
+                    return;
+
+                try
+                {
+                    var raw = File.ReadAllText(openFileDialog.FileName);
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+                    // pcob's real getallinfo response is wrapped as {"allinfo": {...}}; fall back
+                    // to a bare object in case someone re-saved just the inner part.
+                    AllInfo allInfo = null;
+                    try
+                    {
+                        allInfo = JsonSerializer.Deserialize<AllInfoWrapper>(raw, options)?.AllInfo;
+                    }
+                    catch (JsonException) { }
+                    allInfo ??= JsonSerializer.Deserialize<AllInfo>(raw, options);
+
+                    if (allInfo == null || allInfo.TotalPlayerList == null || !allInfo.TotalPlayerList.Any())
+                        throw new Exception("No player data found in this getallinfo JSON.");
+
+                    if (string.IsNullOrEmpty(allInfo.GameID))
+                        throw new Exception("This getallinfo JSON has no GameID -- can't map it to a match.");
+
+                    _loadedAllInfo = allInfo;
+
+                    // Fill the existing Player/Team boxes from the one file -- same shapes
+                    // savePlayersinfo/saveTeamsinfo already expect, so Apply doesn't change.
+                    txtPlayerJson.Text = JsonSerializer.Serialize(new LivePlayersList { PlayerInfoList = allInfo.TotalPlayerList });
+                    txtTeamJson.Text = JsonSerializer.Serialize(new TeamInfoList { teamInfoList = allInfo.TeamInfoList });
+                    lblPlayerStatus.Text = $"✓ From getallinfo - {allInfo.TotalPlayerList.Count} players";
+                    lblPlayerStatus.ForeColor = System.Drawing.Color.Green;
+                    lblTeamStatus.Text = $"✓ From getallinfo - {allInfo.TeamInfoList.Count} teams";
+                    lblTeamStatus.ForeColor = System.Drawing.Color.Green;
+
+                    if (allInfo.HasEnded && long.TryParse(allInfo.FinishedStartTime, out var finishedUnix))
+                    {
+                        var playedDate = DateTimeOffset.FromUnixTimeSeconds(finishedUnix).UtcDateTime.Date;
+                        lblGetAllInfoStatus.Text = $"GameID {allInfo.GameID} -- played {playedDate:yyyy-MM-dd}. Day/Match will be detected automatically on Apply.";
+                    }
+                    else
+                    {
+                        lblGetAllInfoStatus.Text = $"GameID {allInfo.GameID} -- FinishedStartTime is 0 (not ended in this dump); today's date will be used for Day/Match.";
+                    }
+                    lblGetAllInfoStatus.ForeColor = System.Drawing.Color.Blue;
+
+                    _logger.LogInformation("getallinfo JSON loaded: GameID={GameId}, Players={Players}, Teams={Teams}",
+                        allInfo.GameID, allInfo.TotalPlayerList.Count, allInfo.TeamInfoList.Count);
+                }
+                catch (Exception ex)
+                {
+                    _loadedAllInfo = null;
+                    lblGetAllInfoStatus.Text = "✗ Failed to load getallinfo JSON";
+                    lblGetAllInfoStatus.ForeColor = System.Drawing.Color.Red;
+                    _logger.LogError(ex, "Error loading getallinfo JSON");
+                    MessageBox.Show($"Error loading getallinfo JSON:\n{ex.Message}", "Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
@@ -427,18 +501,23 @@ namespace Pubg_Ranking_System
                 return false;
             }
 
-            if (cmbDay.SelectedItem == null)
+            // A loaded getallinfo JSON resolves Day/Match itself (by GameID + FinishedStartTime),
+            // so those two dropdowns are only required for the old two-JSON manual flow.
+            if (_loadedAllInfo == null)
             {
-                MessageBox.Show("Please select a day!", "Missing Selection",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return false;
-            }
+                if (cmbDay.SelectedItem == null)
+                {
+                    MessageBox.Show("Please select a day!", "Missing Selection",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return false;
+                }
 
-            if (cmbMatch.SelectedItem == null)
-            {
-                MessageBox.Show("Please select a match!", "Missing Selection",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return false;
+                if (cmbMatch.SelectedItem == null)
+                {
+                    MessageBox.Show("Please select a match!", "Missing Selection",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return false;
+                }
             }
 
             return true;
@@ -458,6 +537,44 @@ namespace Pubg_Ranking_System
 
             if (stage == null)
                 throw new Exception($"Stage '{cmbStage.SelectedItem}' not found for tournament '{tournament.Name}'!");
+
+            if (_loadedAllInfo != null)
+            {
+                // Single getallinfo JSON path: GameID identifies the match, and the date it was
+                // actually played (from FinishedStartTime, which can be an earlier day) drives
+                // Day/Match -- no manual slot-picking, and it still works for a match played
+                // yesterday.
+                var existingByGameId = await _context.Matches.FirstOrDefaultAsync(x => x.GameId == _loadedAllInfo.GameID);
+                if (existingByGameId != null) return existingByGameId;
+
+                if (checkOnly) return null;
+
+                DateTime referenceDate = _loadedAllInfo.HasEnded && long.TryParse(_loadedAllInfo.FinishedStartTime, out var finishedUnix)
+                    ? DateTimeOffset.FromUnixTimeSeconds(finishedUnix).UtcDateTime.Date
+                    : DateTime.UtcNow.Date;
+
+                var createdMatch = await _tournamentBusiness.GetOrCreateMatchByGameIdAsync(
+                    tournament.TournamentId, stage.StageId, _loadedAllInfo.GameID, referenceDate);
+
+                _logger.LogInformation(
+                    "Match resolved from getallinfo: Tournament={Tournament}, Stage={Stage}, Day={Day}, Match={Match}, GameID={GameId}",
+                    tournament.Name, stage.Name, createdMatch.MatchDayId, createdMatch.MatchId, _loadedAllInfo.GameID);
+
+                MessageBox.Show(
+                    $"Match resolved from getallinfo!\n\n" +
+                    $"Tournament: {tournament.Name}\n" +
+                    $"Stage: {stage.Name}\n" +
+                    $"Day: {createdMatch.MatchDayId}\n" +
+                    $"Match: {createdMatch.MatchId}\n" +
+                    $"GameID: {_loadedAllInfo.GameID}\n" +
+                    $"Played: {referenceDate:yyyy-MM-dd}",
+                    "Match Detected",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                );
+
+                return createdMatch;
+            }
 
             int matchDay = int.Parse(cmbDay.SelectedItem.ToString());
             int matchNumber = int.Parse(cmbMatch.SelectedItem.ToString());

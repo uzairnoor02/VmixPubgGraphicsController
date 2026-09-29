@@ -1,4 +1,4 @@
-﻿using OfficeOpenXml;
+using OfficeOpenXml;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Services;
 using Google.Apis.Sheets.v4;
@@ -45,23 +45,23 @@ namespace VmixGraphicsBusiness.LiveMatch
         }
 
         [AutomaticRetry(Attempts = 0), DisableConcurrentExecution(timeoutInSeconds: 3)]
-        public async Task<object> CreateDynamicLiveStats(Match match, LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats)
+        public async Task<object> CreateDynamicLiveStats(Match match, LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats, List<KillInfoRow> newKillEvents = null, string currentGameTime = null)
         {
             // Check if we should show Top 4 ranking
             if (ShouldShowTop4Ranking(liveTeamInfos))
             {
                 _logger.LogInformation("Switching to Top 4 live ranking display");
                 // CreateTop4LiveRanking(playerInfo, liveTeamInfos, pastMatchStats);
-                backgroundJobClient.Enqueue(HangfireQueues.HighPriority, () => CreateTop4LiveRanking(playerInfo, liveTeamInfos, pastMatchStats));
+                backgroundJobClient.Enqueue(HangfireQueues.HighPriority, () => CreateTop4LiveRanking(match.Id, playerInfo, liveTeamInfos, pastMatchStats));
 
             }
             _logger.LogInformation("Using standard live ranking display");
-            return await CreateLiveStats(match, playerInfo, liveTeamInfos, pastMatchStats);
+            return await CreateLiveStats(match, playerInfo, liveTeamInfos, pastMatchStats, newKillEvents, currentGameTime);
 
         }
 
         [AutomaticRetry(Attempts = 0), DisableConcurrentExecution(timeoutInSeconds: 2)]
-        public async Task<List<Top4TeamStats>> CreateTop4LiveRanking(LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats)
+        public async Task<List<Top4TeamStats>> CreateTop4LiveRanking(int matchDbId, LivePlayersList playerInfo, TeamInfoList liveTeamInfos, List<LiveTeamPointStats> pastMatchStats)
         {
             using var scope = serviceProvider.CreateScope();
             IConnectionMultiplexer redisConnection = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
@@ -103,7 +103,10 @@ namespace VmixGraphicsBusiness.LiveMatch
                 string HeatlhImages = ConfigGlobal.Images!;
 
                 // ✅ RETRIEVE OR INITIALIZE FIXED TEAM POSITIONS WITH 15 MINUTE EXPIRATION
-                string top4PositionsKey = "Top4TeamPositions";
+                // Scoped per match: unscoped, this carried the previous match's team->slot
+                // mapping into the next one whenever matches ran back-to-back within the 15-minute
+                // window (routine with RunAutoTrackingAsync, which never restarts between matches).
+                string top4PositionsKey = $"{HelperRedis.Top4TeamPositionsKey}:{matchDbId}";
                 var storedPositions = await redis.StringGetAsync(top4PositionsKey);
                 Dictionary<int, int> teamPositions; // TeamId -> Position mapping
 

@@ -26,6 +26,8 @@ namespace Pubg_Ranking_System
         private GroupBox grpMatchSelection;
         private GroupBox grpPlayerData;
         private GroupBox grpTeamData;
+        private Button btnLoadGetAllInfoJson;
+        private Label lblGetAllInfoStatus;
 
         protected override void Dispose(bool disposing)
         {
@@ -57,12 +59,14 @@ namespace Pubg_Ranking_System
             this.grpMatchSelection = new GroupBox();
             this.grpPlayerData = new GroupBox();
             this.grpTeamData = new GroupBox();
+            this.btnLoadGetAllInfoJson = new Button();
+            this.lblGetAllInfoStatus = new Label();
 
             this.SuspendLayout();
 
             // Form
             this.Text = "Manual Match Data Input";
-            this.Size = new Size(900, 700);
+            this.Size = new Size(900, 735);
             this.StartPosition = FormStartPosition.CenterParent;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -70,7 +74,7 @@ namespace Pubg_Ranking_System
             // Match Selection Group
             this.grpMatchSelection.Text = "Match Selection";
             this.grpMatchSelection.Location = new Point(10, 10);
-            this.grpMatchSelection.Size = new Size(860, 80);
+            this.grpMatchSelection.Size = new Size(860, 115);
 
             Label lblTournament = new Label();
             lblTournament.Text = "Tournament:";
@@ -111,14 +115,27 @@ namespace Pubg_Ranking_System
             this.cmbMatch.DropDownStyle = ComboBoxStyle.DropDownList;
             this.cmbMatch.Items.AddRange(new object[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" });
 
+            // Day/Match above are only used when no getallinfo JSON has been loaded below --
+            // loading one resolves Day/Match automatically from its GameID + FinishedStartTime.
+            this.btnLoadGetAllInfoJson.Text = "Load getallinfo JSON (auto-detect Day/Match)";
+            this.btnLoadGetAllInfoJson.Location = new Point(10, 60);
+            this.btnLoadGetAllInfoJson.Size = new Size(280, 30);
+            this.btnLoadGetAllInfoJson.Click += BtnLoadGetAllInfoJson_Click;
+
+            this.lblGetAllInfoStatus.Location = new Point(300, 65);
+            this.lblGetAllInfoStatus.Size = new Size(550, 40);
+            this.lblGetAllInfoStatus.ForeColor = Color.Gray;
+            this.lblGetAllInfoStatus.Text = "No getallinfo JSON loaded -- Day/Match above will be used instead.";
+
             this.grpMatchSelection.Controls.AddRange(new Control[] {
                 lblTournament, this.cmbTournament, lblStage, this.cmbStage,
-                lblDay, this.cmbDay, lblMatch, this.cmbMatch
+                lblDay, this.cmbDay, lblMatch, this.cmbMatch,
+                this.btnLoadGetAllInfoJson, this.lblGetAllInfoStatus
             });
 
             // Player Data Group
             this.grpPlayerData.Text = "Player Data JSON";
-            this.grpPlayerData.Location = new Point(10, 100);
+            this.grpPlayerData.Location = new Point(10, 135);
             this.grpPlayerData.Size = new Size(860, 250);
 
             this.txtPlayerJson.Location = new Point(10, 20);
@@ -149,7 +166,7 @@ namespace Pubg_Ranking_System
 
             // Team Data Group
             this.grpTeamData.Text = "Team Data JSON";
-            this.grpTeamData.Location = new Point(10, 360);
+            this.grpTeamData.Location = new Point(10, 395);
             this.grpTeamData.Size = new Size(860, 250);
 
             this.txtTeamJson.Location = new Point(10, 20);
@@ -180,13 +197,13 @@ namespace Pubg_Ranking_System
 
             // Action Buttons
             this.btnCreateBackup.Text = "Create Backup (Optional)";
-            this.btnCreateBackup.Location = new Point(10, 620);
+            this.btnCreateBackup.Location = new Point(10, 655);
             this.btnCreateBackup.Size = new Size(200, 35);
             this.btnCreateBackup.BackColor = Color.LightBlue;
             this.btnCreateBackup.Click += BtnCreateBackup_Click;
 
             this.btnApplyToDb.Text = "Apply to Database";
-            this.btnApplyToDb.Location = new Point(220, 620);
+            this.btnApplyToDb.Location = new Point(220, 655);
             this.btnApplyToDb.Size = new Size(200, 35);
             this.btnApplyToDb.BackColor = Color.LightGreen;
             this.btnApplyToDb.Click += BtnApplyToDb_Click;
