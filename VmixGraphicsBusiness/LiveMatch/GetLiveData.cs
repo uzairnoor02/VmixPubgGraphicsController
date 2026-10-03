@@ -213,11 +213,18 @@ namespace VmixGraphicsBusiness.LiveMatch
             Match activeMatch = null;
             List<LiveTeamPointStats> teampointsForActiveMatch = null;
 
+            // These remember which live-ranking input is already shown in vMix, and CreateLiveStats
+            // only sends OverlayInput4In when the value differs. Left over from a previous run
+            // they make it skip that call, so data gets pushed to an overlay that's never shown.
+            await db.KeyDeleteAsync(new RedisKey[] { "LiveRankingGuid", "Top4RankingGuid" });
+
             await db.StringSetAsync(HelperRedis.MatchStatus, "Waiting for match data...");
             await subscriber.PublishAsync("match-status-channel", "AutoTrackingStarted");
 
             while (true)
             {
+              try
+              {
                 AllInfo allInfo;
                 try
                 {
@@ -278,6 +285,9 @@ namespace VmixGraphicsBusiness.LiveMatch
                             activeMatch = await tournamentBusinessForCreate.GetOrCreateMatchByGameIdAsync(tournamentId, stageId, allInfo.GameID, DateTime.UtcNow);
                         }
                     }
+
+                    // New match: make sure the live-ranking overlay gets switched on again.
+                    await db.KeyDeleteAsync(new RedisKey[] { "LiveRankingGuid", "Top4RankingGuid" });
 
                     await GameTracker.RegisterOrResumeAsync(db, allInfo.GameID, activeMatch.Id);
                     teampointsForActiveMatch = await _dbBusiness.fetchTeamPointsAsync(activeMatch);
@@ -362,6 +372,16 @@ namespace VmixGraphicsBusiness.LiveMatch
                     // this loop forward, not a manual restart.
                     await Task.Delay(3000);
                 }
+              }
+              catch (Exception ex)
+              {
+                // Any DB/Redis hiccup used to end this job silently (AutomaticRetry is off), so
+                // the app sat at "waiting" forever. Surface it and keep going.
+                Console.WriteLine($"Auto-tracking error: {ex}");
+                await db.StringSetAsync(HelperRedis.MatchStatus, $"Auto-tracking error (retrying): {ex.Message}");
+                activeMatch = null;
+                await Task.Delay(3000);
+              }
             }
         }
 

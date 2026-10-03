@@ -1,80 +1,72 @@
 {
-  "tournament_name": "2025 PMCB",
+  "tournament_name": "2026 PMPO",
   "stages": [
     {
-      "stage_name": "Semi Finals A",
+      "stage_name": "QF",
       "teams": [
         {
           "team_id": "5",
-          "team_name": "MAG"
+          "team_name": "RD"
         },
         {
           "team_id": "6",
-          "team_name": "AE"
+          "team_name": "SSP"
         },
         {
           "team_id": "7",
-          "team_name": "GHORA"
+          "team_name": "LOST"
         },
         {
           "team_id": "8",
-          "team_name": "NEXTL"
+          "team_name": "HP"
         },
         {
           "team_id": "9",
-          "team_name": "K2R"
+          "team_name": "1NS"
         },
         {
           "team_id": "10",
-          "team_name": "WS"
+          "team_name": "EG"
         },
         {
           "team_id": "11",
-          "team_name": "TS"
+          "team_name": "777X"
         },
         {
           "team_id": "12",
-          "team_name": "NFP"
+          "team_name": "ACE"
         },
         {
           "team_id": "13",
-          "team_name": "RNG"
+          "team_name": "HYPER"
         },
         {
           "team_id": "14",
-          "team_name": "BL"
+          "team_name": "8FIN"
         },
         {
           "team_id": "15",
-          "team_name": "WHOS"
+          "team_name": "PES"
         },
         {
           "team_id": "16",
-          "team_name": "ISEC"
+          "team_name": "NFP"
         },
         {
           "team_id": "17",
-          "team_name": "SR"
+          "team_name": "GT"
         },
         {
           "team_id": "18",
-          "team_name": "STARS"
+          "team_name": "XR"
         },
         {
           "team_id": "19",
-          "team_name": "M4D"
+          "team_name": "LQ5"
         },
         {
           "team_id": "20",
-          "team_name": "H2E"
-        },
-        {
-          "team_id": "21",
-          "team_name": "9T4"
-        },
-        {
-          "team_id": "22",
-          "team_name": "MHA"
+          "team_name": "UNB"
         }
       ]
     }

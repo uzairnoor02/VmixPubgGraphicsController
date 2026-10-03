@@ -310,7 +310,7 @@ namespace VmixGraphicsBusiness.LiveMatch
                     // Zone status background
                     if (isEliminated)
                     {
-                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"EliminatedBGT{position}", HeatlhImages + "\\EliminatedBG\\Team Dead4.png"));
+                        apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(top4RankingGuid, $"EliminatedBGT{position}", HeatlhImages + "\\EliminatedBG\\Team Dead 4.png"));
                     }
                     else if (isInBlue)
                     {

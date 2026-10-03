@@ -26,13 +26,13 @@ namespace VmixGraphicsBusiness.Utils
             var vmixdata = await VmixDataUtils.SetVMIXDataoperations();
             string TeamEliminatedGuid = vmixdata.TeamEliminatedGuid;
             LiverankingGuid = vmixdata.LiverankingGuid16;
-            ResetLiverankings(LiverankingGuid);
+            await ResetLiverankings(LiverankingGuid);
             LiverankingGuid = vmixdata.LiverankingGuid18;
-            ResetLiverankings(LiverankingGuid);
+            await ResetLiverankings(LiverankingGuid);
             LiverankingGuid = vmixdata.LiverankingGuid20;
-            ResetLiverankings(LiverankingGuid);
+            await ResetLiverankings(LiverankingGuid);
             LiverankingGuid = vmixdata.LiverankingGuid4;
-            ResetLiverankings(LiverankingGuid);
+            await ResetLiverankings(LiverankingGuid);
 
 
             apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(TeamEliminatedGuid, $"elims", " "));
@@ -43,8 +43,10 @@ namespace VmixGraphicsBusiness.Utils
             await apiCallProcessor.ProcessApiCalls(apiCalls);
         }
 
-        private async void ResetLiverankings(string LiverankingGuid)
+        private async Task ResetLiverankings(string LiverankingGuid)
         {
+            // Input not present in vMix -- nothing to reset (calls would target input=null).
+            if (string.IsNullOrEmpty(LiverankingGuid)) return;
             List<string> apiCalls = new();
             for (int i = 1; i < 30; i++)
             {
@@ -58,9 +60,11 @@ namespace VmixGraphicsBusiness.Utils
                 apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"LOGOT{i}", $"{ConfigGlobal.LogosImages}\\0.png"));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetTextApiCall(LiverankingGuid, $"RANKT{i}", $"{i}"));
                 apiCalls.Add(vmi_layerSetOnOff.GetSetImageApiCall(LiverankingGuid, $"EliminatedBGT{i}", $"{ConfigGlobal.Images}\\EliminatedBG\\Team Dead.png"));
-
-                await apiCallProcessor.ProcessApiCalls(apiCalls);
             }
+
+            // Sent once, after the list is complete -- previously this ran inside the loop with
+            // the cumulative list, re-sending earlier rows on every pass.
+            await apiCallProcessor.ProcessApiCalls(apiCalls);
         }
     }
 }
